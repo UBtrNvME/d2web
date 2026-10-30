@@ -6,6 +6,8 @@ Current user direction: prioritize a native HTML/JavaScript/CSS/SVG foundation f
 
 Execution ledger: [research findings](../docs/research-findings.md). R1's bounded association experiment is complete. R0 now includes actual React Flow and framework-free JointJS Core comparisons plus a native SVG connection/hit-target probe. Native font/browser controls contribute to R2, structural cleanup/composition to R3, and native operations to R4 without completing their wider acceptance criteria. R6 actual external library/shadcn composition and R5 complete contracts/stack selection remain open. The user authorized independent workers and automatic research; no public architecture was accepted by running probes. The native-browser foundation preference is an explicit user direction.
 
+Check/CI note: `mise run check` now depends on `reference:fetch` (imports/d2 must be a git checkout at D2 v0.9.0, commit d5a51743b6d5c00f1ec6f8340003f5d5a6ba4eda) and also runs the five research probes (identity, operations, text, connections, composition). See the findings' [Current state](../docs/research-findings.md#current-state).
+
 ## R0: Web framework patterns
 
 - [x] Compare React Flow and JointJS patterns for custom content, handles/routes, nesting, viewport, controlled state, accessibility and lifecycle against D2 requirements using official sources.

@@ -126,6 +126,7 @@ test('research: compare the scene font asset with the native SVG font face', asy
   expect(fontState.assetBytes400SVG.advance).toBeCloseTo(fontState.svg.advance, 2);
   expect(fontState.preEncodedFullFaceSVG.advance).toBeCloseTo(fontState.svg.advance, 2);
   expect(fontState.fullTtfConvertedWoffSVG.advance).toBeCloseTo(fontState.svg.advance, 2);
+  expect(fontState.native.advance - fontState.svg.advance, 'native subset face is wider than the scene TTF').toBeCloseTo(1.640625, 2);
   for (const selector of ['#html-text', '#svg-text text']) {
     await page.locator(selector).selectText();
     expect(await page.evaluate(() => getSelection().toString())).toBe('office affine café');

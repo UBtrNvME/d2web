@@ -1,24 +1,15 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { root } from './examples.mjs';
+import { goProbe, root } from './examples.mjs';
 
 test('research: export native label runs, measured ink and resolved font assets', { timeout: 300_000 }, () => {
   const output = join(root, 'artifacts/research-text');
   mkdirSync(output, { recursive: true });
-  const env = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
-  const probe = join(root, 'tests/research-text.go');
-  const binary = join(output, 'probe');
   const source = join(root, 'examples/research/text/main.d2');
-  const built = spawnSync('go', ['build', '-mod=readonly', '-o', binary, probe], { cwd: join(root, 'imports/d2'), env, encoding: 'utf8', timeout: 180_000 });
-  assert.ifError(built.error);
-  assert.equal(built.status, 0, built.stderr);
-  const result = spawnSync(binary, [source], { cwd: root, encoding: 'utf8', timeout: 60_000, maxBuffer: 16 * 1024 * 1024 });
-  assert.ifError(result.error);
-  assert.equal(result.status, 0, result.stderr);
-  const report = JSON.parse(result.stdout);
+  const probe = goProbe(join(root, 'tests/research-text.go'), join(output, 'probe'), false);
+  const report = JSON.parse(probe.native([source]));
   assert.equal(report.runs.length, 3, 'the case exercises two node labels and one connection label');
   for (const { run, asset } of report.runs) {
     assert.equal(run.Text, 'office affine café');

@@ -4,6 +4,15 @@ Date: 30 October 2026. Experimental evidence and source findings, not an accepte
 
 Latest user direction: prefer native HTML/JavaScript/CSS/SVG as the foundation for future React components. React Flow is studied specifically for connection drawing, not as the intended foundation. Historical adoption comparisons below remain useful evidence but do not override this preference. The follow-up batch uses lower-cost GPT-6 Luna workers and independent coordinator/peer review. Plain modules/data/DOM primitives, framework bindings and optional consumer skins must retain explicit ownership and lifecycle boundaries.
 
+## Current state
+
+- Done (bounded): R0 framework comparison (React Flow, JointJS Core, native SVG connections) and R1 native identity/source association.
+- Partial: R2 text (native font/browser controls only, no rich content), R3 host lifecycle (mount/dispose quick check), R4 native operations, R6 consumer (packed module, Card/Tailwind, one explicit resize round trip).
+- Open: Checkpoint A review with the user (overdue; R3/R6 ran ahead of it) and R5 contracts/stack selection. No architecture is accepted.
+- Next decision: the user reviews R1/R2 evidence at Checkpoint A and chooses what to test next (changed-size consumer contract, richer text/content, or hostile-CSS lifecycle). Open research leads: the subset-font metric difference, richer text and object-specific consumer dimensions. A passing plain-button probe cannot substitute for a real external consumer/shadcn test. Do not promote the probes into public APIs before then.
+- Source is in the initial commit (`bf85ee0`); later research changes are uncommitted. Nothing is pushed or published.
+- `mise run check` now depends on `reference:fetch` (imports/d2 must be a git checkout at D2 v0.9.0, commit d5a51743b6d5c00f1ec6f8340003f5d5a6ba4eda; otherwise remove imports/d2 and rerun `mise run reference:fetch`) and also runs `test:research:identity`, `test:research:operations`, `test:research:text`, `test:research:connections` and `test:research:composition`. The text probe asserts the 1.640625 native-subset-versus-scene-TTF advance gap. Test helpers (nativeArgs, pathData, goRun/goProbe) are centralised in tests/examples.mjs. Check counts in the older entries below are historical.
+
 ## Independent investigation
 
 ### Latest package/theme/sizing check (no workers)
@@ -20,7 +29,7 @@ Final validation: `mise run check` passed its existing native/WASM/Chromium/Type
 
 Quick follow-up at the user's request: `mise run test:research:host` passes one focused Chromium check of a plain native ES-module mount/dispose fixture with two instances and a React StrictMode/portal consumer using the actual imported shadcn Card. D2's fixed path and 56px slots remain intact; removing instance A removes its DOM and native click listener (dispatch on the retained detached wrapper no longer calls back), while B still responds. Fresh test storage remains empty and requests stay within the fixture origin. Source and artifacts are in tests/research-host.mjs, tests/browser/research-host.spec.mjs and ignored artifacts/research-host/.
 
-This is a consumer-ownership/lifecycle check, not an exported library API. The Card is borrowed read-only from the local Studio import and bundled with the same root React; inline consumer styling is explicit. Full Tailwind/theme fidelity, packaged SDK consumption, arbitrary dimensions, all resources/listeners and full parity remain unverified. No production or dependency files changed. Per the user's quick-check direction, font investigation and broad corpus/parity reassessment were not repeated. Next test changed-size consumer content/native relayout before selecting that contract. The outer repository remains uncommitted; this update adds two research files, one mise task and linked documentation only.
+This is a consumer-ownership/lifecycle check, not an exported library API. The Card is borrowed read-only from the local Studio import and bundled with the same root React; inline consumer styling is explicit. Full Tailwind/theme fidelity, packaged SDK consumption, arbitrary dimensions, all resources/listeners and full parity remain unverified. No production or dependency files changed. Per the user's quick-check direction, font investigation and broad corpus/parity reassessment were not repeated. Next test changed-size consumer content/native relayout before selecting that contract. The later research changes remain uncommitted (the source is in the initial commit); this update adds two research files, one mise task and linked documentation only.
 
 Verification: `mise run test:research:host` passed its focused Chromium case; the short `mise run check` baseline also passed (four infrastructure tests, four native cases, native/Node-WASM geometry, two decoder tests, four existing Chromium checks, TypeScript and 30 task definitions). No full corpus/parity or imported-app gate was run.
 
@@ -115,10 +124,6 @@ This is evidence about the native API on named cases, not an existing d2web tran
 
 No full stack is accepted. Current evidence argues against calling raw scene JSON, raw graph JSON, or existing text premeasurement a complete web/editor contract. A faithful default plus opt-in consumer representation remains the requirement; fixed footprints, explicit overflow and native relayout are separate behaviors to evaluate.
 
-## Next research checkpoint
-
-The React Flow and JointJS Core bounded comparisons and first text/font characterization are now executed. Next investigate the native font-asset/metric difference, richer text and consumer replacements with different object-specific dimensions, then external composition/lifecycle. A passing plain-button probe cannot substitute for a real external consumer/shadcn test. The user owns architecture acceptance; automatic research authorizes experiments, not silently declaring a winner.
-
 ## Native connection drawing without a framework
 
 Reproduce with `mise run test:research:connections`. The [probe](../tests/browser/research-native-connections.spec.mjs) uses the actual native path and diamond geometry/translation from geometry.json, without React, React Flow or JointJS at runtime. Reports/screenshots live under artifacts/research-native-connections/.
@@ -187,7 +192,7 @@ Verification commands and final results:
 
 Independent code review found no blocking flaw; evidence wording was narrowed to projection equality, keyboard activation (not general accessibility), removal of the card from a sampled hit (not proof of route interaction), and supplied handles (not a proven universal requirement). Original comparison thresholds were unchanged. Chromium required permitted execution outside the macOS sandbox. Failed research assumptions and the initial blocked-pointer interaction are retained above; passing tests now assert the actual observations.
 
-Changed files: seven new probe/test files under tests/, four authored cases under examples/research/identity/, five mise research tasks, this findings document and linked guidance/task status. Production src/, both imported source copies, root dependency manifest/lockfile, Playwright thresholds and CI remain unchanged. Research dependencies/reports/screenshots are ignored artifacts and are removed by clean. All outer source remains untracked in the unborn repository; nothing was staged, committed, pushed or published.
+Changed files: seven new probe/test files under tests/, four authored cases under examples/research/identity/, five mise research tasks, this findings document and linked guidance/task status. Production src/, both imported source copies, root dependency manifest/lockfile, Playwright thresholds and CI remain unchanged. Research dependencies/reports/screenshots are ignored artifacts and are removed by clean. At the time, the outer source was untracked in an unborn repository (it is now in the initial commit); nothing was pushed or published.
 
 Full upstream corpus, separate imported-app lint/build gate, GitHub CI, native text/font fidelity, JointJS runtime behavior, actual shadcn/external package use, complete editing output equivalence and lifecycle cleanup were not verified in this batch. Existing known corpus/app limitations remain open. Resume from this ledger and current Git state; do not promote the probes into public APIs without the remaining experiments and decision review.
 
@@ -195,7 +200,7 @@ Full upstream corpus, separate imported-app lint/build gate, GitHub CI, native t
 
 Accepted user direction: prefer native HTML/JavaScript/CSS/SVG and framework-independent contracts as a foundation for later React components. React Flow is connection-drawing prior art, not the intended foundation. JointJS is comparison material. Reskinning and integrations are explicit consumer layers. No mandatory Web Components, Shadow DOM, virtual DOM or new renderer architecture is selected. On the user's cost instruction the newly started workers were interrupted before they produced files, and the bounded work resumed with GPT-6 Luna workers; coordinator and peer review remained in place.
 
-Implemented research only: six new probe/test files (native connections, JointJS build/browser and text Go/Node/browser), one local text fixture, four mise research tasks, and updated guidance/findings. Production src/, root package/lockfile, both imported source copies, CI and image thresholds were preserved. JointJS Core is an ignored scratch dependency with an explicit setup command. Outer source remains untracked in the unborn repository; nothing was staged, committed, pushed or published.
+Implemented research only: six new probe/test files (native connections, JointJS build/browser and text Go/Node/browser), one local text fixture, four mise research tasks, and updated guidance/findings. Production src/, root package/lockfile, both imported source copies, CI and image thresholds were preserved. JointJS Core is an ignored scratch dependency with an explicit setup command. At the time, the outer source was untracked in an unborn repository (it is now in the initial commit); nothing was pushed or published.
 
 Final verification:
 

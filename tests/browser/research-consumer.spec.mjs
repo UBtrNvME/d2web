@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { root } from '../examples.mjs';
+import { pathData, root } from '../examples.mjs';
 
 test('packed native module supports consumer theming and explicit measured-size native relayout', async ({page}) => {
   const directory=join(root,'artifacts/research-consumer'), errors=[];
@@ -14,13 +14,13 @@ test('packed native module supports consumer theming and explicit measured-size 
     if(url.pathname==='/compile-size'){
       const {width,height}=route.request().postDataJSON();
       if(width!==160||height!==80)return route.fulfill({status:400,body:'Unexpected measured dimensions'});
-      const original=readFileSync(join(root,'examples/files/geometry.d2'),'utf8');
-      const source=original+`\nsource.width: ${width}\nsource.height: ${height}\n`;
+      // The checked-in sizing case is the only measurement this fixture admits.
+      const source=readFileSync(join(root,'examples/research/sizing/main.d2'),'utf8');
       const result=spawnSync(join(root,'artifacts/scene-probe/scene-probe'),[source],{encoding:'utf8',timeout:30000});
       if(result.status!==0)return route.fulfill({status:500,body:result.stderr});
       const data=JSON.parse(result.stdout), edge=data.webScene.Root.Children.find(n=>n.ID===data.target.connections[0].id);
       compilations++;
-      return route.fulfill({json:{box:data.webScene.Root.Children.find(n=>n.ID==='source').Children[0].Primitive.Box,path:edge.Children[0].Primitive.Commands.map(c=>`${c.Kind===0?'M':'L'}${c.P1.X} ${c.P1.Y}`).join(' ')}});
+      return route.fulfill({json:{box:data.webScene.Root.Children.find(n=>n.ID==='source').Children[0].Primitive.Box,path:pathData(edge.Children[0].Primitive.Commands)}});
     }
     const file={'/':'index.html','/probe.js':'probe.js','/theme.css':'theme.css'}[url.pathname];
     return file?route.fulfill({path:join(directory,file)}):route.abort();

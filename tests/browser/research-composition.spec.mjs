@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { root } from '../examples.mjs';
+import { pathData, root } from '../examples.mjs';
 
 // Disposable browser primitive probe, not a renderer or a shadcn compatibility claim.
 const output = join(root, 'artifacts/research-composition');
@@ -10,7 +10,7 @@ const source = scene.Root.Children.find(node => node.ID === 'source');
 const box = source.Children[0].Primitive.Box;
 const edge = scene.Root.Children.find(node => node.ID === '(source -> target)[0]');
 const route = edge.Children[0].Primitive.Commands;
-const path = route.map(command => `${command.Kind === 0 ? 'M' : 'L'}${command.P1.X} ${command.P1.Y}`).join(' ');
+const path = pathData(route);
 
 for (const topology of ['foreignObject', 'overlay']) {
   for (const scale of [0.75, 2]) {

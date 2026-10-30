@@ -3,33 +3,22 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { root } from './examples.mjs';
+import { goProbe, root } from './examples.mjs';
 
 test('research: compare graph/source/target/scene association across native and WASM', { timeout: 300_000 }, () => {
   const output = join(root, 'artifacts/research-identity');
   mkdirSync(output, { recursive: true });
-  const env = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
-  const run = (command, args, options = {}) => {
-    const result = spawnSync(command, args, { cwd: join(root, 'imports/d2'), env, encoding: 'utf8', timeout: 180_000, maxBuffer: 8 * 1024 * 1024, ...options });
-    assert.ifError(result.error);
-    assert.equal(result.status, 0, result.stderr);
-    return result.stdout;
-  };
-  const probe = join(root, 'tests/research-identity.go');
   const native = join(output, 'probe');
-  const wasm = join(output, 'probe.wasm');
-  run('go', ['build', '-mod=readonly', '-o', native, probe]);
-  run('go', ['build', '-mod=readonly', '-o', wasm, probe], { env: { ...env, GOOS: 'js', GOARCH: 'wasm' } });
-  const goRoot = run('go', ['env', 'GOROOT']).trim();
+  const probe = goProbe(join(root, 'tests/research-identity.go'), native);
   const workspaces = ['research/identity', 'imports', 'boards'];
   const results = {};
   for (const name of workspaces) {
     const directory = join(root, 'examples', name);
     const files = Object.fromEntries(readdirSync(directory).filter(file => file.endsWith('.d2')).map(file => [file, readFileSync(join(directory, file), 'utf8')]));
     const request = JSON.stringify({ entry: 'main.d2', files });
-    const result = JSON.parse(run(native, [request]));
-    assert.deepEqual(JSON.parse(run(native, [request])), result, `${name}: repeat native compilation`);
-    assert.deepEqual(JSON.parse(run(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [wasm, request])), result, `${name}: WASM equivalence`);
+    const result = JSON.parse(probe.native([request]));
+    assert.deepEqual(JSON.parse(probe.native([request])), result, `${name}: repeat native compilation`);
+    assert.deepEqual(JSON.parse(probe.wasm([request])), result, `${name}: WASM equivalence`);
     for (const board of result) {
       assert(!board.sceneError, `${name}/${board.path.join('/')}: ${board.sceneError}`);
       const semantic = [...board.objects ?? [], ...board.edges ?? []].map(object => object.id);
@@ -69,8 +58,8 @@ test('research: compare graph/source/target/scene association across native and 
   const counterexamples = {};
   for (const entry of ['collision.d2', 'invisible.d2']) {
     const request = JSON.stringify({ entry, files: { [entry]: readFileSync(join(root, 'examples/research/identity', entry), 'utf8') } });
-    const result = JSON.parse(run(native, [request]));
-    assert.deepEqual(JSON.parse(run(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [wasm, request])), result);
+    const result = JSON.parse(probe.native([request]));
+    assert.deepEqual(JSON.parse(probe.wasm([request])), result);
     assert(!result[0].sceneError, result[0].sceneError);
     counterexamples[entry] = result;
   }

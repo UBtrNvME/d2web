@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
-import { root } from './examples.mjs';
+import { pathData, root } from './examples.mjs';
 
 // Disposable adapter probe; React Flow and its lockfile live only in ignored artifacts.
 const output = join(root, 'artifacts/research-reactflow');
@@ -28,7 +28,7 @@ assert.deepEqual(native.target.shapes.map(shape => shape.id), ['source', 'target
 const connection = native.target.connections[0];
 const primitive = native.webScene.Root.Children.find(node => node.ID === connection.id).Children[0].Primitive;
 assert(primitive.Commands.every(command => [0, 1].includes(command.Kind)), 'Only the existing straight-route fixture is admitted');
-const path = primitive.Commands.map(command => `${command.Kind === 0 ? 'M' : 'L'}${command.P1.X} ${command.P1.Y}`).join(' ');
+const path = pathData(primitive.Commands);
 const fixture = { shapes: native.target.shapes, connection, path };
 await mkdir(output, { recursive: true });
 await writeFile(join(output, 'input.json'), JSON.stringify(fixture, null, 2) + '\n');

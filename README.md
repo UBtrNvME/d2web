@@ -63,7 +63,7 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run setup` | Install tools, root locked dependencies and upstream source for investigation |
 | `mise run browser:install` | Install Playwright Chromium and required OS packages |
 | `mise run doctor` | Print resolved tool versions |
-| `mise run check` | Validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary and browser comparison machinery |
+| `mise run check` | Validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
 | `mise run test:scene` | Build the native/WASM geometry scene probe and check Node/WASM equivalence |
 | `mise run test:research:identity` | Compare selected source/identity projections in native and Node/WASM |
 | `mise run test:research:operations` | Characterize native edit mutation and text premeasurement behavior |
@@ -92,7 +92,7 @@ The imported Studio stays in its independent Git checkout at the user's request.
 
 Root rendering dependencies and build tools are pinned in `package.json`/`pnpm-lock.yaml`. `pnpm-workspace.yaml` permits esbuild's installation script only and includes only the root package; the imported Studio retains its own workspace policy and package-manager selection.
 
-Research tasks are separate from root `check`/CI and do not certify product capabilities. React Flow and JointJS Core are installed only by their opt-in research setups under `artifacts/research-reactflow/` and `artifacts/research-jointjs/`, with scripts/automatic peers disabled. Root build tools are shared; the historical React Flow probe also shares root React. `clean` removes those scratch installations/lockfiles along with artifacts; regenerating their locks can select newer transitive versions. They are not production dependencies or packaged library APIs.
+The five research probes run in `check`; the other research tasks (React Flow, JointJS, consumer, host) are separate from root `check`/CI. None certify product capabilities. React Flow and JointJS Core are installed only by their opt-in research setups under `artifacts/research-reactflow/` and `artifacts/research-jointjs/`, with scripts/automatic peers disabled. Root build tools are shared; the historical React Flow probe also shares root React. `clean` removes those scratch installations/lockfiles along with artifacts; regenerating their locks can select newer transitive versions. They are not production dependencies or packaged library APIs.
 
 ## Generated files and cleanup
 
@@ -110,4 +110,4 @@ Stop development servers, builds and tests before running `mise run clean`. It u
 | `imports/d2/`, the Studio's `.git/`, both pnpm lockfiles and `examples/` | Source/history/input data; never removed by `clean` |
 | User-wide Corepack, pnpm, mise and Playwright caches | Outside this checkout; untouched by repository cleanup |
 
-There is no global cache purge or broad `git clean` command. Local environment files and logs are ignored. No source has been committed, pushed or deployed by this preparation work.
+There is no global cache purge or broad `git clean` command. Local environment files and logs are ignored. The source is in the initial commit; later changes are uncommitted and nothing has been pushed or deployed.

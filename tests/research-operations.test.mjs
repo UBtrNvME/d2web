@@ -1,31 +1,18 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { root } from './examples.mjs';
+import { goProbe, root } from './examples.mjs';
 
 test('research: native oracle mutation and text measurement keys agree with Node/WASM', { timeout: 300_000 }, () => {
   const output = join(root, 'artifacts/research-operations');
   mkdirSync(output, { recursive: true });
-  const env = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
-  const run = (command, args, options = {}) => {
-    const result = spawnSync(command, args, { cwd: join(root, 'imports/d2'), env, encoding: 'utf8', timeout: 180_000, maxBuffer: 8 * 1024 * 1024, ...options });
-    assert.ifError(result.error);
-    assert.equal(result.status, 0, result.stderr);
-    return result.stdout;
-  };
-  const probe = join(root, 'tests/research-operations.go');
-  const native = join(output, 'probe');
-  const wasm = join(output, 'probe.wasm');
-  run('go', ['build', '-mod=readonly', '-o', native, probe]);
-  run('go', ['build', '-mod=readonly', '-o', wasm, probe], { env: { ...env, GOOS: 'js', GOARCH: 'wasm' } });
+  const probe = goProbe(join(root, 'tests/research-operations.go'), join(output, 'probe'));
   const directory = join(root, 'examples/research/identity');
   const files = Object.fromEntries(readdirSync(directory).filter(file => file.endsWith('.d2')).map(file => [file, readFileSync(join(directory, file), 'utf8')]));
   const request = JSON.stringify({ entry: 'main.d2', files });
-  const result = JSON.parse(run(native, [request]));
-  const goRoot = run('go', ['env', 'GOROOT']).trim();
-  assert.deepEqual(JSON.parse(run(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [wasm, request])), result);
+  const result = JSON.parse(probe.native([request]));
+  assert.deepEqual(JSON.parse(probe.wasm([request])), result);
   const [successful, rejected, imported, scenario] = result.operations;
   assert.equal(successful.error, '');
   assert.equal(successful.returnedNil, false);

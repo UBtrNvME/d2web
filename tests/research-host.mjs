@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { build } from 'esbuild';
-import { root } from './examples.mjs';
+import { pathData, root } from './examples.mjs';
 
 const output = join(root, 'artifacts/research-host');
 const studio = join(root, 'imports/d2-architecture-studio');
 const scene = JSON.parse(await readFile(join(root, 'artifacts/scene-probe/geometry.json'), 'utf8'));
 const source = scene.Root.Children.find(node => node.ID === 'source').Children[0].Primitive.Box;
 const edge = scene.Root.Children.find(node => node.ID === '(source -> target)[0]').Children[0].Primitive.Commands;
-const path = edge.map(command => `${command.Kind === 0 ? 'M' : 'L'}${command.P1.X} ${command.P1.Y}`).join(' ');
+const path = pathData(edge);
 assert(edge.every(command => [0, 1].includes(command.Kind)), 'Fixture must remain a straight line');
 await mkdir(output, { recursive: true });
 await writeFile(join(output, 'native.js'), `const box=${JSON.stringify(source)}, path=${JSON.stringify(path)};

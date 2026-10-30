@@ -87,8 +87,6 @@ Key risks are loss of source ownership, font/glyph differences, incomplete scene
 
 ## Handoff
 
-This task creates the research plan/task list and links the current guidance to them. No runtime, imported source, dependency or experimental result changes. Next execute R1 and attach its observed evidence before proposing a public contract. All outer source is still untracked in an unborn repository; nothing is staged, committed or published.
+Current status, next decision and check/CI changes are in the [findings' Current state](../docs/research-findings.md#current-state); task status is in [todo.md](todo.md). The source is in the initial commit and later research changes are uncommitted.
 
-Verification of this planning update: `mise run check` passed four infrastructure tests, four native cases, one native/Node-WASM test, two geometry decoder tests, four Chromium tests, TypeScript and all 20 mise task definitions. Local links and whitespace passed for the six changed guidance/plan documents. The imported Studio checkout was clean. This reruns existing evidence only; none of R1–R5 has been executed or accepted. Full corpus and the separate imported-app gate were not rerun.
-
-Framework/customization extension: initial official React Flow, JointJS and shadcn documentation was inspected and linked above. Added R0 and R6, expanded consumer representation requirements and updated guidance to supersede the earlier D2-configuration-only appearance restriction. `mise run check` passed again with the same counts; changed-document local links/whitespace passed. No framework was installed or locally tested, and no runtime/source/dependency changes were made. Next finish R0's comparative assessment and bounded probe proposal, then execute R1. All architecture decisions remain open pending evidence and review.
+Historical (early planning, when only R0/R1 groundwork existed): `mise run check` then passed four infrastructure tests, four native cases, one native/Node-WASM test, two geometry decoder tests, four Chromium tests, TypeScript and 20 mise task definitions. Those counts are superseded.

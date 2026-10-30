@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { root } from '../examples.mjs';
+import { pathData, root } from '../examples.mjs';
 
 const output = join(root, 'artifacts/research-native-connections');
 const scene = JSON.parse(await readFile(join(root, 'artifacts/scene-probe/geometry.json'), 'utf8'));
@@ -9,14 +9,8 @@ const edge = scene.Root.Children.find(node => node.ID === '(source -> target)[0]
 const edgePath = edge.Children.find(node => node.ID.endsWith(':path'));
 const arrow = edge.Children.find(node => node.ID.endsWith(':dst-arrowhead'));
 const source = scene.Root.Children.find(node => node.ID === 'source').Children[0].Primitive.Box;
-const commandPath = commands => commands.map(command => {
-  if (command.Kind === 0) return `M${command.P1.X} ${command.P1.Y}`;
-  if (command.Kind === 1) return `L${command.P1.X} ${command.P1.Y}`;
-  if (command.Kind === 5) return 'Z';
-  throw new Error(`Unsupported scene path command ${command.Kind}`);
-}).join(' ');
-const route = commandPath(edgePath.Primitive.Commands);
-const arrowRoute = commandPath(arrow.Primitive.Commands);
+const route = pathData(edgePath.Primitive.Commands);
+const arrowRoute = pathData(arrow.Primitive.Commands);
 
 for (const viewportScale of [1, 2]) {
   for (const deviceScaleFactor of [1, 2]) {

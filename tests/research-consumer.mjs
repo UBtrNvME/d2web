@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
-import { root } from './examples.mjs';
+import { nativeArgs, pathData, root } from './examples.mjs';
 
 const output = join(root, 'artifacts/research-consumer');
 const studio = join(root, 'imports/d2-architecture-studio');
@@ -43,7 +43,7 @@ run('node', ['--input-type=module', '-e', "const m=await import('d2web-native-pr
 const geometry = data => {
   const group = data.webScene.Root.Children.find(n => n.ID === data.target.connections[0].id);
   return { box: data.webScene.Root.Children.find(n => n.ID === 'source').Children[0].Primitive.Box,
-    path: group.Children[0].Primitive.Commands.map(c => `${c.Kind === 0 ? 'M' : 'L'}${c.P1.X} ${c.P1.Y}`).join(' ') };
+    path: pathData(group.Children[0].Primitive.Commands) };
 };
 writeFileSync(join(output, 'base.json'), JSON.stringify(geometry(base)));
 const entry = `import React,{useEffect,useState}from'react';import{createRoot}from'react-dom/client';import{createPortal}from'react-dom';
@@ -76,7 +76,7 @@ for (const [name, data] of [['base', base], ['resized', resized]]) {
   const n = join(output, 'native', name), w = join(output, 'web', name);
   mkdirSync(n, { recursive: true }); mkdirSync(w, { recursive: true });
   if (name === 'base') copyFileSync(join(root, 'artifacts/scene-probe/native.svg'), join(n, 'diagram.svg'));
-  else run('d2', ['--layout=tala', '--tala-seeds=1', '--theme=0', '--dark-theme=-1', '--pad=0', '--scale=1', '--sketch=false', '--center=false', '--bundle=true', join(root, 'examples/research/sizing/main.d2'), join(n, 'diagram.svg')]);
+  else run('d2', [...nativeArgs, join(root, 'examples/research/sizing/main.d2'), join(n, 'diagram.svg')]);
   writeFileSync(join(n, 'case.json'), JSON.stringify({status:0, source:name==='base'?'examples/files/geometry.d2':'examples/research/sizing/main.d2'}));
   writeFileSync(join(w, 'geometry.json'), JSON.stringify(data.webScene));
   copyFileSync(join(root, 'artifacts/scene-probe/react.js'), join(w, 'react.js'));

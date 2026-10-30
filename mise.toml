@@ -16,12 +16,16 @@ run = ["node --version", "corepack --version", "pnpm --version", "go version", "
 
 [tasks.check]
 description = "Check tooling, native TALA examples, and automated image comparison"
-depends = ["doctor", "test:unit", "typecheck:renderer", "test:comparison"]
+depends = ["doctor", "reference:fetch", "test:unit", "typecheck:renderer", "test:comparison", "test:research:identity", "test:research:operations", "test:research:text", "test:research:connections", "test:research:composition"]
 run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."reference:fetch"]
-description = "Get the official D2 v0.9.0 source for investigation if absent"
-run = "test -d imports/d2 || git clone --depth 1 --branch v0.9.0 https://github.com/d2lang/d2.git imports/d2"
+description = "Get the official D2 v0.9.0 source if absent and verify its commit"
+run = [
+  "test -d imports/d2 || git clone --depth 1 --branch v0.9.0 https://github.com/d2lang/d2.git imports/d2",
+  # Go probes build against this source; a different version would silently invalidate native/WASM evidence.
+  "test -d imports/d2/.git && test \"$(git -C imports/d2 rev-parse HEAD)\" = d5a51743b6d5c00f1ec6f8340003f5d5a6ba4eda || { echo 'imports/d2 is not a D2 v0.9.0 checkout (d5a5174); remove it and rerun mise run reference:fetch' >&2; exit 1; }",
+]
 
 [tasks."test:native"]
 description = "Render the fast upstream examples with TALA, preserving files and boards"

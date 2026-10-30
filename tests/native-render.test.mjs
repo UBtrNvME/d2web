@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { examples, root } from './examples.mjs';
+import { examples, nativeArgs, root } from './examples.mjs';
 
 const full = process.env.D2_FULL === '1';
 const outputRoot = join(root, full ? 'artifacts/native-corpus' : 'artifacts/native');
@@ -15,7 +15,7 @@ for (const example of examples(full)) {
       const output = join(outputRoot, example.id, run.id);
       mkdirSync(output, { recursive: true });
       assert(existsSync(join(directory, run.entry)), 'Example missing; see examples/README.md');
-      const args = ['--layout=tala', '--tala-seeds=1', '--theme=0', '--dark-theme=-1', '--pad=0', '--scale=1', '--sketch=false', '--center=false', '--bundle=true', '--force-appendix=false', '--animate-interval=0', '--target=*', '--timeout=30', ...(run.args ?? []), run.entry, join(output, 'diagram.svg')];
+      const args = [...nativeArgs, ...(run.args ?? []), run.entry, join(output, 'diagram.svg')];
       const result = spawnSync('d2', args, { cwd: directory, encoding: 'utf8', timeout: 40_000, maxBuffer: 8 * 1024 * 1024 });
       writeFileSync(join(output, 'stdout.txt'), result.stdout ?? '');
       writeFileSync(join(output, 'stderr.txt'), result.stderr ?? '');
