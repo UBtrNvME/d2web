@@ -1,0 +1,17 @@
+vars: {
+  dog1: Frido {
+    shape: circle
+  }
+  my-house: {
+    label: "Home"
+  }
+}
+
+ok: {
+  ...${my-house}
+  dog1: {
+    ...${dog1}
+  }
+  dog1 -> dog3
+}
+

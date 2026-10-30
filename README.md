@@ -1,0 +1,113 @@
+# d2web
+
+**Current phase: architecture research with executable experiments.** The preferred foundation is native HTML, JavaScript and CSS, including browser-native SVG, with future React components building on framework-independent contracts. The [research plan](tasks/plan.md) and [task list](tasks/todo.md) compare boundaries and local evidence before selecting APIs. React Flow is prior art for how connections are drawn and interacted with, not the intended foundation. The real web surface includes semantics, source association, browser interaction and lifecycle as well as rendering.
+
+Build a reusable browser library for D2: WASM runtime integration, semantic/source and native scene/paint data, and browser presentation, including TALA support. D2 remains the language, compiler, layout and default appearance authority. React is a future binding and an existing experimental renderer, not a required browser runtime dependency by design.
+
+The full target is D2 on the web: every D2 element and its content, styling, theming, layout and rendering behavior must have an explicit, verified web mapping. Geometry is the first tested subset, not the product boundary. Reuse D2 through WASM and map presentation to web primitives rather than duplicating D2's language or layout engines in JavaScript/TypeScript. Consumer-owned React/shadcn components may supply opt-in alternate representations above the faithful default.
+
+D2 Architecture Studio is a future consumer of d2web. Editor panels, toolbars, application state and persistence belong to consuming applications. The imported Studio is reference material; its UI and framework do not define the library's architecture or dependencies.
+
+Applications such as a future `d2editor` should integrate through documented runtime/data contracts, stable D2 identities and source references, React components/events and characterized native operations. These integration boundaries remain to be specified as capabilities are proved; no generic plugin framework is assumed.
+
+The current priority is a pinned pipeline map and executable feature/capability matrix, followed by a joint decision on the web mapping. The imported Studio is a prototype, not the specification or a certified renderer.
+
+- [Goal, proposed approach and current handoff](docs/project-brief.md)
+- [D2 → React porting map](docs/porting-map.md)
+- [Research findings: frameworks, source identity, browser composition and native operations](docs/research-findings.md)
+- [Native TALA and web comparison guide](docs/conformance.md)
+- [Test examples and provenance](examples/README.md)
+- [Imported Studio, upstream source and historical evidence](imports/README.md)
+- [Development rules](AGENTS.md)
+
+## Repository layout
+
+| Directory | Responsibility |
+| --- | --- |
+| `docs/` | Current requirements, mapping and validation guidance |
+| `examples/` | Repository-owned conformance inputs, imports, assets and upstream license |
+| `tests/` | Node assertions and Playwright comparisons; no second examples tree |
+| `src/` | Reusable d2web types, validation and React rendering components |
+| `scripts/` | Repository maintenance commands |
+| `imports/` | Historical evidence and local external source copies; D2 source is in `imports/d2/`, Studio in `imports/d2-architecture-studio/` |
+| `artifacts/` | Ignored generated references, logs, screenshots and reports |
+
+The separate `references/` directory has been consolidated into `imports/`. Tests read all conformance inputs from `examples/`, without needing the upstream checkout. See the comparison guide for the remaining remote-image dependencies.
+
+## Setup and validation
+
+With mise installed, review [mise.toml](mise.toml), then run from this directory:
+
+```sh
+mise trust
+mise run setup
+mise run browser:install
+mise run check
+```
+
+Mise supplies Node.js 24, Go 1.27.3 and D2 0.9.0. Corepack provides the package-local pnpm versions: root `pnpm@12.14.0`, Studio `pnpm@11.25.0`. Use `mise exec -- <command>` for one-off commands. Do not use the imported starter's historical npm installer.
+
+The existing Studio commands below are optional reference-consumer tooling, separate from d2web development:
+
+```sh
+mise run app:setup
+mise run dev
+# In a separate shell:
+mise run check:app
+```
+
+The imported Studio stays in its independent Git checkout at the user's request. Its source and history are preserved and the outer repository explicitly ignores it to prevent accidental gitlink staging. It is not a submodule: an outer clone alone does not restore it. Restore that checkout separately before running the app commands; [import provenance](imports/README.md) records its identity and commit. Inspect its changes with `mise exec -- git -C imports/d2-architecture-studio status --short`.
+
+| Command | Purpose |
+| --- | --- |
+| `mise run setup` | Install tools, root locked dependencies and upstream source for investigation |
+| `mise run browser:install` | Install Playwright Chromium and required OS packages |
+| `mise run doctor` | Print resolved tool versions |
+| `mise run check` | Validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary and browser comparison machinery |
+| `mise run test:scene` | Build the native/WASM geometry scene probe and check Node/WASM equivalence |
+| `mise run test:research:identity` | Compare selected source/identity projections in native and Node/WASM |
+| `mise run test:research:operations` | Characterize native edit mutation and text premeasurement behavior |
+| `mise run test:research:composition` | Compare HTML/SVG placement, interaction, CSS leakage and overflow |
+| `mise run research:reactflow:setup` | Explicitly install the pinned framework into ignored experiment artifacts |
+| `mise run test:research:reactflow` | Test actual React Flow fixed-bound custom nodes and native connection path after setup |
+| `mise run test:research:connections` | Test native SVG paint versus hit targets across viewport/device scales |
+| `mise run research:jointjs:setup` | Explicitly install pinned framework-free JointJS Core into experiment artifacts |
+| `mise run test:research:jointjs` | Compare fixed geometry, custom native path, HTML events and structural cleanup |
+| `mise run test:research:text` | Export native text/font assets and compare browser metrics with font controls |
+| `mise run test:research:host` | Quick native lifecycle/React portal check using the imported shadcn Card; requires the local Studio import/dependencies |
+| `mise run test:research:consumer` | Pack/import a native module, compile Card themes, test explicit native resizing and base/resized image parity; requires Studio dependencies |
+| `mise run typecheck:renderer` | Typecheck the standalone React geometry adapter |
+| `mise run test:native:corpus` | Render all 147 repository-owned file/archive runs with TALA |
+| `mise run test:parity` | Compare native SVGs to actual web scenes from `D2_WEB_OUTPUT` |
+| `mise run app:setup` | Install the imported Studio with its frozen lockfile |
+| `mise run dev` | Start the Studio on loopback, default port 5173 |
+| `mise run lint` / `mise run typecheck` | Run the Studio's existing ESLint rules / TypeScript check |
+| `mise run test:app` | Run imported document, compaction and rich-content WASM assertions |
+| `mise run build` | Build the Studio locally without deploying |
+| `mise run check:app` | Run lint, typecheck, imported assertions and build; lint currently fails |
+| `mise run clean` | Delete the local generated files and caches listed below |
+| `mise tasks` | Discover all commands |
+
+`check` and [CI](.github/workflows/check.yml) validate d2web and one native-versus-React geometry case. `check:app` is the separate, failing gate for the imported reference consumer and is not counted as a passing d2web check. Future Studio adoption will need its own integration checks. The comparison self-tests do not establish React parity; the dedicated React geometry test is the first real comparison. See the [porting map](docs/porting-map.md#react-geometry-adapter) for its exact subset and limits.
+
+Root rendering dependencies and build tools are pinned in `package.json`/`pnpm-lock.yaml`. `pnpm-workspace.yaml` permits esbuild's installation script only and includes only the root package; the imported Studio retains its own workspace policy and package-manager selection.
+
+Research tasks are separate from root `check`/CI and do not certify product capabilities. React Flow and JointJS Core are installed only by their opt-in research setups under `artifacts/research-reactflow/` and `artifacts/research-jointjs/`, with scripts/automatic peers disabled. Root build tools are shared; the historical React Flow probe also shares root React. `clean` removes those scratch installations/lockfiles along with artifacts; regenerating their locks can select newer transitive versions. They are not production dependencies or packaged library APIs.
+
+## Generated files and cleanup
+
+Stop development servers, builds and tests before running `mise run clean`. It uses a fixed list, refuses symlinked parent directories and works independently of the caller's working directory. Deleted reports and native references are regenerated by the checks, never from candidate screenshots.
+
+| Data | Git policy and cleanup |
+| --- | --- |
+| Root `artifacts/`, `.cache/`, `.pnpm-store/`, `dist/`, `coverage/` | Ignored; removed by `clean` |
+| Root `.cache/go-build/`, `.cache/go-mod/`; `artifacts/scene-probe/` | Generated Go caches and native/WASM probe output; removed with their parents by `clean` |
+| Both packages' `node_modules/.cache/`, `node_modules/.vite/`; root `node_modules/.pnpm-store/` | Ignored with dependencies; removed by `clean` |
+| Studio `dist/`, `.next/`, `.vinext/`, `.cache/`, `.pnpm-store/`, `coverage/`, `tsconfig.tsbuildinfo` | Outer import ignored; generated output removed by `clean` |
+| Studio `.sites-runtime/pnpm-store/` and `.sites-runtime/wrangler/logs/` | Ignored by Studio; removable dependency download cache and tool logs, removed by `clean` |
+| Both `node_modules/` trees | Ignored; installed dependencies retained. Rerun the corresponding setup task to restore dependencies if removed manually |
+| Studio `.wrangler/state/`, other `.sites-runtime/` data | Ignored; retained because it may hold local databases or execution configuration |
+| `imports/d2/`, the Studio's `.git/`, both pnpm lockfiles and `examples/` | Source/history/input data; never removed by `clean` |
+| User-wide Corepack, pnpm, mise and Playwright caches | Outside this checkout; untouched by repository cleanup |
+
+There is no global cache purge or broad `git clean` command. Local environment files and logs are ignored. No source has been committed, pushed or deployed by this preparation work.

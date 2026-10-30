@@ -1,0 +1,21 @@
+# Research case: authored, imported and generated references must stay distinguishable.
+classes: {
+  service: {
+    style.fill: "#abcdef"
+  }
+}
+imported: @shared
+local: {class: service}
+local -> imported.child
+*: {style.stroke: "#123456"}
+scenarios: {
+  changed: {
+    local.label: changed
+    imported.child.style.fill: "#fedcba"
+  }
+}
+layers: {
+  independent: {
+    local
+  }
+}

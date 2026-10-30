@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "importedOn": "2026-10-30",
+  "thread": {
+    "id": "6ae47a1d-6c8c-83eb-ab25-3204d16806c0",
+    "kind": "chatgpt",
+    "title": "D2 React Integration",
+    "preview": "::chatgpt-content-reference{index=\"3\" source_message_id=\"4e79e8ea-0e8d-474f-afbd-cab5d202416e\"}",
+    "status": {
+      "type": "idle"
+    },
+    "cwd": null,
+    "createdAt": 1793358365.847679,
+    "updatedAt": 1793359538.474324
+  },
+  "page": {
+    "order": "newest_first",
+    "limit": 10,
+    "nextCursor": null,
+    "hasMore": false
+  },
+  "turns": [
+    {
+      "id": "8609e1c4-1f7b-4508-888f-4442ac84395c",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1793359499.838,
+      "completedAt": 1793359517.01006,
+      "durationMs": null,
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "8609e1c4-1f7b-4508-888f-4442ac84395c",
+          "content": [
+            {
+              "type": "text",
+              "text": "I need a gpt site"
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "4e79e8ea-0e8d-474f-afbd-cab5d202416e",
+          "text": "::chatgpt-content-reference{index=\"3\" source_message_id=\"4e79e8ea-0e8d-474f-afbd-cab5d202416e\"}"
+        }
+      ]
+    },
+    {
+      "id": "b65da1ae-f1ed-4446-9b5c-bebecda9cba0",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1793359286.57,
+      "completedAt": 1793359300.089412,
+      "durationMs": null,
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "b65da1ae-f1ed-4446-9b5c-bebecda9cba0",
+          "content": [
+            {
+              "type": "text",
+              "text": "can you build the gptsite prototype?"
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "2ec72375-d132-491f-8c5f-f4f51e9f7092",
+          "text": "::chatgpt-content-reference{index=\"1\" source_message_id=\"2ec72375-d132-491f-8c5f-f4f51e9f7092\"}"
+        }
+      ]
+    },
+    {
+      "id": "47c1a083-a8d5-4706-b7f5-0414d4406f44",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1793359178.598,
+      "completedAt": 1793359189.271725,
+      "durationMs": null,
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "47c1a083-a8d5-4706-b7f5-0414d4406f44",
+          "content": [
+            {
+              "type": "text",
+              "text": "will ti be possible to have react component as an ouput not svg within react?"
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "c0c0943c-4854-420f-8062-6789830330eb",
+          "text": "::chatgpt-content-reference{index=\"3\" source_message_id=\"c0c0943c-4854-420f-8062-6789830330eb\"}"
+        }
+      ]
+    },
+    {
+      "id": "87db0701-987e-477b-afd0-48d2c7980902",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1793359026.409,
+      "completedAt": 1793359035.857102,
+      "durationMs": null,
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "87db0701-987e-477b-afd0-48d2c7980902",
+          "content": [
+            {
+              "type": "text",
+              "text": "will it be possible to use the d2 as a main engine"
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "62cad525-5dff-4884-a41d-04b67a77aeda",
+          "text": "::chatgpt-content-reference{index=\"4\" source_message_id=\"62cad525-5dff-4884-a41d-04b67a77aeda\"}"
+        }
+      ]
+    },
+    {
+      "id": "cfec5cd6-40a1-46e8-88d8-b6fccb287450",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1793358385.59,
+      "completedAt": 1793358397.776697,
+      "durationMs": null,
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "cfec5cd6-40a1-46e8-88d8-b6fccb287450",
+          "content": [
+            {
+              "type": "text",
+              "text": "can d2 be used to be working nativelly in the browser using some react components and so on"
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "d41af4a0-bddf-428f-a700-68601c8e29c0",
+          "text": "::chatgpt-content-reference{index=\"3\" source_message_id=\"d41af4a0-bddf-428f-a700-68601c8e29c0\"}"
+        }
+      ]
+    }
+  ],
+  "attachments": []
+}
+

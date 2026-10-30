@@ -1,0 +1,17 @@
+{
+  "importedOn": "2026-10-30",
+  "projectId": "appgprj_6ae47ee634e881919475c00ff912ac2a",
+  "title": "D2 Architecture Studio",
+  "url": "https://d2-architecture-studio-aitemir.kuandikaytemir.chatgpt.site",
+  "latestVersion": 4,
+  "sourceCommit": "d5a47eadabb1b142cbd7bdfbc258a9ef2e1d6b64",
+  "sourceDirectory": "d2-architecture-studio",
+  "historicalUpstreamAuditCommit": "6a7b4837838a3907604a1d9eec57ee98b6f3cd01",
+  "gaps": [
+    "Integration conversation assistant replies were returned as content-reference markers.",
+    "Original D2-Web-Port-Audit.md attachment is remote; its generator and inspection evidence were recovered instead.",
+    "Earlier annotation images referenced only in execution history were not returned as downloadable attachments.",
+    "Browser localStorage diagrams are not included in the source repository."
+  ]
+}
+

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "chess",
+    "directory": "examples/files",
+    "runs": [
+      {
+        "id": "default",
+        "entry": "chess.d2",
+        "outputs": [
+          "diagram.svg"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "imports",
+    "directory": "examples/imports",
+    "runs": [
+      {
+        "id": "default",
+        "entry": "main.d2",
+        "outputs": [
+          "diagram.svg"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "boards",
+    "directory": "examples/boards",
+    "runs": [
+      {
+        "id": "all",
+        "entry": "main.d2",
+        "outputs": [
+          "diagram/index.svg",
+          "diagram/x/index.svg",
+          "diagram/x/y.svg"
+        ]
+      },
+      {
+        "id": "nested",
+        "entry": "main.d2",
+        "args": [
+          "--target=layers.x"
+        ],
+        "outputs": [
+          "diagram.svg"
+        ]
+      }
+    ]
+  }
+]

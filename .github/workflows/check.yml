@@ -1,0 +1,35 @@
+name: Development checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_corpus:
+        description: Also render all upstream D2 files and archived examples
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      - run: mise run setup
+      - run: mise run browser:install
+      - run: mise run check
+      - if: ${{ inputs.full_corpus == true }}
+        run: mise run test:native:corpus
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rendering-results
+          path: artifacts/
+          retention-days: 7

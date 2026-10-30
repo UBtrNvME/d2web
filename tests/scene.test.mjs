@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { build } from 'esbuild';
+import { root } from './examples.mjs';
+
+test('D2 geometry compiles into the same native and Node/WASM scene', { timeout: 300_000 }, async () => {
+  const output = join(root, 'artifacts/scene-probe');
+  mkdirSync(output, { recursive: true });
+  const env = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
+  const run = (command, args, options = {}) => {
+    const result = spawnSync(command, args, { cwd: join(root, 'imports/d2'), env, encoding: 'utf8', timeout: 180_000, maxBuffer: 8 * 1024 * 1024, ...options });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  const source = readFileSync(join(root, 'examples/files/geometry.d2'), 'utf8');
+  const probe = join(root, 'tests/scene-probe.go');
+  const native = join(output, 'scene-probe');
+  const wasm = join(output, 'scene-probe.wasm');
+  run('go', ['build', '-mod=readonly', '-o', native, probe]);
+  run('go', ['build', '-mod=readonly', '-o', wasm, probe], { env: { ...env, GOOS: 'js', GOARCH: 'wasm' } });
+  const goRoot = run('go', ['env', 'GOROOT']).trim();
+  const nativeResult = JSON.parse(run(native, [source]));
+  const wasmResult = JSON.parse(run(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [wasm, source]));
+  assert.deepEqual(wasmResult, nativeResult);
+  const nodes = nativeResult.nodes;
+  const sourceNode = nativeResult.scene.Root.Children.find(n => n.ID === 'source');
+  const targetNode = nativeResult.scene.Root.Children.find(n => n.ID === 'target');
+  assert.equal(sourceNode.Children[0].Primitive.Box.Width, 56);
+  assert.deepEqual(sourceNode.Children[0].Primitive.Fill.Color, { R: 255, G: 107, B: 107, A: 255 });
+  assert.equal(sourceNode.Children[0].Primitive.Stroke.Width, 3);
+  assert.equal(targetNode.Children[0].Primitive.RadiusX, 21);
+  assert.equal(nodes.filter(n => n.kind === 'd2scene.Ellipse').length, 1);
+  assert(nodes.some(n => n.id.endsWith(':dst-arrowhead') && n.kind === 'd2scene.Path'));
+  assert.equal(nativeResult.target.shapes.find(s => s.id === 'source').strokeWidth, 3);
+  assert.equal(nativeResult.target.connections[0].strokeWidth, 4);
+  const edge = nativeResult.target.connections[0];
+  const edgeNode = nativeResult.scene.Root.Children.find(n => n.ID === edge.id);
+  assert.deepEqual(nativeResult.scene.Root.Children.map(n => n.ID), ['root:background', 'source', 'target', edge.id]);
+  assert.deepEqual(edgeNode.Children[0].Primitive.Commands.map(c => c.P1), [{ X: 59.5, Y: 21 }, { X: 161, Y: 21 }]);
+  assert.deepEqual(edgeNode.Children[1].Transform, { A: 1, B: 0, C: 0, D: 1, E: 130.4, F: 7.5 });
+  const rejected = spawnSync(native, ['a: {'], { encoding: 'utf8' });
+  assert.notEqual(rejected.status, 0);
+  assert.equal(rejected.stdout, '', 'A failed compilation must not emit a partial scene');
+  for (const unsupported of ['a: hello', 'a.style.fill: "linear-gradient(red, blue)"', 'a.style.shadow: true']) {
+    const rejected = spawnSync(native, [unsupported], { encoding: 'utf8' });
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /unsupported geometry/);
+    assert.equal(rejected.stdout, '');
+  }
+  run('d2', ['--layout=tala', '--tala-seeds=1', '--theme=0', '--dark-theme=-1', '--pad=0', '--scale=1', '--sketch=false', '--center=false', '--bundle=true', join(root, 'examples/files/geometry.d2'), join(output, 'native.svg')]);
+  writeFileSync(join(output, 'native.json'), JSON.stringify(nativeResult, null, 2) + '\n');
+  writeFileSync(join(output, 'geometry.json'), JSON.stringify(nativeResult.webScene));
+  writeFileSync(join(output, 'source.json'), JSON.stringify(source));
+  writeFileSync(join(output, 'wasm_exec.js'), readFileSync(join(goRoot, 'lib/wasm/wasm_exec.js')));
+  await build({ entryPoints: [join(root, 'tests/react-entry.tsx')], outfile: join(output, 'react.js'), bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
+  writeFileSync(join(output, 'react.html'), '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>D2 geometry React comparison</title></head><body style="margin:0"><div id="root"></div><script type="module" src="./react.js"></script></body></html>');
+});

@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+mise.local.toml
+mise.*.local.toml
+node_modules/
+dist/
+coverage/
+.cache/
+.pnpm-store/
+*.tsbuildinfo
+*.log
+/imports/d2/
+/imports/d2-architecture-studio/
+/artifacts/
