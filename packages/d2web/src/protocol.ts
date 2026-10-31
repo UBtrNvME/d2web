@@ -1,5 +1,6 @@
 // Message types for spec 0001 (docs/specs/0001-compile-protocol.md). Types only; the spec is the contract, this file mirrors it.
 export const PROTOCOL_VERSION = 1;
+export const SCENE_VERSION = 1;
 
 export type Engine = 'tala' | 'dagre' | 'elk';
 
@@ -27,6 +28,8 @@ export interface WorkerReady {
   d2: string;
   engines: Engine[];
   sceneVersion: number;
+  // True when the wasm was built from a D2 checkout with docs/upstream patches applied.
+  patched: boolean;
 }
 
 export interface CompileRequest {

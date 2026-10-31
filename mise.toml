@@ -243,3 +243,13 @@ run = ["node scripts/test-d2-document.mjs", "node scripts/test-d2-compact.mjs", 
 [tasks."studio:check"]
 description = "Validate the imported Studio baseline (currently fails lint)"
 depends = ["studio:lint", "studio:typecheck", "studio:test", "studio:build"]
+
+[tasks.build]
+description = "Build the d2web package into packages/d2web/dist (wasm, worker, ESM, types, notices); refuses an unpinned or patched D2 unless D2WEB_ALLOW_PATCHED=1"
+depends = ["reference:fetch"]
+run = "node packages/d2web/build.mjs"
+
+[tasks."test:dist"]
+description = "Package artifacts: dist contents and the size budget (spec 0003), after a build"
+depends = ["build"]
+run = "node --test packages/d2web/test/dist.test.mjs"

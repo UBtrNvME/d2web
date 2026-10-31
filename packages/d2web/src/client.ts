@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type CompileRequest, type CompileResult, type WorkerMessage } from './protocol.ts';
+import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type WorkerMessage, type WorkerReady } from './protocol.ts';
 import { normalizeCompileRequest } from './request.ts';
 
 // Minimal Worker surface so tests can script one; a real `Worker` fits.
@@ -23,13 +23,15 @@ export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id'>;
 
 export class SupersededError extends Error {}
 export class TimeoutError extends Error {}
+// The worker's wasm speaks another protocol or scene version than this client (usually a stale cached wasm; spec 0003 section 4).
+export class VersionError extends Error {}
 
 interface Job { request: CompileRequest; resolve: (r: CompileResult) => void; reject: (e: unknown) => void; started: number; timer?: ReturnType<typeof setTimeout> }
 
 // Spec 0001 section 3.4: one compile at a time, latest request wins, no cooperative cancel (abort = terminate and respawn).
 export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000 }: ClientOptions) {
   let worker: WorkerLike;
-  let ready: Promise<void>;
+  let ready: Promise<WorkerReady>;
   let running: Job | null = null;
   let waiting: Job | null = null;
   let nextId = 0;
@@ -40,7 +42,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
     ready = new Promise(resolve => {
       mine.onmessage = ({ data }) => {
         if (mine !== worker) return;
-        if (data.type === 'ready') resolve();
+        if (data.type === 'ready') resolve(data);
         else if (running && data.type === 'result' && data.id === running.request.id) finish(data);
       };
     });
@@ -74,9 +76,14 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
     const timeout = (ms: number, what: string) => setTimeout(() => { if (running === job) abort(new TimeoutError(`${what} for ${ms} ms`)); }, ms);
     job.timer = timeout(startupTimeoutMs, 'worker not ready');
     const mine = worker;
-    ready.then(() => {
+    ready.then(hello => {
       if (running !== job || mine !== worker) return;
       clearTimeout(job.timer);
+      if (hello.v !== PROTOCOL_VERSION || hello.sceneVersion !== SCENE_VERSION) {
+        settle(job);
+        job.reject(new VersionError(`worker speaks protocol ${hello.v}, scene ${hello.sceneVersion}; client expects ${PROTOCOL_VERSION}, ${SCENE_VERSION}`));
+        return pump();
+      }
       job.timer = timeout(silentTimeoutMs, 'no reply');
       mine.postMessage(job.request);
     });
@@ -101,5 +108,22 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       for (const job of [running, waiting]) { if (job) { clearTimeout(job.timer); job.reject(new Error('client is disposed')); } }
       running = waiting = null;
     },
+  };
+}
+
+export interface SpawnWorkerOptions {
+  // Override any URL (same-origin only for `worker`); defaults resolve next to this module.
+  worker?: string | URL;
+  exec?: string | URL;
+  wasm?: string | URL;
+}
+
+// A `spawn` for createClient (spec 0003 section 3). `new URL(..., import.meta.url)` is the form bundlers recognise as an asset.
+export function spawnWorker({ worker = new URL('./worker.js', import.meta.url), exec, wasm }: SpawnWorkerOptions = {}): () => WorkerLike {
+  return () => {
+    const url = new URL(worker, location.href);
+    if (exec) url.searchParams.set('exec', new URL(exec, location.href).href);
+    if (wasm) url.searchParams.set('wasm', new URL(wasm, location.href).href);
+    return new Worker(url) as WorkerLike;
   };
 }

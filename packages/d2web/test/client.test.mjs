@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createClient, SupersededError, TimeoutError } from '../src/client.ts';
+import { createClient, SupersededError, TimeoutError, VersionError } from '../src/client.ts';
 
 const render = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
 const input = (revision, source = 'a') => ({ revision, files: { 'main.d2': source }, entry: 'main.d2', render });
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 // A scripted worker: replies come from `behave(message, reply)`; `ready` is sent on the next tick like the real one.
-function fakes(behave) {
+function fakes(behave, ready = {}) {
   const spawned = [];
   const spawn = () => {
     const w = { sent: [], terminated: false, onmessage: null, onerror: null };
     w.postMessage = m => { w.sent.push(m); behave(m, reply => { if (!w.terminated) w.onmessage?.({ data: reply }); }, w); };
     w.terminate = () => { w.terminated = true; };
     spawned.push(w);
-    setTimeout(() => w.onmessage?.({ data: { v: 1, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1 } }), 1);
+    setTimeout(() => w.onmessage?.({ data: { v: 1, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1, patched: false, ...ready } }), 1);
     return w;
   };
   return { spawn, spawned };
@@ -92,4 +92,14 @@ test('error results resolve (they are answers); dispose terminates and rejects l
   client.dispose();
   assert.equal(spawned[0].terminated, true);
   await assert.rejects(client.compile(input(2)), /disposed/);
+});
+
+test('a worker with another protocol or scene version is rejected with VersionError, not left hanging', async () => {
+  for (const ready of [{ v: 2 }, { sceneVersion: 9 }]) {
+    const { spawn, spawned } = fakes(answer(), ready);
+    const client = createClient({ spawn });
+    await assert.rejects(client.compile(input(1)), VersionError);
+    assert.equal(spawned[0].sent.length, 0);
+    client.dispose();
+  }
 });

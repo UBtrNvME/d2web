@@ -3,5 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "D2 browser runtime: worker-hosted D2 Go/WASM compile and native HTML/SVG painting (spec 0001)"
+  "description": "D2 browser runtime: worker-hosted D2 Go/WASM compile and native HTML/SVG painting (spec 0001)",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./worker.js": "./dist/worker.js",
+    "./wasm_exec.js": "./dist/wasm_exec.js",
+    "./d2web.wasm": "./dist/d2web.wasm",
+    "./NOTICE.txt": "./dist/NOTICE.txt"
+  },
+  "files": ["dist"]
 }

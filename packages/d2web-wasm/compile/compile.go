@@ -111,9 +111,12 @@ type Result struct {
 	} `json:"echo"`
 }
 
+// Patched is set to "true" at link time (-ldflags -X) by mise run build when the D2 checkout carries docs/upstream patches (spec 0003 section 4).
+var Patched string
+
 // Ready is the worker's first message.
 func Ready() []byte {
-	out, _ := json.Marshal(map[string]any{"v": ProtocolVersion, "type": "ready", "d2": "0.9.0", "engines": []string{"tala", "dagre", "elk"}, "sceneVersion": scenejson.Version})
+	out, _ := json.Marshal(map[string]any{"v": ProtocolVersion, "type": "ready", "d2": "0.9.0", "engines": []string{"tala", "dagre", "elk"}, "sceneVersion": scenejson.Version, "patched": Patched == "true"})
 	return out
 }
 
