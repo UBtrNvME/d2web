@@ -133,3 +133,10 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 - [ ] Native corpus is 145/147 (two broken remote image URLs).
 - [ ] Go/Node WASM hang (about 1 in 20-50 runs under load) is worked around by a timeout and retry, cause unknown.
 - [x] Gate split (31 Oct 2026): `mise run check` is the fast gate (8.7 s, no browser); `check:browser` is every Playwright suite (188 s); `check:full` runs both and is what CI should use. Studio tasks renamed `studio:*`. Mixed research tasks gained a `:node` half.
+
+## Feature-map gaps (31 Oct 2026)
+
+- [x] Icons/images: catalog inlines the icon as a data URI (35 cases now ok); `content/icon-remote` keeps the offline-placeholder case.
+- [x] `render/pad-scale-center`: painter scales content (Codex wrote it, I ran the browser tests).
+- [x] Link/tooltip badges: intended difference (scene builder omits static badges by design); no upstream patch drafted. Hover/click tests still open.
+- [ ] Sketch shapes (scene builder, upstream patch), `shape: text` kerning, LaTeX sizing, theme overrides (no native flag).

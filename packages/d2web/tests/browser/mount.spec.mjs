@@ -87,3 +87,28 @@ test('two mounts of the same scene stay independent and isolated from hostile pa
   await hostilePage.evaluate(() => { document.getElementById('b').style.visibility = 'hidden'; });
   expect(await hostilePage.evaluate(() => getComputedStyle(document.getElementById('b').shadowRoot.firstElementChild).visibility)).toBe('hidden');
 });
+
+test('pad, scale and center scale the painted content with the host', async ({ page }) => {
+  await open(page, { body: host });
+  const boxes = await page.evaluate(async () => {
+    const mount = d2web.mount(document.getElementById('a'));
+    const boxes = [];
+    for (const scale of [1, 1.5]) {
+      await mount.update(await compile('a -> b', { pad: 40, scale, center: true }));
+      const root = document.getElementById('a').shadowRoot;
+      boxes.push(['[data-d2-scene]', '[data-id="a"] [data-k="rect"]'].map(selector => {
+        const { x, y, width, height } = root.querySelector(selector).getBoundingClientRect();
+        return { x, y, width, height };
+      }));
+    }
+    mount.dispose();
+    return boxes;
+  });
+  const [[baseHost, shape], [scaledHost, scaledShape]] = boxes;
+  expect(scaledHost.width).toBe(Math.ceil(baseHost.width * 1.5));
+  expect(scaledHost.height).toBe(Math.ceil(baseHost.height * 1.5));
+  expect(scaledShape.width).toBeCloseTo(shape.width * 1.5, 2);
+  expect(scaledShape.height).toBeCloseTo(shape.height * 1.5, 2);
+  expect(scaledShape.x).toBeCloseTo(shape.x * 1.5 + (scaledHost.width - baseHost.width * 1.5) / 2, 2);
+  expect(scaledShape.y).toBeCloseTo(shape.y * 1.5 + (scaledHost.height - baseHost.height * 1.5) / 2, 2);
+});

@@ -10,7 +10,9 @@ const entries = [];
 const add = (family, name, covers, source, extra = {}) => entries.push({ id: `${family}/${name}`, family, covers, source, mechanism: 'scene-paint', ...extra });
 
 // ---- shapes -------------------------------------------------------------------------------------------------------------------------
-const icon = 'https://icons.terrastruct.com/essentials%2F092-graph%20bar.svg';
+const remoteIcon = 'https://icons.terrastruct.com/essentials%2F092-graph%20bar.svg';
+// Offline fixture: the worker never fetches (compile.go), so icons are inlined to compare the same bytes on both sides.
+const icon = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="30" width="12" height="26" fill="#2b6cb0"/><rect x="26" y="14" width="12" height="42" fill="#c05621"/><rect x="44" y="22" width="12" height="34" fill="#2f855a"/></svg>')}`;
 const shapeSource = {
   sql_table: 'x: {shape: sql_table; id: int {constraint: primary_key}; name: varchar(100) {constraint: unique}}',
   class: 'x: {shape: class; +field: int; -secret: string; +method(a: int): string}',
@@ -23,7 +25,7 @@ const shapeSource = {
   circle: 'x: Hi {shape: circle}',
 };
 const shapes = ['rectangle', 'square', 'page', 'parallelogram', 'document', 'cylinder', 'queue', 'package', 'step', 'callout', 'stored_data', 'person', 'c4-person', 'diamond', 'oval', 'circle', 'hexagon', 'cloud', 'text', 'code', 'class', 'sql_table', 'image', 'sequence_diagram', 'hierarchy'];
-for (const s of shapes) add('shape', s, [`shape:${s}`, 'keyword:shape'], shapeSource[s] ?? `x: Hi {shape: ${s}}`, s === 'image' ? { network: true } : {});
+for (const s of shapes) add('shape', s, [`shape:${s}`, 'keyword:shape'], shapeSource[s] ?? `x: Hi {shape: ${s}}`);
 
 // ---- styles ---------------------------------------------------------------------------------------------------------------------------
 const styles = [
@@ -69,7 +71,7 @@ const positions = ['top-left', 'top-center', 'top-right', 'center-left', 'center
   'border-right-top', 'border-right-center', 'border-right-bottom', 'border-bottom-left', 'border-bottom-center', 'border-bottom-right'];
 for (const p of positions) {
   add('label-position', p, [`labelpos:${p}`, 'keyword:near', 'keyword:label'], `x: {width: 300; height: 200; label: Label; label.near: ${p}}`);
-  add('icon-position', p, [`labelpos:${p}`, 'keyword:icon', 'keyword:near'], `x: {width: 300; height: 200; icon: ${icon}; icon.near: ${p}}`, { network: true });
+  add('icon-position', p, [`labelpos:${p}`, 'keyword:icon', 'keyword:near'], `x: {width: 300; height: 200; icon: ${icon}; icon.near: ${p}}`);
 }
 for (const p of ['top-left', 'top-center', 'top-right', 'center-left', 'center-right', 'bottom-left', 'bottom-center', 'bottom-right']) {
   add('near', p, [`near:${p}`, 'keyword:near'], `title: Title {near: ${p}}\na -> b`);
@@ -99,7 +101,8 @@ add('content', 'latex', ['extra:latex', 'keyword:label'], 'x: |`latex\n\\frac{a}
 add('content', 'multiline', ['keyword:label'], 'x: "line one\\nline two\\nline three"');
 add('content', 'unicode', ['keyword:label', 'extra:unicode'], 'x: "日本語 العربية 😀 é"');
 add('content', 'fonts-bold-italic', ['style:bold', 'style:italic', 'style:underline', 'style:font'], 'x: Text {style: {bold: true; italic: true; underline: true; font: mono}}');
-add('content', 'icon', ['keyword:icon'], `x: Icon {icon: ${icon}}`, { network: true });
+add('content', 'icon', ['keyword:icon'], `x: Icon {icon: ${icon}}`);
+add('content', 'icon-remote', ['keyword:icon'], `x: Icon {icon: ${remoteIcon}}`, { network: true });
 add('content', 'link', ['keyword:link'], 'x: Click {link: https://example.test}', { mechanism: 'interaction' });
 add('content', 'tooltip', ['keyword:tooltip'], 'x: Hover {tooltip: Some tip}', { mechanism: 'interaction' });
 add('content', 'tooltip-markdown', ['keyword:tooltip'], 'x: Hover {tooltip: |md **bold** tip |}', { mechanism: 'interaction' });

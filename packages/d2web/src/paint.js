@@ -259,8 +259,13 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   if (html) {
     const links = (scene.Links ?? []).map(l => `<a data-k="link" ${l.URL ? `href="${esc(l.URL)}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     const body = nodeHtml(scene.Root);
+    let sx = scene.LogicalWidth / v.Width, sy = scene.LogicalHeight / v.Height;
+    if (scene.ViewportFit) sx = sy = Math.min(sx, sy);
+    const centered = scene.ViewportFit && scene.ViewportAlign;
+    const dx = centered ? (scene.LogicalWidth - v.Width * sx) / 2 : 0;
+    const dy = centered ? (scene.LogicalHeight - v.Height * sy) / 2 : 0;
     return {
-      html: `<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:hidden;width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:${px(-v.X)};top:${px(-v.Y)}">${body}${links}</div></div>`,
+      html: `<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:hidden;width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
       stats: { ...stats, links: scene.Links?.length ?? 0 },
       animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
     };
