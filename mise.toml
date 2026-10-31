@@ -61,7 +61,7 @@ run = ["go test -mod=readonly ./...", "node --test test/protocol.test.mjs test/e
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/test/browser/client.spec.mjs packages/d2web/test/browser/e2e.spec.mjs packages/d2web/test/browser/mount.spec.mjs packages/d2web/test/browser/events.spec.mjs packages/d2web/test/browser/content.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/test/browser/client.spec.mjs packages/d2web/test/browser/e2e.spec.mjs packages/d2web/test/browser/mount.spec.mjs packages/d2web/test/browser/events.spec.mjs packages/d2web/test/browser/content.spec.mjs packages/d2web/test/browser/fonts.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"

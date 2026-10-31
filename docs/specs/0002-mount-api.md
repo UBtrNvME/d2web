@@ -62,11 +62,15 @@ Compile results carry the font bytes D2 used (spec 0001 section 3.3). With `font
 | Node content replacement leaves the rest of the board unchanged; restore is byte-identical; consumer receives clicks | verified (research, chess board) | `test:research:content` |
 | Named focusable groups per D2 object, Tab order = paint order | verified | `test:research:a11y` |
 | Measured card sizes become D2 width/height and converge in one recompile | verified | `test:research:loop`, `test:research:shadcn` |
-| Product mount API, events with D2 identity, re-application of content across updates | proposed, not built | |
-| Same scene mounted twice | unknown (prefixing is the mechanism, not exercised) | |
-| Links, focus, events under the shadow root | unknown | |
-| Font registration across mounts | unknown | |
-| Other browsers, screen readers, find-in-page | unknown | |
+| Product mount API: mount, update (paint then swap), nodeBox, dispose, remount, a live mount cannot be mounted over | verified in Chromium | `test:client` (`mount.spec.mjs`) |
+| Events with D2 identity for nodes and connections, hover enter/leave, focus, unsubscribe; linked objects keep their identity | verified in Chromium | `events.spec.mjs` |
+| Consumer content: restore byte-identical, persistence across updates, `orphaned`, measured-size handshake | verified in Chromium | `content.spec.mjs` |
+| Same scene mounted twice; hostile page CSS; hidden host stays hidden | verified (pixel-identical to a clean baseline) | `mount.spec.mjs` |
+| Links and keyboard focus under the shadow root | verified (focusable, hit-testable; navigation itself not exercised) | `events.spec.mjs` |
+| Font registration shared and reference-counted across mounts; `'consumer'` registers nothing | verified | `fonts.spec.mjs` |
+| Source to pixels through client and mount, light and dark within 5% of native D2 | verified on one board | `fonts.spec.mjs` |
+| `nodeBox` for path shapes is the bounds of the outline's points (control points included), not the exact outline | known approximation | `mount.ts` |
+| Animation painting, other browsers, screen readers, find-in-page | unknown / not built | |
 
 ## 8. Decisions taken in review (user, 31 October 2026)
 
