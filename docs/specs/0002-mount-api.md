@@ -20,7 +20,7 @@ interface MountOptions {
 }
 
 interface Mount {
-  update(result: CompileResult, board?: string): UpdateReport; // board defaults to the root board ''
+  update(result: CompileResult, board?: string): Promise<UpdateReport>; // board defaults to the root board ''; async because fonts must be loaded before text baselines are measured
   nodeBox(id: string): Box | undefined;                         // scene coordinates of a painted object, after update
   setNodeContent(id: string, element: HTMLElement | null): void; // null restores the faithful default
   on(type: D2EventType, listener: (event: D2Event) => void): () => void; // returns the unsubscribe function
@@ -33,6 +33,8 @@ interface D2Event { type: D2EventType; board: string; id: string; domEvent: Even
 ```
 
 ## 3. Lifecycle
+
+_Amendment (31 October 2026, found while building step 2): `update` is asynchronous. Result fonts must finish loading before the painter's text baselines are measured, and `FontFace.load()` is a promise. Everything that can throw still happens before the DOM swap, and the swap plus baseline calibration run synchronously after the fonts._
 
 - **mount** attaches an open shadow root to `host` and puts one wrapper inside it styled `all: initial; display: block; visibility: inherit`. It adds nothing else to the document: no network request, no global, no head or stylesheet change, no storage (except fonts, section 6). The library never styles `host`; the consumer positions and sizes it.
 - **update** paints first and swaps afterwards: any throw (invalid or errored result, unknown board, unknown primitive, null `Root`, missing `ViewBox`) leaves the previous DOM untouched. A result with an `error`, or without the requested board, throws `MountError`. Success replaces the board's DOM wholesale and re-applies consumer content (section 5).
