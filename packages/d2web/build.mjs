@@ -31,5 +31,5 @@ copyFileSync(join(root, 'packages/d2web/src/paint.d.ts'), join(dist, 'paint.d.ts
 
 const notice = [['D2 (MPL-2.0)', join(root, 'imports/d2/LICENSE.txt')], ['D2 third-party notices', join(root, 'imports/d2/THIRD_PARTY_NOTICES.txt')], ['Go runtime (wasm_exec.js, BSD-3)', join(goRoot, 'LICENSE')]]
   .map(([title, file]) => `==== ${title} ====\n${readFileSync(file, 'utf8')}`).join('\n');
-writeFileSync(join(dist, 'NOTICE.txt'), `d2web distributes a WebAssembly build of D2 ${patched ? '(with local patches applied) ' : ''}and Go's wasm_exec.js.\n\n${notice}`);
+writeFileSync(join(dist, 'NOTICE.txt'), `d2web is MPL-2.0 (see LICENSE). It distributes a WebAssembly build of D2 ${patched ? '(with local patches applied) ' : ''}and Go's wasm_exec.js. D2 source: https://github.com/d2lang/d2 at v0.9.0 (${pinned}); local changes to it are the files in docs/upstream of the d2web repository.\n\n${notice}`);
 console.log(`built ${dist}${patched ? ' (patched D2)' : ''}`);
