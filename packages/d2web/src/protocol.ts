@@ -94,6 +94,7 @@ export interface AssociationObject {
   content?: 'markdown' | 'code' | 'latex' | 'sql_table' | 'class';
   nodes: string[];
   references: Source[];
+  properties: Record<string, { value: string; source: Source | null }>;
   src?: string;
   dst?: string;
 }

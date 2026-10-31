@@ -62,6 +62,11 @@ test('a failed compile has no association (and no boards)', () => {
   assert.equal(r.boards, undefined);
 });
 
+// The 80 single-file examples compiled once, shared by the two corpus tests below.
+let compiled;
+const corpus = () => compiled ??= readdirSync(join(root, 'examples/files')).filter(f => f.endsWith('.d2'))
+  .map(file => ({ file, result: native(request({ 'main.d2': readFileSync(join(root, 'examples/files', file), 'utf8') })) }));
+
 // Spec 0004 section 6: every scene node except the two helper nodes belongs to exactly one object, over the example corpus.
 test('every scene node of the example corpus has exactly one owner', { timeout: 600_000 }, () => {
   const helpers = new Set(['root', 'root:background']);
@@ -72,9 +77,7 @@ test('every scene node of the example corpus has exactly one owner', { timeout: 
   };
   let boards = 0;
   const failures = [], orphans = [];
-  for (const file of readdirSync(join(root, 'examples/files')).filter(f => f.endsWith('.d2'))) {
-    const text = readFileSync(join(root, 'examples/files', file), 'utf8');
-    const r = native(request({ 'main.d2': text }));
+  for (const { file, result: r } of corpus()) {
     if (r.error) { failures.push(`${file}: ${r.error.message}`); continue; }
     for (const board of r.boards) {
       boards++;
@@ -111,8 +114,8 @@ test('property sources: class, glob, import and scenario override own their valu
 
 test('size: the association payload against the scene over the example corpus', { timeout: 600_000 }, () => {
   let association = 0, scene = 0, boards = 0, worst = 0;
-  for (const file of readdirSync(join(root, 'examples/files')).filter(f => f.endsWith('.d2'))) {
-    for (const board of native(request({ 'main.d2': readFileSync(join(root, 'examples/files', file), 'utf8') })).boards ?? []) {
+  for (const { result } of corpus()) {
+    for (const board of result.boards ?? []) {
       const [a, s] = [JSON.stringify(board.association).length, JSON.stringify(board.scene).length];
       association += a; scene += s; boards++; worst = Math.max(worst, a / s);
     }
