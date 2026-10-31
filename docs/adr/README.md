@@ -28,4 +28,4 @@ Consequences: what it commits us to, what stays open, what would reverse it
 | [0006](0006-font-delivery.md) | Consumer-approved fonts, loadable on demand | accepted |
 | [0007](0007-product-scope-v1.md) | v1 is a read-only render runtime for a generic embedder; Chromium only; editing is v2 | accepted |
 | [0008](0008-repository-layout.md) | Multi-language monorepo: `packages/d2web`, `packages/d2web-wasm`, `research/`, shared `tests/` | accepted |
-| [0009](0009-natural-web-forms.md) | D2 is natural on the web, not a copy of native SVG; web-native status | proposed |
+| [0009](0009-natural-web-forms.md) | D2 is natural on the web, not a copy of native SVG; web-native status | accepted |

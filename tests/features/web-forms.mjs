@@ -1,6 +1,6 @@
 // Feature map rule (user, 31 Oct 2026): D2 should feel natural on the web, not look like native SVG. Each family names the web element or behaviour
 // that is natural for it (the target, not always today's painter), and `byDesign` lists cases where native's static artefact is deliberately not
-// reproduced, so a pixel difference there is not a gap. Proposed in docs/adr/0009; the pixel bar only applies where the web has no other natural form.
+// reproduced, so a pixel difference there is not a gap. Accepted in docs/adr/0009; the pixel bar only applies where the web has no other natural form.
 export const webForms = {
   shape: 'SVG geometry for outlines; HTML or SVG text for labels',
   style: 'SVG paint (fill, stroke, filter); CSS for opacity and font properties',
