@@ -96,3 +96,22 @@ test('a newer request aborts a long compile by respawning; a silent worker times
   expect(out.afterRev).toBe(4);
   expect(out.spawnedTotal).toBe(2 + 2);
 });
+
+// Spec 0008: a lowered layout budget aborts a slow TALA compile near the budget, and the replacement worker serves the next compile.
+test('budgets.maxLayoutMillis aborts a slow layout with a budget TimeoutError; the next compile works', async ({ page }) => {
+  const out = await page.evaluate(async ({ source }) => {
+    const client = make();
+    await client.compile(input(0, 'warm\n'));
+    const started = performance.now();
+    const error = await client.compile({ ...input(1, source), budgets: { maxLayoutMillis: 300 } }).catch(e => e);
+    const elapsed = performance.now() - started;
+    const next = await client.compile(input(2, 'a -> b\n'));
+    client.dispose();
+    return { name: error.constructor.name, code: error.code, elapsed, ok: !next.error, spawned };
+  }, { source: big(100) });
+  expect(out.name).toBe('TimeoutError');
+  expect(out.code).toBe('budget');
+  expect(out.elapsed).toBeLessThan(3000);
+  expect(out.ok).toBe(true);
+  expect(out.spawned).toBe(2);
+});

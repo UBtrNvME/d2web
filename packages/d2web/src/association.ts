@@ -21,3 +21,9 @@ export function objectsAt(association: Association, at: { path: string; line: nu
     .sort((a, b) => a.size - b.size)
     .map(m => m.object);
 }
+
+// Spec 0008: how big a board is in D2 terms, so a consumer can choose a faster engine itself when a layout is slow.
+export const countObjects = (association: Association): { shapes: number; connections: number } => {
+  const connections = association.objects.filter(o => o.kind === 'connection').length;
+  return { shapes: association.objects.length - connections, connections };
+};

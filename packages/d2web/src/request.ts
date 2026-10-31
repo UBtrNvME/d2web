@@ -8,6 +8,8 @@ export const ROOT_BOARD = '';
 // shortcut: placeholder ceilings copied from the research probes (research/census.go); replace with measured defaults when the worker exists.
 export const DEFAULT_BUDGETS = {
   maxNodes: 100_000,
+  // Client side (spec 0008): a compile running longer than this is aborted by terminating the worker; the wasm never sees it.
+  maxLayoutMillis: 60_000,
   maxPathCommands: 1_000_000,
   sketch: { maxOperationSets: 100_000, maxOperations: 1_000_000, maxPathCommands: 1_000_000 },
   links: { maxRegions: 10_000, maxStringBytes: 1_000_000 },

@@ -103,3 +103,26 @@ test('a worker with another protocol or scene version is rejected with VersionEr
     client.dispose();
   }
 });
+
+// Spec 0008: the layout budget bounds a compile; the worker is replaced and the error says it was the budget.
+test('a compile past budgets.maxLayoutMillis is aborted with a budget TimeoutError and the worker is replaced', async () => {
+  const { spawn, spawned } = fakes(() => {}); // never answers
+  const client = createClient({ spawn });
+  const started = Date.now();
+  const error = await client.compile({ ...input(1), budgets: { maxLayoutMillis: 40 } }).catch(e => e);
+  assert.ok(error instanceof TimeoutError);
+  assert.equal(error.code, 'budget');
+  assert.ok(Date.now() - started < 1000, 'aborted near the budget, not at the 120 s silent timeout');
+  assert.equal(spawned[0].terminated, true);
+  assert.equal(spawned.length, 2);
+  client.dispose();
+});
+
+test('the default layout budget is 60 s and a non-integer one is refused', async () => {
+  const { spawn, spawned } = fakes(answer());
+  const client = createClient({ spawn });
+  await client.compile(input(1));
+  assert.equal(spawned[0].sent[0].budgets.maxLayoutMillis, 60_000);
+  await assert.rejects(client.compile({ ...input(2), budgets: { maxLayoutMillis: 0.5 } }), /maxLayoutMillis/);
+  client.dispose();
+});

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getObject, objectsAt } from '../src/association.ts';
+import { countObjects, getObject, objectsAt } from '../src/association.ts';
 
 const src = (path, l1, c1, l2, c2) => ({ path, start: { line: l1, column: c1, offset: 0 }, end: { line: l2, column: c2, offset: 0 } });
 const object = (id, references, properties = {}) => ({ id, kind: 'shape', label: id, nodes: [id], references, properties });
@@ -28,4 +28,9 @@ test('objectsAt: property declarations count, other files and empty places do no
   assert.deepEqual(objectsAt(association, { path: 'shared.d2', line: 0, column: 0 }).map(o => o.id), ['s']);
   assert.deepEqual(objectsAt(association, { path: 'main.d2', line: 5, column: 0 }), []);
   assert.deepEqual(objectsAt(association, { path: 'other.d2', line: 0, column: 0 }), []);
+});
+
+test('countObjects separates shapes from connections', () => {
+  const association = { objects: [object('a', []), object('b', []), { ...object('(a -> b)[0]', []), kind: 'connection' }] };
+  assert.deepEqual(countObjects(association), { shapes: 2, connections: 1 });
 });

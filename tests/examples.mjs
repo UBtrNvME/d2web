@@ -30,8 +30,14 @@ export function pathData(commands) {
 export const goEnv = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
 
 // Runs inside the pinned D2 source so probes resolve its Go module.
+// The Go wasm runtime refuses to start when argv plus environment exceed 8 KiB, and a long shell environment (editor and agent variables) can
+// reach that, so a wasm run gets only the variables its node launcher needs.
+const WASM_ENV = ['PATH', 'HOME', 'TMPDIR', 'GOROOT', 'LANG'];
+const wasmEnv = env => Object.fromEntries(WASM_ENV.filter(k => env[k] !== undefined).map(k => [k, env[k]]));
+
 export function goRun(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: join(root, 'imports/d2'), env: goEnv, encoding: 'utf8', timeout: 180_000, maxBuffer: 16 * 1024 * 1024, ...options });
+  const merged = { cwd: join(root, 'imports/d2'), env: goEnv, encoding: 'utf8', timeout: 180_000, maxBuffer: 16 * 1024 * 1024, ...options };
+  const result = spawnSync(command, args, command.endsWith('go_js_wasm_exec') ? { ...merged, env: wasmEnv(merged.env) } : merged);
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   return result.stdout;

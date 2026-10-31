@@ -1,6 +1,6 @@
 # Spec 0007: fallback fonts, right-to-left text and font styles
 
-Status: **proposed** (31 October 2026; the user asked for the specs, nothing is built, nothing accepted). Builds on [ADR 0006](../adr/0006-font-delivery.md) (consumer-approved fonts, never fetched or substituted by the library), [spec 0001](0001-compile-protocol.md) (`result.fonts`, scenes carry glyph assets) and [ADR 0009](../adr/0009-natural-web-forms.md) (D2 owns semantics; d2web translates).
+Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [ADR 0006](../adr/0006-font-delivery.md) (consumer-approved fonts, never fetched or substituted by the library), [spec 0001](0001-compile-protocol.md) (`result.fonts`, scenes carry glyph assets) and [ADR 0009](../adr/0009-natural-web-forms.md) (D2 owns semantics; d2web translates).
 
 ## 1. What is known
 

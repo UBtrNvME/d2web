@@ -16,6 +16,7 @@ export interface RenderOptions {
 // Every field optional: the worker supplies defaults; a request may lower or raise them.
 export interface Budgets {
   maxNodes?: number;
+  maxLayoutMillis?: number;
   maxPathCommands?: number;
   sketch?: { maxOperationSets?: number; maxOperations?: number; maxPathCommands?: number };
   links?: { maxRegions?: number; maxStringBytes?: number };

@@ -22,7 +22,8 @@ export interface ClientOptions {
 export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id'>;
 
 export class SupersededError extends Error {}
-export class TimeoutError extends Error {}
+// `code: 'budget'` marks a compile aborted by budgets.maxLayoutMillis (spec 0008); other timeouts have no code.
+export class TimeoutError extends Error { code?: 'budget'; }
 // The worker's wasm speaks another protocol or scene version than this client (usually a stale cached wasm; spec 0003 section 4).
 export class VersionError extends Error {}
 
@@ -73,7 +74,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
     const job = (running = waiting);
     waiting = null;
     job.started = Date.now();
-    const timeout = (ms: number, what: string) => setTimeout(() => { if (running === job) abort(new TimeoutError(`${what} for ${ms} ms`)); }, ms);
+    const timeout = (ms: number, what: string, code?: 'budget') => setTimeout(() => { if (running === job) abort(Object.assign(new TimeoutError(`${what} for ${ms} ms`), { code })); }, ms);
     job.timer = timeout(startupTimeoutMs, 'worker not ready');
     const mine = worker;
     ready.then(hello => {
@@ -84,7 +85,8 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         job.reject(new VersionError(`worker speaks protocol ${hello.v}, scene ${hello.sceneVersion}; client expects ${PROTOCOL_VERSION}, ${SCENE_VERSION}`));
         return pump();
       }
-      job.timer = timeout(silentTimeoutMs, 'no reply');
+      const budget = job.request.budgets!.maxLayoutMillis!;
+      job.timer = budget <= silentTimeoutMs ? timeout(budget, 'compile exceeded budgets.maxLayoutMillis', 'budget') : timeout(silentTimeoutMs, 'no reply');
       mine.postMessage(job.request);
     });
   }
