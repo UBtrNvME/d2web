@@ -63,7 +63,8 @@ test('a D2 link with a tooltip carries both href and title', async ({ page }) =>
   await expect(link).toHaveAccessibleName('Click');
 });
 
-test('a link-only anchor is reachable by Tab and named by its node label', async ({ page }) => {
+test('a link-only anchor is reachable by Tab and named by its node label', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'Safari leaves links out of the Tab order unless the user enables it');
   await ready(page, source);
   const link = linkIn(page);
   await page.keyboard.press('Tab');

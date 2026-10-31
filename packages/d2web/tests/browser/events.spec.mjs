@@ -45,7 +45,8 @@ test('hover fires when the pointer enters or leaves an object, not between its p
   expect((await events(page)).filter(e => e.type === 'hover').map(e => [e.id, e.dom])).toContainEqual(['api', 'pointerout']);
 });
 
-test('focus: Tab walks the objects in paint order and reports them; links are focusable and hit-testable under the shadow root', async ({ page }) => {
+test('focus: Tab walks the objects in paint order and reports them; links are focusable and hit-testable under the shadow root', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'Safari leaves links out of the Tab order unless the user enables it');
   await ready(page);
   const order = [];
   for (let i = 0; i < 6; i++) {

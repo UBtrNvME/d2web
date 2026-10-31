@@ -124,7 +124,7 @@ const client = createClient({ spawn: spawnWorker() }); // or spawnWorker({ worke
 - Serve the wasm as `application/wasm`; a wrong type still works but compiles without streaming.
 - The worker must be same-origin. A strict CSP needs `worker-src` and `'wasm-unsafe-eval'` in `script-src` (tested).
 - A stale cached wasm paired with a newer client fails with `VersionError`. `ready.patched` is true when the wasm was built from a patched D2.
-- Not tested: Vite, webpack, Next.js, cross-origin hosting. Browsers: Chromium is the reference, Firefox works with small paint differences, Safari/WebKit is **unsupported for now** (the wasm cannot start in a WebKit worker); see [docs/browser-support.md](docs/browser-support.md). Licence: MPL-2.0 (same as D2, which the wasm embeds); `dist/NOTICE.txt` carries D2's and Go's notices. The npm name `d2web` was unregistered on 31 October 2026 (404); it is only reserved by publishing.
+- Not tested: Vite, webpack, Next.js, cross-origin hosting. Browsers: Chromium is the reference, Firefox works with small paint differences, WebKit works in Playwright (the worker start failure is fixed); real Safari is not yet verified; see [docs/browser-support.md](docs/browser-support.md). Licence: MPL-2.0 (same as D2, which the wasm embeds); `dist/NOTICE.txt` carries D2's and Go's notices. The npm name `d2web` was unregistered on 31 October 2026 (404); it is only reserved by publishing.
 
 ## Generated files and cleanup
 

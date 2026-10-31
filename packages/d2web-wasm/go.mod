@@ -30,3 +30,5 @@ require (
 
 // The pinned, verified checkout (mise run reference:fetch). Pristine unless `mise run reference:patch` was run on purpose (ADR 0008).
 replace github.com/d2lang/d2 => ../../imports/d2
+
+replace github.com/yuin/goldmark => ./third_party/goldmark

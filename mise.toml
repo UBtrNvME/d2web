@@ -57,7 +57,7 @@ description = "Go tests for the product module (packages/d2web-wasm): scene enco
 depends = ["reference:fetch"]
 dir = "packages/d2web-wasm"
 env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root}}/.cache/go-mod" }
-run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs tests/association.test.mjs"]
+run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs tests/association.test.mjs tests/stack.test.mjs"]
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
@@ -78,11 +78,13 @@ run = "pnpm exec playwright install --with-deps chromium"
 
 [tasks."test:firefox"]
 description = "Run the d2web browser suites and the feature-map paint comparison in Firefox (docs/browser-support.md)"
+depends = ["build"]
 run = "D2WEB_BROWSER=firefox pnpm exec playwright test packages/d2web/tests/browser/*.spec.mjs tests/features/paint.spec.mjs"
 
 [tasks."test:webkit"]
-description = "Run the WebKit-safe d2web suites and the feature-map paint comparison in WebKit, wasm on the page thread (docs/browser-support.md)"
-run = "D2WEB_BROWSER=webkit D2WEB_MAIN_THREAD=1 pnpm exec playwright test packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/association.spec.mjs tests/features/paint.spec.mjs"
+description = "Run the d2web browser suites and the feature-map paint comparison in WebKit (docs/browser-support.md)"
+depends = ["build"]
+run = "D2WEB_BROWSER=webkit pnpm exec playwright test packages/d2web/tests/browser/*.spec.mjs tests/features/paint.spec.mjs"
 
 [tasks."test:comparison"]
 description = "Verify screenshot comparison and native-equivalent Chromium/WASM scene data"

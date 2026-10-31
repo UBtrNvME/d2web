@@ -53,4 +53,4 @@ Translate each track to the Web Animations API, one call per track on the elemen
 | The painter ignores tracks today | verified (spec 0002, `paint.js`) |
 | Every track property and easing has a direct CSS/WAAPI form | proposed; the drop-shadow track and bidirectional split are not yet exercised |
 | Native and web match at equal `currentTime` | unknown until step 3 of the test plan runs |
-| Firefox and Safari | animation suite passes in Firefox and in WebKit with the wasm on the page thread; Safari is unsupported for now (docs/browser-support.md) |
+| Firefox and Safari | animation suite passes in Firefox and in Playwright's WebKit; real Safari unverified (docs/browser-support.md) |
