@@ -12,7 +12,8 @@ Only what is still to do. Evidence and results are in [research findings](../doc
 - [x] First contract drafted: [spec 0001](../docs/specs/0001-compile-protocol.md) (proposed; its three open questions were answered 31 October 2026, see its section 8). Render options test: `test:research:options`.
 - [x] Spec 0001 accepted by the user, 31 October 2026.
 - [x] Slice 1 complete (31 October 2026), see below.
-- [x] Slice 3 chosen: packaging (user, 31 October 2026), plan below, spec 0003 drafted.
+- [ ] Slice 4 chosen: association (user, 31 October 2026), [spec 0004](../docs/specs/0004-association.md) drafted and waiting for acceptance; plan in tasks/todo.md.
+- [x] Slice 3 chosen: packaging (user, 31 October 2026), built; spec 0003 accepted.
 - [x] Slice 2 chosen: mount API (user, 31 October 2026), plan below. Spec 0002 accepted.
 
 ## Slice 1: compile protocol, render only (spec 0001)
@@ -49,6 +50,17 @@ Chosen by the user. Spec 0003 was built after the user answered "continue workin
 - [x] 4. (done: `packages/d2web/tests/dist.test.mjs`, task `test:dist`) Size budget test (15 MB gzip wasm, 40 KB gzip index.js unless the user changes them).
 - [x] 5. (done 31 October 2026: 3 of 3 pass, 7 s; `packages/d2web/tests/browser/consumer.spec.mjs`, task `test:consumer`; see ledger) Consumer test: `pnpm pack` the package, install the tarball in a temporary consumer, load it in Chromium with native ESM and no bundler, then again under a restrictive CSP; compile and mount a board.
 - [x] 6. (done: README "Using the built package") Consumer docs in the README (hosting, MIME type, CSP, same-origin worker, sizes) and the ledger.
+
+## Slice 4: association (spec 0004, plan 31 October 2026)
+
+Chosen by the user. Spec 0004 is a draft; nothing is built before it is accepted. Read-only: no identity across edits, no editing (v2).
+
+- [ ] 1. Spec 0004 accepted by the user ([spec 0004](../docs/specs/0004-association.md); four open questions at its end).
+- [ ] 2. Worker payload: `compile` builds `association` per board (objects, kind, parent, label, content role, src/dst, references, explicit scene `nodes`) from the d2graph and scene build; types in `protocol.ts`; test in `packages/d2web-wasm/tests` that native and Node/WASM payloads are equal over `examples/research/{identity,imports,boards}` and that malformed input still returns no partial boards.
+- [ ] 3. Scene-node ownership: every scene node except `root`, `root:background` belongs to exactly one object over the example corpus (the join probe's prefix rule becomes a tested worker output); any exception is listed, not hidden.
+- [ ] 4. Property sources: `properties` with owning declaration (class, glob, import, scenario override) and `source: null` for defaults; tests reuse the R1 cases (class fill, glob stroke, imported label, scenario override); payload size measured over the corpus and a budget recorded in spec 0004.
+- [ ] 5. Client helpers `getObject`, `objectsAt` (pure functions, unit tests in `test:unit`, incl. overlapping declarations and multi-file ranges).
+- [ ] 6. End to end in Chromium: click a node in a mounted board, join the event ID with `getObject`, and the source text at the returned range is the declaration; light and dark requests give the same association. README and ledger.
 
 ## Painting and presentation (R2)
 
