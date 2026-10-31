@@ -61,7 +61,7 @@ run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"

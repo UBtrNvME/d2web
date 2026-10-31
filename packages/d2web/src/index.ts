@@ -1,6 +1,7 @@
-export { createClient, SupersededError, TimeoutError, VersionError } from './client.ts';
+export { createClient, FontError, SupersededError, TimeoutError, VersionError } from './client.ts';
 export { spawnWorker } from './client.ts';
 export type { SpawnWorkerOptions, ClientOptions, CompileInput, WorkerLike } from './client.ts';
+export type { FontSpec } from './protocol.ts';
 export { mount, MountError } from './mount.ts';
 export type { Box, D2Event, D2EventType, Mount, MountOptions, UpdateReport } from './mount.ts';
 export { countObjects, getObject, objectsAt } from './association.ts';

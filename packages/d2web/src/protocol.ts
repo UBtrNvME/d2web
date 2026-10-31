@@ -80,8 +80,14 @@ export interface CompileResult {
   echo: { layout: Engine; render: RenderOptions };
 }
 
-export type HostMessage = CompileRequest;
-export type WorkerMessage = WorkerReady | CompileResult;
+// Spec 0007: a fallback font the consumer approved (ADR 0006); the client fetches it, checks `sha256` when given and posts the bytes to the worker once.
+export interface FontSpec { name: string; url: string; sha256?: string }
+export interface FontsMessage { type: 'fonts'; fonts: { name: string; data: Uint8Array }[] }
+// The worker's answer to a fonts message: `error` is the reason the wasm refused them (a file that is not a font).
+export interface FontsAck { type: 'fonts'; error: string }
+
+export type HostMessage = CompileRequest | FontsMessage;
+export type WorkerMessage = WorkerReady | CompileResult | FontsAck;
 
 // Spec 0004. Positions are D2's with UTF-16 positions enabled: line and column 0-based, offset from the start of the file, all in UTF-16 code
 // units, so `offset` is a JS string index. Diagnostic ranges use the same offsets.

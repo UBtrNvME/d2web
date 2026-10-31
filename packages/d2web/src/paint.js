@@ -15,6 +15,8 @@ const isIdentity = m => m.A === 1 && m.B === 0 && m.C === 0 && m.D === 1 && m.E 
 const split = c => { const [r, g, b, a] = c.slice(5, -1).split(','); return [`rgb(${r},${g},${b})`, +a]; };
 
 export const fontFamily = id => 'scene-' + id.replace(/\W/g, '-');
+// Spec 0007: a run's primary font, then the consumer fallbacks D2 chose for glyphs the primary lacks, as one CSS font stack.
+const fontStack = p => [p.Font.Asset, ...(p.Fallbacks ?? [])].map(fontFamily).join(',');
 
 export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '', a11y = false, association = [] } = {}) {
   if (!scene?.Root || !scene.ViewBox) throw new Error('scene needs Root and ViewBox');
@@ -75,7 +77,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       case 'Path': return `<path d="${pathData(p.Commands)}" fill-rule="${p.FillRule ? 'evenodd' : 'nonzero'}" ${fillAttrs(p.Fill)} ${strokeAttrs(p.Stroke)}/>`;
       case 'TextRun': {
         const decoration = [p.Underline && 'underline', p.Strike && 'line-through'].filter(Boolean).join(' ');
-        return `<text x="${num(p.Origin.X)}" y="${num(p.Origin.Y)}" font-family="${fontFamily(p.Font.Asset)}" font-size="${num(p.Font.Size)}" text-anchor="${['start', 'middle', 'end'][p.Anchor]}"${decoration ? ` text-decoration="${decoration}"` : ''} xml:space="preserve" ${fillAttrs(p.Fill)} ${strokeAttrs(p.Stroke)}>${esc(p.Text)}</text>`;
+        return `<text x="${num(p.Origin.X)}" y="${num(p.Origin.Y)}" font-family="${fontStack(p)}" font-size="${num(p.Font.Size)}" text-anchor="${['start', 'middle', 'end'][p.Anchor]}"${decoration ? ` text-decoration="${decoration}"` : ''} xml:space="preserve" ${fillAttrs(p.Fill)} ${strokeAttrs(p.Stroke)}>${esc(p.Text)}</text>`;
       }
       case 'Image': {
         const asset = scene.Assets[p.Asset];
@@ -160,7 +162,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       const decoration = [p.Underline && 'underline', p.Strike && 'line-through'].filter(Boolean).join(' ');
       const shift = ['0', '-50%', '-100%'][p.Anchor];
       // top is set after layout from the measured baseline (placeText in the spec); the empty inline-block marks it.
-      return [`<div data-k="text" data-y="${num(p.Origin.Y)}" style="position:absolute;left:${px(p.Origin.X)};top:0;white-space:pre;line-height:normal;font-synthesis:none;font-family:${fontFamily(p.Font.Asset)};font-size:${px(p.Font.Size)};color:${rgba(p.Fill.Color)};transform:translateX(${shift})${decoration ? `;text-decoration:${decoration}` : ''}"><span data-baseline style="display:inline-block;width:0;height:0"></span>${esc(p.Text)}\n</div>`, null];
+      return [`<div data-k="text" data-y="${num(p.Origin.Y)}" style="position:absolute;left:${px(p.Origin.X)};top:0;white-space:pre;line-height:normal;font-synthesis:none;font-family:${fontStack(p)};font-size:${px(p.Font.Size)};color:${rgba(p.Fill.Color)};transform:translateX(${shift})${decoration ? `;text-decoration:${decoration}` : ''}"><span data-baseline style="display:inline-block;width:0;height:0"></span>${esc(p.Text)}\n</div>`, null];
     }
     if (p.$ === 'Image') {
       const asset = scene.Assets[p.Asset];

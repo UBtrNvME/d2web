@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createClient, SupersededError, TimeoutError, VersionError } from '../src/client.ts';
+import { createClient, FontError, SupersededError, TimeoutError, VersionError } from '../src/client.ts';
+import { createHash } from 'node:crypto';
 
 const render = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
 const input = (revision, source = 'a') => ({ revision, files: { 'main.d2': source }, entry: 'main.d2', render });
@@ -125,4 +126,55 @@ test('the default layout budget is 60 s and a non-integer one is refused', async
   assert.equal(spawned[0].sent[0].budgets.maxLayoutMillis, 60_000);
   await assert.rejects(client.compile({ ...input(2), budgets: { maxLayoutMillis: 0.5 } }), /maxLayoutMillis/);
   client.dispose();
+});
+
+// Spec 0007: consumer-approved fallback fonts are fetched once, checked, and posted to every worker before its first compile.
+const bytes = new Uint8Array([1, 2, 3, 4]);
+const sha = createHash('sha256').update(bytes).digest('hex');
+const okFetch = calls => async url => { calls.push(url); return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer.slice(0) }; };
+
+test('listed fonts are fetched once and posted before the first compile of each worker, including a respawned one', async () => {
+  const calls = [];
+  const { spawn, spawned } = fakes(answer());
+  const client = createClient({ spawn, fonts: [{ name: 'Amiri', url: 'https://x.test/a.ttf', sha256: sha }], fetch: okFetch(calls), supersedeAfterMs: 1 });
+  await client.compile(input(1));
+  assert.deepEqual(spawned[0].sent.map(m => m.type), ['fonts', 'compile']);
+  assert.deepEqual([...spawned[0].sent[0].fonts[0].data], [1, 2, 3, 4]);
+  assert.equal(spawned[0].sent[0].fonts[0].name, 'Amiri');
+  spawned[0].onerror?.({ message: 'boom' }); // respawn
+  await wait(5);
+  await client.compile(input(2));
+  assert.deepEqual(spawned[1].sent.map(m => m.type), ['fonts', 'compile']);
+  assert.deepEqual(calls, ['https://x.test/a.ttf'], 'fetched once for both workers');
+  client.dispose();
+});
+
+test('a client without fonts never posts a fonts message or fetches', async () => {
+  const { spawn, spawned } = fakes(answer());
+  const client = createClient({ spawn, fetch: async () => { throw new Error('must not fetch'); } });
+  await client.compile(input(1));
+  assert.deepEqual(spawned[0].sent.map(m => m.type), ['compile']);
+  client.dispose();
+});
+
+test('a checksum mismatch or a failed fetch rejects the compile with FontError and sends nothing', async () => {
+  for (const [fetch, expect] of [[okFetch([]), /checksum/], [async () => ({ ok: false, status: 404 }), /404/], [async () => { throw new Error('offline'); }, /offline/]]) {
+    const { spawn, spawned } = fakes(answer());
+    const client = createClient({ spawn, fonts: [{ name: 'F', url: 'https://x.test/f.ttf', sha256: fetch === okFetch ? '' : 'a'.repeat(64) }].map(f => (f.sha256 ? f : { name: f.name, url: f.url, sha256: 'b'.repeat(64) })), fetch });
+    await assert.rejects(client.compile(input(1)), e => e instanceof FontError && expect.test(e.message));
+    assert.equal(spawned[0].sent.length, 0);
+    client.dispose();
+  }
+});
+
+test('the worker refusing the fonts rejects the compile with FontError', async () => {
+  const { spawn } = fakes((m, reply) => { if (m.type === 'fonts') reply({ type: 'fonts', error: 'font "F": not a font' }); });
+  const client = createClient({ spawn, fonts: [{ name: 'F', url: 'https://x.test/f.ttf' }], fetch: okFetch([]) });
+  await assert.rejects(client.compile(input(1)), e => e instanceof FontError && /not a font/.test(e.message));
+  client.dispose();
+});
+
+test('a malformed font list is refused when the client is created, before any fetch', () => {
+  const { spawn } = fakes(answer());
+  for (const bad of ['x', [{ url: 'u' }], [{ name: 'n' }], [{ name: 'n', url: 'u', sha256: 'zz' }], [{ name: 'n', url: 'u', extra: 1 }]]) assert.throws(() => createClient({ spawn, fonts: bad, fetch: async () => { throw new Error('no'); } }), /fonts/);
 });

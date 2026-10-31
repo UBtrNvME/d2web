@@ -243,11 +243,12 @@ func run(ctx context.Context, req *Request, res *Result) {
 		return
 	}
 	res.Fonts = map[string][]byte{}
+	fallback := &consumerResolver{missing: map[rune]struct{}{}}
 	for _, path := range wanted {
 		d := diagrams[path]
 		leaf := *d
 		leaf.Layers, leaf.Scenarios, leaf.Steps = nil, nil, nil
-		doc, err := build(ctx, req, opts, &leaf)
+		doc, err := build(ctx, req, opts, &leaf, fallback)
 		if err != nil {
 			code := "internal"
 			if strings.Contains(err.Error(), "budget") || strings.Contains(err.Error(), "exceed") || strings.Contains(err.Error(), "limit") {
@@ -264,11 +265,13 @@ func run(ctx context.Context, req *Request, res *Result) {
 		for id, bytes := range fonts {
 			res.Fonts[string(id)] = bytes
 		}
-		res.Boards = append(res.Boards, Board{Path: path, Scene: data, Association: associate(graphs[path], doc)})
+		assoc := associate(graphs[path], doc)
+		res.Boards = append(res.Boards, Board{Path: path, Scene: data, Association: assoc})
+		res.Diagnostics = append(res.Diagnostics, missingGlyphDiagnostics(path, fallback.uncovered(), assoc.Objects)...)
 	}
 }
 
-func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2target.Diagram) (*d2scene.Document, error) {
+func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2target.Diagram, fallback *consumerResolver) (*d2scene.Document, error) {
 	// BaseDir is explicit because a browser has no working directory (os.Getwd is not implemented on js).
 	// Offline: remote images become the builder's placeholder, and files in the virtual filesystem are not readable as images yet.
 	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: offline{}}, Limits: imageasset.Limits{
@@ -281,7 +284,16 @@ func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2ta
 	}
 	b := req.Budgets
 	svg := b.SVGRaw
+	var fonts *d2scenebuild.FontFallbackOptions
+	fontsMu.Lock()
+	listed := len(faces) > 0
+	fontsMu.Unlock()
+	if listed { // no consumer fonts: the builder's default (no fallback resolution) is unchanged
+		// shortcut: fixed ceilings (64 faces, 256 MiB); expose in Budgets when a consumer needs more.
+		fonts = &d2scenebuild.FontFallbackOptions{Resolver: fallback, MaxAssets: 64, MaxBytes: 256 << 20}
+	}
 	return d2scenebuild.Build(ctx, leaf, d2scenebuild.Options{
+		Fonts: fonts,
 		Pad: opts.Pad, Scale: opts.Scale, Center: opts.Center, ThemeID: opts.ThemeID, ThemeOverrides: opts.ThemeOverrides, Sketch: req.Render.Sketch,
 		MaxNodes: b.MaxNodes, MaxPathCommands: b.MaxPathCommands,
 		SketchBudget: d2scenebuild.SketchBudget{MaxOperationSets: b.Sketch.MaxOperationSets, MaxOperations: b.Sketch.MaxOperations, MaxPathCommands: b.Sketch.MaxPathCommands},

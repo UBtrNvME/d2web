@@ -1,5 +1,5 @@
-import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type WorkerMessage, type WorkerReady } from './protocol.ts';
-import { normalizeCompileRequest } from './request.ts';
+import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type FontSpec, type FontsMessage, type WorkerMessage, type WorkerReady } from './protocol.ts';
+import { normalizeCompileRequest, normalizeFonts } from './request.ts';
 
 // Minimal Worker surface so tests can script one; a real `Worker` fits.
 export interface WorkerLike {
@@ -17,6 +17,11 @@ export interface ClientOptions {
   silentTimeoutMs?: number;
   // A worker that never sends `ready` within this time is replaced the same way.
   startupTimeoutMs?: number;
+  // Spec 0007: fallback fonts the consumer approves (ADR 0006). Fetched once, on the first compile, checked against `sha256` when given, then handed to
+  // every worker before its first compile. Nothing outside this list is ever fetched.
+  fonts?: FontSpec[];
+  // The fetch used for `fonts` (default: the page's); a hook for tests and consumers that cache elsewhere.
+  fetch?: (url: string) => Promise<Response>;
 }
 
 export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id'>;
@@ -26,11 +31,26 @@ export class SupersededError extends Error {}
 export class TimeoutError extends Error { code?: 'budget'; }
 // The worker's wasm speaks another protocol or scene version than this client (usually a stale cached wasm; spec 0003 section 4).
 export class VersionError extends Error {}
+// A listed font could not be fetched, did not match its checksum, or the wasm refused it (spec 0007).
+export class FontError extends Error {}
 
 interface Job { request: CompileRequest; resolve: (r: CompileResult) => void; reject: (e: unknown) => void; started: number; timer?: ReturnType<typeof setTimeout> }
 
 // Spec 0001 section 3.4: one compile at a time, latest request wins, no cooperative cancel (abort = terminate and respawn).
-export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000 }: ClientOptions) {
+export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, fetch: fetchFont = u => fetch(u) }: ClientOptions) {
+  const listed = fonts === undefined ? undefined : normalizeFonts(fonts);
+  let fontBytes: Promise<FontsMessage> | undefined;
+  const sent = new WeakSet<object>();
+  const loadFonts = () => (fontBytes ??= Promise.all(listed!.map(async f => {
+    const response = await fetchFont(f.url).catch(e => { throw new FontError(`font ${f.name}: ${(e as Error).message}`); });
+    if (!response.ok) throw new FontError(`font ${f.name}: ${f.url} answered ${response.status}`);
+    const data = new Uint8Array(await response.arrayBuffer());
+    if (f.sha256) {
+      const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].map(b => b.toString(16).padStart(2, '0')).join('');
+      if (hex !== f.sha256) throw new FontError(`font ${f.name}: checksum mismatch (got ${hex})`);
+    }
+    return { name: f.name, data };
+  })).then(list => ({ type: 'fonts' as const, fonts: list })));
   let worker: WorkerLike;
   let ready: Promise<WorkerReady>;
   let running: Job | null = null;
@@ -44,6 +64,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       mine.onmessage = ({ data }) => {
         if (mine !== worker) return;
         if (data.type === 'ready') resolve(data);
+        else if (data.type === 'fonts') { if (data.error && running) { const job = running; settle(job); job.reject(new FontError(`worker refused the fonts: ${data.error}`)); pump(); } }
         else if (running && data.type === 'result' && data.id === running.request.id) finish(data);
       };
     });
@@ -77,7 +98,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
     const timeout = (ms: number, what: string, code?: 'budget') => setTimeout(() => { if (running === job) abort(Object.assign(new TimeoutError(`${what} for ${ms} ms`), { code })); }, ms);
     job.timer = timeout(startupTimeoutMs, 'worker not ready');
     const mine = worker;
-    ready.then(hello => {
+    ready.then(async hello => {
       if (running !== job || mine !== worker) return;
       clearTimeout(job.timer);
       if (hello.v !== PROTOCOL_VERSION || hello.sceneVersion !== SCENE_VERSION) {
@@ -86,6 +107,11 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         return pump();
       }
       const budget = job.request.budgets!.maxLayoutMillis!;
+      if (listed?.length && !sent.has(mine)) {
+        job.timer = timeout(silentTimeoutMs, 'fonts not loaded');
+        try { mine.postMessage(await loadFonts()); sent.add(mine); clearTimeout(job.timer); } catch (error) { if (running === job) { settle(job); job.reject(error); pump(); } return; }
+        if (running !== job || mine !== worker) return;
+      }
       job.timer = budget <= silentTimeoutMs ? timeout(budget, 'compile exceeded budgets.maxLayoutMillis', 'budget') : timeout(silentTimeoutMs, 'no reply');
       mine.postMessage(job.request);
     });

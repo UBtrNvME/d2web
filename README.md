@@ -120,6 +120,8 @@ const client = createClient({ spawn: spawnWorker() }); // or spawnWorker({ worke
 ```
 
 - Source association: `result.boards[i].association` lists each object with its label, content role, source declarations, property owners and scene nodes; `getObject(association, id)` and `objectsAt(association, { path, line, column })` look things up ([spec 0004](docs/specs/0004-association.md)). Positions are UTF-16 (`offset` is a JS string index); identity across edits is not provided.
+- Fallback fonts ([spec 0007](docs/specs/0007-fonts-and-text.md)): `createClient({ spawn, fonts: [{ name, url, sha256? }] })` lists the fonts you approve for text D2's own fonts lack (Arabic, CJK, emoji). The client fetches each once, checks `sha256`, and hands the bytes to the worker; nothing else is ever fetched. Characters no listed font covers produce a `warning` diagnostic naming the object; the browser paints its own fallback for them. Errors: `FontError`.
+- Layout budget ([spec 0008](docs/specs/0008-large-boards.md)): `budgets.maxLayoutMillis` (default 60 000) aborts a slow compile with a `TimeoutError` whose `code` is `'budget'`; `countObjects(board.association)` sizes a board, and [docs/layout-limits.md](docs/layout-limits.md) shows what each engine costs. d2web never switches engine on its own.
 - Sizes: `d2web.wasm` 52.7 MB raw, about 13.6 MB gzip (serve it compressed); `index.js` about 8 KB gzip. A test fails above 15 MB and 40 KB gzip.
 - Serve the wasm as `application/wasm`; a wrong type still works but compiles without streaming.
 - The worker must be same-origin. A strict CSP needs `worker-src` and `'wasm-unsafe-eval'` in `script-src` (tested).

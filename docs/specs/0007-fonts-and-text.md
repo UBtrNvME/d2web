@@ -17,7 +17,7 @@ Status: **accepted with the recommended answers to questions 1-4** (user, 31 Oct
 4. **Right-to-left and mixed text.** Painted as text with the browser's own bidi, because that is the web's natural form; the test checks that the scene's advance sum and the browser width agree for Arabic and Hebrew examples, and records any difference as measured.
 5. **Bold and italic.** D2 bundles the bold and italic faces it uses for layout. Styles without a bundled face on a fallback font are painted as the web does (the browser may synthesise); the spec records which cases do.
 
-Not in this spec: bundling any non-D2 font (size budget 15 MB gzip for the wasm, spec 0003), automatic CDN fonts, subsetting, text editing.
+Built (31 October 2026): `compile/fonts.go` (resolver over the consumer's faces via D2's `FallbackResolver`), `d2webSetFonts` in the worker, the client option `fonts` with fetch, checksum and `FontError`, the paint font stack, the missing-glyph warning. Not in this spec: bundling any non-D2 font (size budget 15 MB gzip for the wasm, spec 0003), automatic CDN fonts, subsetting, text editing.
 
 ## 3. Test plan (proposed)
 
@@ -32,7 +32,7 @@ Not in this spec: bundling any non-D2 font (size budget 15 MB gzip for the wasm,
 1. **Where the fetch happens.** Recommended: the client (page thread) fetches and verifies, then transfers bytes to the worker, so the worker stays fetch-free and offline. Alternative: the worker fetches.
 2. **A tiny built-in fallback.** Recommended: none in v1; the library bundles only D2's own fonts. Alternative: bundle a small subset (for example Latin Extended) to avoid tofu on accents.
 3. **Missing glyphs.** Recommended: a warning diagnostic, text painted by the browser's own fallback. Alternative: fail the compile.
-4. **Which fonts the catalog tests use.** Recommended: free fonts checked into `examples/` (licence file kept), not system fonts, so results do not depend on the machine.
+4. **Which fonts the catalog tests use.** Recommended: free fonts checked into the repository (licence file kept), not system fonts, so results do not depend on the machine. Built as `packages/d2web-wasm/tests/fixtures/fonts/` (Amiri, OFL), because `examples/` has an inventory test; no CJK, Hebrew or emoji fixture exists yet.
 
 ## 5. Verified, proposed, unknown
 
@@ -40,7 +40,8 @@ Not in this spec: bundling any non-D2 font (size budget 15 MB gzip for the wasm,
 | --- | --- |
 | The wasm resolves no fallback fonts; native resolves host fonts | verified (research findings) |
 | Browser repaint with scene fallbacks renders CJK, Arabic, emoji; advances match | measured once, Chromium, one machine |
-| The worker can take consumer font bytes into D2's resolver chain | proposed; the resolver hook in `compile.go` is not yet written |
+| The worker can take consumer font bytes into D2's resolver chain | verified: `fonts_test.go`, `fallback-fonts.spec.mjs` (Arabic via Amiri; Japanese deliberately uncovered gives the warning) |
+| The painted run's browser width equals the scene's advance sum for Arabic | verified to 0.5 px in Chromium, Firefox and WebKit (one Amiri sample) |
 | Long RTL and mixed-direction text agrees with D2's advances | unknown |
 | Bold and italic on fallback fonts | unknown |
 | Firefox and WebKit text metrics | unknown |

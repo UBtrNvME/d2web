@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type Engine, type RenderOptions } from './protocol.ts';
+import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type Engine, type FontSpec, type RenderOptions } from './protocol.ts';
 
 const ENGINES: readonly Engine[] = ['tala', 'dagre', 'elk'];
 
@@ -28,6 +28,20 @@ export interface NormalizedRequest extends CompileRequest {
 }
 
 export class ProtocolError extends Error {}
+
+// Spec 0007: the consumer's font list, validated before anything is fetched.
+export function normalizeFonts(value: unknown): FontSpec[] {
+  if (!Array.isArray(value)) throw new ProtocolError('fonts must be an array');
+  return value.map((f, i) => {
+    const at = `fonts[${i}]`;
+    if (!isObject(f)) throw new ProtocolError(`${at} must be an object`);
+    for (const key of Object.keys(f)) if (!['name', 'url', 'sha256'].includes(key)) throw new ProtocolError(`unknown ${at}.${key}`);
+    if (typeof f.name !== 'string' || !f.name) throw new ProtocolError(`${at}.name must be a non-empty string`);
+    if (typeof f.url !== 'string' || !f.url) throw new ProtocolError(`${at}.url must be a non-empty string`);
+    if (f.sha256 !== undefined && !(typeof f.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(f.sha256))) throw new ProtocolError(`${at}.sha256 must be 64 hex digits`);
+    return { name: f.name, url: f.url, ...(f.sha256 ? { sha256: f.sha256.toLowerCase() } : {}) };
+  });
+}
 
 const fail = (message: string): never => { throw new ProtocolError(message); };
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

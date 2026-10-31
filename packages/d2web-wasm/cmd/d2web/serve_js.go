@@ -27,6 +27,21 @@ func init() {
 			})
 			return js.Global().Get("Promise").New(executor)
 		}))
+		// d2webSetFonts(names: string[], buffers: Uint8Array[]) -> "" or an error message (spec 0007); bytes are copied, not base64-encoded.
+		js.Global().Set("d2webSetFonts", js.FuncOf(func(this js.Value, args []js.Value) any {
+			names, buffers := args[0], args[1]
+			list := make([]compile.FontInput, names.Length())
+			for i := range list {
+				buffer := buffers.Index(i)
+				data := make([]byte, buffer.Get("length").Int())
+				js.CopyBytesToGo(data, buffer)
+				list[i] = compile.FontInput{Name: names.Index(i).String(), Data: data}
+			}
+			if err := compile.SetFonts(list); err != nil {
+				return err.Error()
+			}
+			return ""
+		}))
 		select {}
 	}
 }
