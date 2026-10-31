@@ -144,3 +144,4 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 - [ ] Sketch shapes (scene builder, upstream patch), `shape: text` kerning, LaTeX sizing, theme overrides (no native flag).
 - [x] Animation (spec 0005, accepted 31 Oct 2026 with the recommended answers): `src/animation.js` maps tracks to Web Animations, mount runs and cancels them; unit, browser and feature-map (shared 500 ms moment) tests. Open: Firefox/Safari, a drop-shadow blur check by eye (matched native within the bar).
 - [x] Browser compatibility (31 Oct 2026): Firefox works (29/29 client, 3/3 consumer, small paint differences); WebKit worker cannot start the wasm, user declared Safari unsupported for now. Open later: shallower Go start-up or a main-thread fallback.
+- [x] Theme overrides now compared with native through a d2-config block in the source (248 ok); remaining gaps are sketch shapes, shape: text kerning, LaTeX sizing (all documented, ADR 0009).

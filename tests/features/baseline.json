@@ -239,7 +239,7 @@
  "theme/301": "ok",
  "theme/302": "ok",
  "theme/303": "ok",
- "theme/overrides": "no-native",
+ "theme/overrides": "ok",
  "sketch/demo": "ok",
  "sketch/shapes": "differs",
  "render/pad-scale-center": "ok",
