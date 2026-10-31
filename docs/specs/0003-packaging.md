@@ -67,7 +67,7 @@ D2 is MPL-2.0 (Terrastruct); the wasm embeds its fonts (OFL, see D2's `d2fonts/N
 | Vite, webpack, Next.js consumers | unknown | |
 | Cross-origin hosting, service-worker caching, brotli size | unknown | |
 | Byte-identical wasm across machines | unknown | |
-| Firefox, Safari | unknown | |
+| Firefox | works; Safari unsupported for now (docs/browser-support.md) | |
 
 ## 9. Open questions for the user
 

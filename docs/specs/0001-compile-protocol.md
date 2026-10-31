@@ -96,7 +96,8 @@ Consequences for the contract:
 | Association payload shape and source ranges over the worker | proposed | `test:research:identity`, `test:research:join` for the data |
 | Budget defaults | unknown values; policy decided (worker defaults, request may change) | numbers in the probes are placeholders |
 | Painting a dark-theme scene | unknown | |
-| Firefox, Safari | unknown | |
+| Firefox | works (docs/browser-support.md) | |
+| Safari | unsupported for now: the worker cannot start the wasm (docs/browser-support.md) | |
 | Worker and wasm packaging, bundle size | unknown | |
 
 ## 8. Decisions taken in review (user, 31 October 2026)

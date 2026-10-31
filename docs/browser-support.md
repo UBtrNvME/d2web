@@ -6,7 +6,7 @@ Measured 31 October 2026 on one macOS machine (Playwright browsers; versions are
 | --- | --- | --- |
 | Chromium | supported, the reference | every gate |
 | Firefox | works; small paint differences | `test:client` 29/29 (mount, links, animation, events, content, e2e), `test:consumer` 3/3 (native ESM, wrong wasm MIME type, restrictive CSP), feature paint 241 of 255 cases ok against native D2 rendered in the same Firefox |
-| Safari / WebKit | **the worker cannot start the wasm; the rest works** | Playwright WebKit 27.2 (a Safari-class engine, not Safari itself). In a Worker the Go wasm dies in `go.run` with `RangeError: Maximum call stack size exceeded`; the same wasm on the page thread starts. With the wasm on the page thread, feature paint is 247 of 255 ok, identical to Chromium, and the mount, animation, content and association suites pass |
+| Safari / WebKit | **unsupported for now (user decision, 31 October 2026)**: the worker cannot start the wasm; the rest works | Playwright WebKit 27.2 (a Safari-class engine, not Safari itself). In a Worker the Go wasm dies in `go.run` with `RangeError: Maximum call stack size exceeded`; the same wasm on the page thread starts. With the wasm on the page thread, feature paint is 247 of 255 ok, identical to Chromium, and the mount, animation, content and association suites pass |
 
 ## Firefox differences (same engine renders D2's native SVG and our painter)
 
@@ -24,6 +24,6 @@ Real Safari, mobile browsers, other Firefox versions, and the slow research suit
 
 ## WebKit details
 
-- **Worker start failure (blocking for the shipped design):** fetch, compile and instantiate succeed in a WebKit worker; `go.run` then throws a stack overflow. The same call works on the main thread, so WebKit's worker threads have a smaller native stack than the Go runtime's start-up needs. Not fixed and not worked around; shipping to Safari needs a decision (a main-thread fallback that blocks the page during compiles, a Go build with a shallower start-up, or declaring Safari unsupported). Whether real Safari behaves like Playwright's WebKit is not verified.
+- **Worker start failure (blocking for the shipped design):** fetch, compile and instantiate succeed in a WebKit worker; `go.run` then throws a stack overflow. The same call works on the main thread, so WebKit's worker threads have a smaller native stack than the Go runtime's start-up needs. Not fixed and not worked around. The user chose to declare Safari unsupported for now (31 October 2026); the other options stay open for later: a main-thread fallback that blocks the page during compiles, or a Go build with a shallower start-up (not investigated). Whether real Safari behaves like Playwright's WebKit is not verified.
 - **Test mode:** `D2WEB_MAIN_THREAD=1` makes the test harness host the wasm on the page thread behind the same client interface. One Go runtime per page, so the specs that respawn or time out workers (`client.spec`, `e2e.spec`, `consumer.spec`) do not run in this mode.
 - **Tab to links:** `events.spec` and `links.spec` Tab-focus tests fail in WebKit. Safari does not put links in the Tab order unless the user turns that preference on; this is platform behaviour, not a d2web defect (focusable D2 objects use `tabindex`). Not isolated further.
