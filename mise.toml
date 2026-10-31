@@ -50,22 +50,22 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs packages/d2web/test/client.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
 depends = ["reference:fetch"]
 dir = "packages/d2web-wasm"
 env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root}}/.cache/go-mod" }
-run = ["go test -mod=readonly ./...", "node --test test/protocol.test.mjs test/equivalence.test.mjs"]
+run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs"]
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/test/browser/client.spec.mjs packages/d2web/test/browser/e2e.spec.mjs packages/d2web/test/browser/mount.spec.mjs packages/d2web/test/browser/events.spec.mjs packages/d2web/test/browser/content.spec.mjs packages/d2web/test/browser/fonts.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
-run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs packages/d2web/test/client.test.mjs"
+run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs"
 
 [tasks."test:native:corpus"]
 description = "Render every upstream D2 file and archived example with TALA"
@@ -83,7 +83,7 @@ run = "pnpm exec playwright test comparison-selftest.spec.mjs scene-probe.spec.m
 
 [tasks."test:scene"]
 description = "Build the geometry scene probe and compare native with Node/WASM output"
-run = ["node --test tests/scene.test.mjs", "node --test tests/geometry-scene.test.mjs"]
+run = ["node --test tests/scene.test.mjs", "node --test research/geometry/geometry-scene.test.mjs"]
 
 [tasks."test:research:identity"]
 description = "Probe native/Node-WASM semantic and source association without selecting an architecture"
@@ -252,9 +252,9 @@ run = "node packages/d2web/build.mjs"
 [tasks."test:dist"]
 description = "Package artifacts: dist contents and the size budget (spec 0003), after a build"
 depends = ["build"]
-run = "node --test packages/d2web/test/dist.test.mjs"
+run = "node --test packages/d2web/tests/dist.test.mjs"
 
 [tasks."test:consumer"]
 description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
 depends = ["build"]
-run = "pnpm exec playwright test packages/d2web/test/browser/consumer.spec.mjs --reporter=line --output=artifacts/d2web-consumer/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/consumer.spec.mjs --reporter=line --output=artifacts/d2web-consumer/run"

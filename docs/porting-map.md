@@ -259,7 +259,7 @@ Afterward expand cases across all 20 style keywords, all 25 source shape names, 
 
 ## Verified geometry scene boundary
 
-`geometry.d2` now has an executable investigation probe: [Go helper](../tests/scene-probe.go), [native/Node-WASM assertions](../tests/scene.test.mjs), and [Chromium-WASM assertion](../tests/browser/scene-probe.spec.mjs). Run `mise run test:scene` for the native/Node check; `mise run check` also runs the browser check. These exercise D2's actual compiler, TALA seed `1` and scene builder, with zero padding and scale `1`. No imported D2 or Studio source was changed.
+`geometry.d2` now has an executable investigation probe: [Go helper](../research/geometry/scene-probe.go), [native/Node-WASM assertions](../tests/scene.test.mjs), and [Chromium-WASM assertion](../tests/browser/scene-probe.spec.mjs). Run `mise run test:scene` for the native/Node check; `mise run check` also runs the browser check. These exercise D2's actual compiler, TALA seed `1` and scene builder, with zero padding and scale `1`. No imported D2 or Studio source was changed.
 
 The same probe builds as a native executable and as `GOOS=js GOARCH=wasm`. Native, Node/WASM and Chromium/WASM produced exactly equal parsed target and scene JSON for this fixture. The browser runs the Go program without a Node filesystem shim. A malformed D2 input fails without emitting a partial scene. This is a verified execution boundary; it is not a React visual-parity result.
 

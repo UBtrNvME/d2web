@@ -91,7 +91,7 @@ The two browser self-tests check the comparison machinery, not our renderer's fi
 
 ## Native scene/WASM boundary probe
 
-`mise run test:scene` compiles [the investigation helper](../tests/scene-probe.go) against the loaded D2 source as native and `js/wasm` executables. It uses [geometry.d2](../examples/files/geometry.d2), runs TALA with seed `1`, builds the native D2 scene, and checks exact native-versus-Node/WASM JSON equality plus shape paint/geometry, object IDs, paint order, line trimming and arrowhead transform. Invalid source must not emit a partial scene.
+`mise run test:scene` compiles [the investigation helper](../research/geometry/scene-probe.go) against the loaded D2 source as native and `js/wasm` executables. It uses [geometry.d2](../examples/files/geometry.d2), runs TALA with seed `1`, builds the native D2 scene, and checks exact native-versus-Node/WASM JSON equality plus shape paint/geometry, object IDs, paint order, line trimming and arrowhead transform. Invalid source must not emit a partial scene.
 
 The Go module uses its existing sums without modification. Go build/download caches are isolated in root `.cache/`; binaries, diagnostic JSON and the matching Go runtime are generated under `artifacts/scene-probe/`. The JSON is an investigation representation, not the production bridge schema. `mise run clean` already removes both locations.
 

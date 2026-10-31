@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { parseGeometryScene } from '../research/geometry/geometry-scene.ts';
+import { parseGeometryScene } from './geometry-scene.ts';
 
-const fixture = JSON.parse(readFileSync(new URL('../artifacts/scene-probe/geometry.json', import.meta.url), 'utf8'));
+const fixture = JSON.parse(readFileSync(new URL('../../artifacts/scene-probe/geometry.json', import.meta.url), 'utf8'));
 test('tagged native geometry is accepted without converting D2 values', () => {
   assert.equal(parseGeometryScene(fixture), fixture);
   const emptyLists = structuredClone(fixture);

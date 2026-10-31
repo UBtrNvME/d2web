@@ -11,7 +11,7 @@ test('D2 geometry compiles into the same native and Node/WASM scene', { timeout:
   mkdirSync(output, { recursive: true });
   const source = readFileSync(join(root, 'examples/files/geometry.d2'), 'utf8');
   const native = join(output, 'scene-probe');
-  const probe = goProbe(join(root, 'tests/scene-probe.go'), native);
+  const probe = goProbe(join(root, 'research/geometry/scene-probe.go'), native);
   const nativeResult = JSON.parse(probe.native([source]));
   const wasmResult = JSON.parse(probe.wasm([source]));
   assert.deepEqual(wasmResult, nativeResult);
@@ -45,6 +45,6 @@ test('D2 geometry compiles into the same native and Node/WASM scene', { timeout:
   writeFileSync(join(output, 'geometry.json'), JSON.stringify(nativeResult.webScene));
   writeFileSync(join(output, 'source.json'), JSON.stringify(source));
   writeFileSync(join(output, 'wasm_exec.js'), readFileSync(join(probe.goRoot, 'lib/wasm/wasm_exec.js')));
-  await build({ entryPoints: [join(root, 'tests/react-entry.tsx')], outfile: join(output, 'react.js'), bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
+  await build({ entryPoints: [join(root, 'research/geometry/react-entry.tsx')], outfile: join(output, 'react.js'), bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
   writeFileSync(join(output, 'react.html'), '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>D2 geometry React comparison</title></head><body style="margin:0"><div id="root"></div><script type="module" src="./react.js"></script></body></html>');
 });

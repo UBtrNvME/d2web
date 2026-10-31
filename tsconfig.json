@@ -8,5 +8,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["packages/d2web/src", "research/geometry", "tests/react-entry.tsx"]
+  "include": ["packages/d2web/src", "research/geometry"]
 }

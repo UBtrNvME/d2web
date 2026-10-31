@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import { GeometryScene } from '../research/geometry/GeometryScene.js';
-import { parseGeometryScene } from '../research/geometry/geometry-scene.js';
+import { GeometryScene } from './GeometryScene.js';
+import { parseGeometryScene } from './geometry-scene.js';
 
 declare global {
   interface Window {

@@ -56,7 +56,7 @@ There is no cooperative cancel: the wasm thread cannot be interrupted. The only 
 ## 4. Scene payload
 
 The payload is D2's own scene document (`d2scene.Document`: view box, logical size, root node tree, assets, link regions) serialized as versioned JSON. Rules:
-1. **Whole, not reduced.** The worker serializes everything the builder produced, including masks, clips, filters, blend, animations, assets (fonts as bytes, embedded images) and link regions. The research dump already carries this; the geometry-subset serializer in `tests/scene-probe.go` is explicitly not the model.
+1. **Whole, not reduced.** The worker serializes everything the builder produced, including masks, clips, filters, blend, animations, assets (fonts as bytes, embedded images) and link regions. The research dump already carries this; the geometry-subset serializer in `research/geometry/scene-probe.go` is explicitly not the model.
 2. **Stable shape.** Every primitive and paint is a tagged object (`{ $: 'Rect', ... }`) with documented fields. The current dump is reflection-based; replacing it with a designed encoder is the main implementation task of this slice and is **unverified**.
 3. **Versioned.** `sceneVersion` increments on any breaking change. Unknown fields must be carried through by intermediaries and ignored by consumers; an unknown *primitive* or *paint* kind makes the painter fail visibly for that node instead of dropping it.
 4. **Self-contained.** Assets travel inside the scene; the scene never requires a fetch to paint, except fonts the consumer chose not to inline (ADR 0006).
