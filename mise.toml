@@ -264,6 +264,11 @@ description = "Package artifacts: dist contents and the size budget (spec 0003),
 depends = ["build"]
 run = "node --test packages/d2web/tests/dist.test.mjs"
 
+[tasks.demo]
+description = "Serve the d2web demo page on http://127.0.0.1:5280 (builds the package first)"
+depends = ["build"]
+run = "node packages/d2web/demo/serve.mjs"
+
 [tasks."test:consumer"]
 description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
 depends = ["build"]

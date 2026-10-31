@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>d2web demo</title>
+<style>
+  :root { color-scheme: light dark; font: 14px system-ui, sans-serif; }
+  body { margin: 0; display: grid; grid-template-columns: minmax(280px, 34%) 1fr; height: 100vh; }
+  aside { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-right: 1px solid #8884; overflow: auto; }
+  textarea { flex: 1; min-height: 200px; font: 13px ui-monospace, monospace; tab-size: 2; }
+  label { display: flex; gap: 6px; align-items: center; }
+  main { overflow: auto; padding: 16px; }
+  #status { font-size: 12px; opacity: .7; min-height: 1.4em; }
+  #errors { color: #c0392b; white-space: pre-wrap; font: 12px ui-monospace, monospace; }
+  @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; border-bottom: 1px solid #8884; } }
+</style>
+<aside>
+  <label>Example <select id="example"></select></label>
+  <textarea id="src" spellcheck="false" aria-label="D2 source"></textarea>
+  <label>Theme <select id="theme"></select></label>
+  <label>Layout <select id="layout"><option value="tala">TALA</option><option value="dagre">dagre</option><option value="elk">ELK</option></select></label>
+  <label><input type="checkbox" id="sketch"> Sketch</label>
+  <label>Board <select id="board"><option value="">root</option></select></label>
+  <div id="status" role="status"></div>
+  <div id="errors"></div>
+</aside>
+<main><div id="host"></div></main>
+<script type="module">
+import { createClient, spawnWorker, mount } from './index.js';
+
+const examples = {
+  'Shapes and connections': 'direction: right\ndb: Database {shape: cylinder}\napi: API {style.fill: "#fff4cc"}\nclient: Browser {shape: person}\nclient -> api: request\napi -> db: query\ndb -> api: rows {style.stroke-dash: 4}\n',
+  'Containers': 'cloud: Cloud {\n  web: Web\n  app: App\n  web -> app\n}\nuser: User {shape: person}\nuser -> cloud.web: https\n',
+  'Sequence diagram': 'shape: sequence_diagram\nalice -> bob: hello\nbob -> alice: hi\nalice -> bob: bye\n',
+  'Grid': 'grid-rows: 2\ngrid-columns: 3\na\nb\nc\nd\ne\nf\n',
+  'SQL table and class': 'users: {shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar(100)\n}\nShape: {shape: class\n  +area(): float\n}\nusers.id -> Shape\n',
+  'Animated, links and tooltips': 'a -> b {style.animated: true}\nb: Docs {link: https://d2lang.com; tooltip: Opens the D2 docs}\nc: Lift {style.animated: true}\n',
+  'Markdown, code, LaTeX': 'md: |md\n# Title\nSome **bold** text\n|\ncode: |`go\nfunc main() {}\n`|\nmath: |`latex\n\\frac{a}{b} + \\sqrt{c}\n`|\n',
+  'Layers (boards)': 'a -> b\nlayers: {\n  detail: {\n    x -> y\n  }\n}\n',
+};
+const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
+const $ = id => document.getElementById(id);
+for (const name of Object.keys(examples)) $('example').add(new Option(name));
+for (const [id, name] of themes) $('theme').add(new Option(`${name} (${id})`, id));
+
+const client = createClient({ spawn: spawnWorker() });
+const view = mount($('host'));
+let last, revision = 0;
+
+async function run() {
+  $('status').textContent = 'compiling…';
+  const started = performance.now();
+  try {
+    last = await client.compile({
+      revision: ++revision, files: { 'main.d2': $('src').value }, entry: 'main.d2', boards: 'all',
+      render: { themeId: +$('theme').value, sketch: $('sketch').checked, pad: 40, scale: 1, center: false },
+      layout: $('layout').value,
+    });
+  } catch (error) { if (error.name !== 'SupersededError') $('status').textContent = String(error); return; }
+  if (last.error) { $('errors').textContent = last.error.diagnostics?.map(d => `${d.range?.start?.line + 1 ?? '?'}: ${d.message}`).join('\n') || last.error.message; $('status').textContent = 'error'; return; }
+  $('errors').textContent = last.diagnostics.map(d => d.message).join('\n');
+  const chosen = $('board').value;
+  $('board').replaceChildren(...last.boards.map(b => new Option(b.path || 'root', b.path)));
+  $('board').value = last.boards.some(b => b.path === chosen) ? chosen : '';
+  await view.update(last, $('board').value);
+  $('status').textContent = `${last.boards.length} board(s), compiled in ${Math.round(performance.now() - started)} ms (${last.millis ?? '?'} ms in D2)`;
+}
+let timer;
+const later = () => { clearTimeout(timer); timer = setTimeout(run, 300); };
+$('src').addEventListener('input', later);
+for (const id of ['theme', 'layout', 'sketch']) $(id).addEventListener('change', run);
+$('board').addEventListener('change', () => last && view.update(last, $('board').value));
+$('example').addEventListener('change', () => { $('src').value = examples[$('example').value]; run(); });
+$('example').dispatchEvent(new Event('change'));
+</script>

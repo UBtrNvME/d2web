@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "d2web-demo", "runtimeExecutable": "mise", "runtimeArgs": ["run", "demo"], "port": 5280 }
+  ]
+}
