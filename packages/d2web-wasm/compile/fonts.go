@@ -1,6 +1,7 @@
 package compile
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/d2lang/d2/d2renderers/d2fonts"
+	gotextfont "github.com/go-text/typesetting/font"
 	"golang.org/x/image/font/sfnt"
 )
 
@@ -21,10 +23,12 @@ type FontInput struct {
 }
 
 type fontFace struct {
-	name  string
-	data  []byte
-	index uint16
-	face  *sfnt.Font
+	name   string
+	data   []byte
+	index  uint16
+	face   *sfnt.Font
+	weight int  // 100-900, from the face's own metadata
+	italic bool // likewise
 }
 
 var (
@@ -43,12 +47,18 @@ func SetFonts(list []FontInput) error {
 		if err != nil {
 			return fmt.Errorf("font %q: %w", in.Name, err)
 		}
+		described, err := gotextfont.ParseTTC(bytes.NewReader(in.Data))
+		if err != nil || len(described) != collection.NumFonts() {
+			return fmt.Errorf("font %q: cannot read its weight and style", in.Name)
+		}
 		for i := 0; i < collection.NumFonts(); i++ {
 			face, err := collection.Font(i)
 			if err != nil {
 				return fmt.Errorf("font %q face %d: %w", in.Name, i, err)
 			}
-			next = append(next, fontFace{name: in.Name, data: in.Data, index: uint16(i), face: face})
+			aspect := described[i].Describe().Aspect
+			next = append(next, fontFace{name: in.Name, data: in.Data, index: uint16(i), face: face,
+				weight: min(900, max(100, int(aspect.Weight+0.5))), italic: aspect.Style == gotextfont.StyleItalic})
 		}
 	}
 	fontsMu.Lock()
@@ -69,30 +79,63 @@ type consumerResolver struct {
 	missing map[rune]struct{}
 }
 
+// requestedStyle reads the weight and slant D2 asks for the way D2's own system resolver does: an explicit weight wins, else the style words.
+func requestedStyle(request d2fonts.FallbackRequest) (weight int, italic bool) {
+	style := strings.ToLower(request.Style)
+	weight = request.Weight
+	if weight <= 0 {
+		switch {
+		case strings.Contains(style, "semibold"), strings.Contains(style, "semi-bold"):
+			weight = 600
+		case strings.Contains(style, "bold"):
+			weight = 700
+		default:
+			weight = 400
+		}
+	}
+	return min(900, max(100, weight)), strings.Contains(style, "italic") || strings.Contains(style, "oblique")
+}
+
+// ResolveFallbacks picks, for each rune, the covering face closest to the requested weight and slant (the consumer's order breaks ties), and
+// returns the chosen faces in order of first use. A rune only one listed face covers always gets that face, whatever its weight.
 func (r *consumerResolver) ResolveFallbacks(_ context.Context, request d2fonts.FallbackRequest) ([]d2fonts.FallbackFont, error) {
 	fontsMu.Lock()
 	list := faces
 	fontsMu.Unlock()
-	remaining := map[rune]struct{}{}
-	for _, c := range request.Runes {
-		remaining[c] = struct{}{}
+	weight, italic := requestedStyle(request)
+	penalty := func(f fontFace) int {
+		p := f.weight - weight
+		if p < 0 {
+			p = -p
+		}
+		if f.italic != italic {
+			p += 1000
+		}
+		return p
 	}
 	var out []d2fonts.FallbackFont
-	for _, f := range list {
-		used := false
-		for c := range remaining {
-			if f.covers(c) {
-				delete(remaining, c)
-				used = true
+	chosen := map[int]bool{}
+	var missing []rune
+	for _, c := range request.Runes {
+		best := -1
+		for i, f := range list {
+			if f.covers(c) && (best < 0 || penalty(f) < penalty(list[best])) {
+				best = i
 			}
 		}
-		if used {
+		if best < 0 {
+			missing = append(missing, c)
+			continue
+		}
+		if !chosen[best] {
+			chosen[best] = true
+			f := list[best]
 			out = append(out, d2fonts.FallbackFont{Name: f.name, MIMEType: "font/ttf", Data: f.data, FaceIndex: f.index})
 		}
 	}
-	if len(remaining) > 0 {
+	if len(missing) > 0 {
 		r.mu.Lock()
-		for c := range remaining {
+		for _, c := range missing {
 			r.missing[c] = struct{}{}
 		}
 		r.mu.Unlock()
