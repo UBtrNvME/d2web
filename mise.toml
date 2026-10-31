@@ -269,6 +269,10 @@ description = "Serve the d2web demo page on http://127.0.0.1:5280 (builds the pa
 depends = ["build"]
 run = "node packages/d2web/demo/serve.mjs"
 
+[tasks."measure:layout"]
+description = "Measure layout time per engine in Chromium and write docs/layout-limits.md (spec 0008; takes minutes, not part of check)"
+run = "pnpm exec playwright test tests/features/measure-layout.spec.mjs --reporter=line --output=artifacts/measure-layout/run"
+
 [tasks."test:consumer"]
 description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
 depends = ["build"]
