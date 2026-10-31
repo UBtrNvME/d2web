@@ -18,6 +18,7 @@ The current priority is a pinned pipeline map and executable feature/capability 
 - [Native TALA and web comparison guide](docs/conformance.md)
 - [Capability matrix (R5 draft)](docs/capability-matrix.md)
 - [Product definition (v1)](docs/product.md)
+- [D2 feature map](docs/feature-map.md): every D2 capability, how it reaches the web and whether it paints equal to native (generated)
 - [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)

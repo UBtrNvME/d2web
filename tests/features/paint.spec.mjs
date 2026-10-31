@@ -1,11 +1,12 @@
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from '../../packages/d2web/tests/browser/harness.mjs';
 import { root } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
+import { writeReport } from './report.mjs';
 
 // Feature map step 3: every catalog entry compiled in the browser worker, mounted with the shipping mount API, and compared with D2's own
 // native SVG for the same options. Records a status per entry; it does not fail on a difference (baseline.json guards regressions in step 5).
@@ -95,4 +96,15 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
   const counts = {};
   for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
   console.log('feature paint status:', JSON.stringify(counts));
+  if (only) return;
+  // Regression guard: a case that was ok in baseline.json must stay ok. UPDATE_BASELINE=1 rewrites it from this run (a measurement, not an endorsement).
+  const baselinePath = join(root, 'tests/features/baseline.json');
+  const status = Object.fromEntries(results.map(r => [r.id, r.status]));
+  if (process.env.UPDATE_BASELINE || !existsSync(baselinePath)) writeFileSync(baselinePath, JSON.stringify(status, null, 1) + '\n');
+  const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  writeReport();
+  const regressed = Object.keys(baseline).filter(id => baseline[id] === 'ok' && status[id] !== 'ok');
+  const improved = Object.keys(status).filter(id => status[id] === 'ok' && baseline[id] !== 'ok');
+  if (improved.length) console.log('improved since baseline (rerun with UPDATE_BASELINE=1):', improved.join(', '));
+  expect(regressed, 'cases that were ok in tests/features/baseline.json').toEqual([]);
 });

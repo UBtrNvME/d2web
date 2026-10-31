@@ -1,0 +1,11 @@
+// Root-cause notes shown in docs/feature-map.md, first matching pattern wins. Written from investigated evidence only (feature map step 4,
+// investigation by a Codex worker; claims marked "checked" were re-read in the source by the coordinator, the rest are the worker's findings).
+export const notes = [
+  { match: /^(icon-position|content\/icon|shape\/image)/, text: 'Offline asset policy: native fetched the real remote icon, the worker compiles offline (compile.go `offline` transport) and paints the builder\'s placeholder (checked). All 35 image boxes match native x/y/width/height; only the asset content differs. Fix for a fair comparison: supply the icon as a data URI.' },
+  { match: /^render\/pad-scale-center/, text: 'Painter defect: the HTML path sizes the host for scale and pad but translates the content without scaling it (paint.js; worker finding, not re-verified). Scene dimensions are correct.' },
+  { match: /^sketch\/shapes/, text: 'Scene-builder defect: sketch shapes flatten curves and call rough-go Polygon/LinearPath, native calls rough.Path on SVG paths (`d2scenebuild/sketch_shapes.go`; worker finding). Native output is deterministic.' },
+  { match: /^shape\/text/, text: 'Reference mismatch, partly unresolved: native embeds a subset font without GPOS kerning, the scene carries the full font (advance 62.09 vs 62.8 px). Whether kerning explains all differing pixels is not confirmed.' },
+  { match: /^content\/(link|tooltip)/, text: 'Scene-bridge gap: native paints 32 px corner badges for links and tooltips; the scene builder removes that space and emits only interaction regions (`d2scenebuild/metadata.go`, checked). Boxes agree; the canvas is 17 px smaller each way.' },
+  { match: /^content\/latex/, text: 'Native MathJax keeps its `ex` size and resolves it with the browser font; the scene importer fixes 1ex = 8 px (`d2svgimport/style.go` mathJaxEXPixels, checked). The native reference is font-dependent; residual differences are unisolated.' },
+  { match: /^theme\/overrides/, text: 'No CLI flag for theme overrides, so the harness skipped it. Native does honour `vars.d2-config.theme-overrides` in source (worker finding), so the harness could translate; pixel equality is not measured.' },
+];
