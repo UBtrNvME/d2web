@@ -9,6 +9,9 @@ import { catalog } from './catalog.mjs';
 export const output = join(root, 'artifacts/feature-map');
 const defaults = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
 
+// shortcut: catalog board names are simple identifiers; quote segments if cases add literal dots or slashes.
+export const boardTarget = path => path.slice(1).replaceAll('/', '.');
+
 export const requestFor = (entry, id = 1) => JSON.stringify(normalizeCompileRequest({
   v: 1, type: 'compile', id, revision: 1, entry: 'main.d2', files: { 'main.d2': entry.source, ...entry.files },
   render: { ...defaults, ...entry.render }, boards: entry.boards ?? [''], ...(entry.layout ? { layout: entry.layout } : {}),

@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
+import { boardTarget } from './compile.mjs';
 import { families } from './families.mjs';
 import { notes } from './notes.mjs';
 import { webForms, byDesign } from './web-forms.mjs';
@@ -13,6 +14,7 @@ const note = id => notes.find(n => n.match.test(id))?.text ?? '';
 const design = id => byDesign.find(d => d.match.test(id));
 const statusOf = (id, paint) => (design(id) ? 'web-native' : paint[id]?.status ?? 'missing');
 const esc = s => String(s).replaceAll('|', '\\|').replaceAll('\n', ' ');
+const difference = p => p.ratio === undefined ? esc(p.detail ?? '') : `${(100 * p.ratio).toFixed(1)} % of image, ${(100 * p.inkRatio).toFixed(0)} % of ink`;
 
 export function writeReport() {
   const compile = Object.fromEntries(read('compile.json').map(r => [r.id, r]));
@@ -27,7 +29,7 @@ export function writeReport() {
     '- **web-native**: native paints a static artefact (a badge, a footnote) where the web has its own natural behaviour; the difference is intended and not counted as a gap. The rule: D2 should be natural on the web, not look like native SVG (see [the web forms](#natural-web-forms) and ADR 0009).',
     '- **differs**, **size-mismatch**: measured gaps. **no-native**: D2 offers no flag for the same options. Link and tooltip behaviour (hover, click) is browser interaction and is not covered by the pixel comparison.',
     '- Mechanism: `scene-paint` arrives as scene primitives the painter draws; `compile-only` is resolved by D2 while compiling; `interaction` also needs browser behaviour.',
-    '- Chromium only, one machine, offline worker (remote images become placeholders), TALA seed 1 unless the case names an engine. Root board is the one compared; other boards are mounted but not compared.', '');
+    '- Chromium only, one machine, offline worker (remote images become placeholders), TALA seed 1 unless the case names an engine. Every case compares root; the Boards family also compares every non-root board with the same thresholds. Extra board rows are listed separately and do not change catalog coverage or rollup counts. **missing** means not yet measured.', '');
   const rows = [];
   const forms = ['## Natural web forms', '', 'The web element or behaviour that is natural for each family (the target; the painter may not be there yet).', '', '| Family | Natural web form |', '| --- | --- |', ...Object.entries(webForms).map(([f, t]) => `| ${families[f]?.[0] ?? f} | ${esc(t)} |`), ''];
   for (const [family, entries] of byFamily) {
@@ -49,8 +51,17 @@ export function writeReport() {
       out.push('| Case | D2 | Mechanism | Primitives | Status | Difference | Note |', '| --- | --- | --- | --- | --- | --- | --- |');
       for (const e of rest) {
         const p = paint[e.id] ?? {}, c = compile[e.id] ?? {};
-        const diff = p.ratio === undefined ? esc(p.detail ?? '') : `${(100 * p.ratio).toFixed(1)} % of image, ${(100 * p.inkRatio).toFixed(0)} % of ink`;
-        out.push(`| \`${e.id.split('/')[1]}\` | \`${esc(e.source.replaceAll('\n', '; ')).slice(0, 70)}\` | ${e.mechanism} | ${(c.primitives ?? []).join(', ')} | ${statusOf(e.id, paint)} | ${diff} | ${esc(design(e.id)?.text ?? note(e.id))} |`);
+        out.push(`| \`${e.id.split('/')[1]}\` | \`${esc(e.source.replaceAll('\n', '; ')).slice(0, 70)}\` | ${e.mechanism} | ${(c.primitives ?? []).join(', ')} | ${statusOf(e.id, paint)} | ${difference(p)} | ${esc(design(e.id)?.text ?? note(e.id))} |`);
+      }
+      out.push('');
+    }
+    if (family === 'board') {
+      out.push('Non-root boards (same pixel and ink thresholds; excluded from the catalog rollup):', '', '| Case / board | Status | Difference |', '| --- | --- | --- |');
+      for (const e of entries) {
+        for (const board of (compile[e.id]?.boards ?? []).filter(Boolean)) {
+          const id = `${e.id}#${boardTarget(board)}`;
+          out.push(`| \`${esc(id)}\` | ${statusOf(id, paint)} | ${difference(paint[id] ?? {})} |`);
+        }
       }
       out.push('');
     }

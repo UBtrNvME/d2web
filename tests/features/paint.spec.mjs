@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { open } from '../../packages/d2web/tests/browser/harness.mjs';
 import { root } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
+import { boardTarget } from './compile.mjs';
 import { writeReport } from './report.mjs';
 
 // Feature map step 3: every catalog entry compiled in the browser worker, mounted with the shipping mount API, and compared with D2's own
@@ -30,15 +31,15 @@ const diff = (page, a, b) => page.evaluate(async ({ a, b }) => {
   return { ratio: different / (x.w * x.h), inkRatio: ink ? different / ink : 0 };
 }, { a, b });
 
-// Native D2 with the same settings the product asks for. `--target=` renders the root board only.
-function native(entry) {
+// Native D2 with the same settings the product asks for. An empty target renders only root; a dotted path renders only that board.
+function native(entry, board) {
   const dir = mkdtempSync(join(tmpdir(), 'feature-'));
   writeFileSync(join(dir, 'main.d2'), entry.source);
   for (const [name, text] of Object.entries(entry.files ?? {})) writeFileSync(join(dir, name), text);
   const r = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false, ...entry.render };
   if (r.themeOverrides) return { skip: 'no native flag for theme overrides' };
   const args = [`--layout=${entry.layout ?? 'tala'}`, '--tala-seeds=1', `--theme=${r.themeId}`, '--dark-theme=-1', `--pad=${r.pad}`, `--scale=${r.scale}`, `--sketch=${r.sketch}`,
-    `--center=${r.center}`, '--bundle=true', '--force-appendix=false', '--animate-interval=0', '--target=', '--timeout=60', join(dir, 'main.d2'), join(dir, 'out.svg')];
+    `--center=${r.center}`, '--bundle=true', '--force-appendix=false', '--animate-interval=0', `--target=${boardTarget(board)}`, '--timeout=60', join(dir, 'main.d2'), join(dir, 'out.svg')];
   try { execFileSync('d2', args, { encoding: 'utf8', stdio: 'pipe', timeout: 90_000 }); } catch (error) { return { error: String(error.stderr || error.message).split('\n').find(l => l.includes('err') || l.includes('failed')) ?? 'native d2 failed' }; }
   return { svg: readFileSync(join(dir, 'out.svg'), 'utf8') };
 }
@@ -49,8 +50,8 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
   const only = process.env.FEATURES_ONLY;
   const results = [];
   for (const entry of catalog.filter(e => !only || e.id.includes(only))) {
-    const row = { id: entry.id };
-    results.push(row);
+    const entryRow = { id: entry.id };
+    results.push(entryRow);
     try {
       const request = { revision: 1, files: { 'main.d2': entry.source, ...entry.files }, entry: 'main.d2', render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false, ...entry.render }, boards: entry.boards ?? [''], ...(entry.layout ? { layout: entry.layout } : {}) };
       const mounted = await page.evaluate(async request => {
@@ -58,38 +59,46 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
         if (result.error) return { error: `${result.error.code}: ${result.error.message}` };
         const host = document.getElementById('scene');
         host.replaceChildren();
-        const m = d2web.mount(host);
-        const boards = [];
-        try {
-          for (const b of result.boards) { await m.update(result, b.path); boards.push(b.path); }
-          await m.update(result, result.boards[0].path); // leave the first board painted for the comparison
-        } catch (error) { return { error: `mount: ${error.message}`, boards }; }
-        window.currentMount = m;
-        return { boards };
+        window.currentMount = d2web.mount(host);
+        window.currentResult = result;
+        return { boards: result.boards.map(b => b.path) };
       }, request);
-      row.boards = mounted.boards;
-      if (mounted.error) { row.status = mounted.error.startsWith('mount') ? 'mount-error' : 'compile-error'; row.detail = mounted.error.slice(0, 200); continue; }
-      const ref = native(entry);
-      if (ref.skip || ref.error) { row.status = 'no-native'; row.detail = ref.skip ?? ref.error.slice(0, 200); continue; }
-      await page.evaluate(svg => { document.getElementById('native').innerHTML = svg; document.querySelector('#native > svg').style.display = 'block'; }, ref.svg);
-      await page.evaluate(() => document.fonts.ready);
-      const shot = async id => {
-        await page.evaluate(id => { for (const el of document.querySelectorAll('#native,#scene')) el.style.visibility = el.id === id ? 'visible' : 'hidden'; }, id);
-        return (await page.locator('#' + id).screenshot({ animations: 'disabled' })).toString('base64');
-      };
-      const [a, b] = [await shot('native'), await shot('scene')];
-      const d = await diff(page, a, b);
-      if (d.sizeMismatch) { row.status = 'size-mismatch'; row.detail = d.sizeMismatch.join(','); }
-      else { row.ratio = Number(d.ratio.toFixed(4)); row.inkRatio = Number(d.inkRatio.toFixed(3)); row.status = d.ratio <= THRESHOLD && d.inkRatio <= INK_THRESHOLD ? 'ok' : 'differs'; }
-      if (row.status !== 'ok') {
-        const name = entry.id.replaceAll('/', '__');
-        writeFileSync(join(shots, `${name}.native.png`), Buffer.from(a, 'base64'));
-        writeFileSync(join(shots, `${name}.web.png`), Buffer.from(b, 'base64'));
+      entryRow.boards = mounted.boards;
+      if (mounted.error) { entryRow.status = 'compile-error'; entryRow.detail = mounted.error.slice(0, 200); continue; }
+      for (const board of entry.family === 'board' ? mounted.boards : ['']) {
+        const row = board ? { id: `${entry.id}#${boardTarget(board)}` } : entryRow;
+        if (board) results.push(row);
+        try {
+          const error = await page.evaluate(async board => {
+            try { await window.currentMount.update(window.currentResult, board); }
+            catch (error) { return error.message; }
+          }, board);
+          if (error) { row.status = 'mount-error'; row.detail = error.slice(0, 200); continue; }
+          const ref = native(entry, board);
+          if (ref.skip || ref.error) { row.status = 'no-native'; row.detail = ref.skip ?? ref.error.slice(0, 200); continue; }
+          await page.evaluate(svg => { document.getElementById('native').innerHTML = svg; document.querySelector('#native > svg').style.display = 'block'; }, ref.svg);
+          await page.evaluate(() => document.fonts.ready);
+          const shot = async id => {
+            await page.evaluate(id => { for (const el of document.querySelectorAll('#native,#scene')) el.style.visibility = el.id === id ? 'visible' : 'hidden'; }, id);
+            return (await page.locator('#' + id).screenshot({ animations: 'disabled' })).toString('base64');
+          };
+          const [a, b] = [await shot('native'), await shot('scene')];
+          const d = await diff(page, a, b);
+          if (d.sizeMismatch) { row.status = 'size-mismatch'; row.detail = d.sizeMismatch.join(','); }
+          else { row.ratio = Number(d.ratio.toFixed(4)); row.inkRatio = Number(d.inkRatio.toFixed(3)); row.status = d.ratio <= THRESHOLD && d.inkRatio <= INK_THRESHOLD ? 'ok' : 'differs'; }
+          if (row.status !== 'ok') {
+            const name = row.id.replaceAll('/', '__');
+            writeFileSync(join(shots, `${name}.native.png`), Buffer.from(a, 'base64'));
+            writeFileSync(join(shots, `${name}.web.png`), Buffer.from(b, 'base64'));
+          }
+        } catch (error) {
+          row.status = 'harness-error'; row.detail = String(error.message).split('\n')[0].slice(0, 200);
+        }
       }
     } catch (error) {
-      row.status = 'harness-error'; row.detail = String(error.message).split('\n')[0].slice(0, 200);
+      entryRow.status = 'harness-error'; entryRow.detail = String(error.message).split('\n')[0].slice(0, 200);
     } finally {
-      await page.evaluate(() => { window.currentMount?.dispose(); window.currentMount = null; document.getElementById('native').replaceChildren(); }).catch(() => {});
+      await page.evaluate(() => { window.currentMount?.dispose(); window.currentMount = null; window.currentResult = null; document.getElementById('native').replaceChildren(); }).catch(() => {});
     }
   }
   writeFileSync(join(output, only ? 'paint.partial.json' : 'paint.json'), JSON.stringify(results, null, 1));
