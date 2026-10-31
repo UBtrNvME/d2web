@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../../tests/examples.mjs';
-import { paintScene } from '../../tests/scene-paint.mjs';
+import { paintScene } from '../../packages/d2web/src/paint.js';
 
 // HTML-first pass: paint each root board with real HTML elements where an HTML equivalent is exact enough (boxes, text,
 // raster images, link regions) and nested SVG elsewhere. Records the HTML/SVG split with fallback reasons, the raster

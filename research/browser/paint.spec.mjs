@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../../tests/examples.mjs';
-import { fontFamily, paintScene } from '../../tests/scene-paint.mjs';
+import { fontFamily, paintScene } from '../../packages/d2web/src/paint.js';
 
 // Whole-image pass: paint each root board from the scene dump (every primitive, paint, clip, mask, filter) and compare
 // the Chromium raster with D2's native SVG raster. Ratios are recorded per case, not tuned or filtered.

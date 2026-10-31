@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../../tests/examples.mjs';
-import { paintScene } from '../../tests/scene-paint.mjs';
+import { paintScene } from '../../packages/d2web/src/paint.js';
 
 // R6, painter side: a consumer element replaces one painted node's shape and label in the HTML-first output (chess board,
 // node "hans"), at the original size, at double size overflowing, and double size clipped to the original box. Records what

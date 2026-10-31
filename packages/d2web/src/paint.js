@@ -1,5 +1,5 @@
-// Research painter: turns a tagged scene dump (research/census.go) into SVG markup. It covers every primitive,
-// paint, clip, mask, filter and blend kind in the dump; animations are not painted. Not a product API.
+// Painter: turns the scene JSON of spec 0001 (packages/d2web-wasm/scenejson) into SVG or HTML-first markup. It covers every primitive,
+// paint, clip, mask, filter and blend kind in the corpus; animations are not painted. Moved from the research tree; behaviour unchanged.
 const ALIGN = ['none', 'xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
 const BLEND = ['normal', 'multiply', 'darken', 'color-burn', 'overlay', 'lighten'];
 const CAP = ['butt', 'round', 'square'];

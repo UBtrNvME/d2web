@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../../tests/examples.mjs';
-import { paintScene } from '../../tests/scene-paint.mjs';
+import { paintScene } from '../../packages/d2web/src/paint.js';
 
 // Accessibility grouping probe: the HTML-first painter can name every D2 object and connection from the scene's own IDs and
 // label runs, without changing paint. Records the accessibility tree, Tab order against paint order, and pixel identity.

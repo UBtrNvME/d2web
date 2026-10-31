@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { root } from '../../tests/examples.mjs';
-import { paintScene } from '../../tests/scene-paint.mjs';
+import { paintScene } from '../../packages/d2web/src/paint.js';
 
 // R3: two painted boards in one document under hostile host CSS. Compares a plain mount, a mount with namespaced IDs and a
 // shadow-root mount against a clean single-board baseline, then records effects of update, failed input, disposal and remount.
