@@ -79,3 +79,5 @@ Compile results carry the font bytes D2 used (spec 0001 section 3.3). With `font
 3. Shadow root mode: open.
 
 The user accepted the spec as written on 31 October 2026.
+
+_Amendment (31 October 2026, spec 0007): `UpdateReport` gains an optional `rejectedFonts: { id, message }[]`, present only when the browser refused a font in the result; the board is still painted._

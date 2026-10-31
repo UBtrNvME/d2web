@@ -112,3 +112,19 @@ test('pad, scale and center scale the painted content with the host', async ({ p
   expect(scaledShape.x).toBeCloseTo(shape.x * 1.5 + (scaledHost.width - baseHost.width * 1.5) / 2, 2);
   expect(scaledShape.y).toBeCloseTo(shape.y * 1.5 + (scaledHost.height - baseHost.height * 1.5) / 2, 2);
 });
+
+// Spec 0007: a font the engine refuses must not stop the board; the refusal is reported and the rest paints.
+test('a font the engine rejects is reported in the update report and the board still paints', async ({ page }) => {
+  await open(page, { body: host });
+  const out = await page.evaluate(async () => {
+    const view = d2web.mount(document.getElementById('a'));
+    const result = await compile('a -> b');
+    const bad = { ...result, fonts: { ...result.fonts, 'font:fallback:bogus': new Uint8Array([1, 2, 3, 4]) } };
+    const first = await view.update(bad);
+    const second = await view.update(bad); // not retried, still reported
+    return { first, second, painted: document.getElementById('a').shadowRoot.querySelectorAll('[data-id]').length };
+  });
+  expect(out.first.rejectedFonts.map(f => f.id)).toEqual(['font:fallback:bogus']);
+  expect(out.second.rejectedFonts.map(f => f.id)).toEqual(['font:fallback:bogus']);
+  expect(out.painted).toBeGreaterThan(0);
+});

@@ -19,6 +19,15 @@ Status: **accepted with the recommended answers to questions 1-4** (user, 31 Oct
 
 Built (31 October 2026): `compile/fonts.go` (resolver over the consumer's faces via D2's `FallbackResolver`), `d2webSetFonts` in the worker, the client option `fonts` with fetch, checksum and `FontError`, the paint font stack, the missing-glyph warning. Not in this spec: bundling any non-D2 font (size budget 15 MB gzip for the wasm, spec 0003), automatic CDN fonts, subsetting, text editing.
 
+## 2b. Colour emoji: measured, not solved (31 October 2026)
+
+D2's scene builder paints outline and COLR glyphs only, and prepares its own bundled Noto Color Emoji through a trusted path (`BundledFallbackResolver`, authenticated by hash) whose font data the wasm build leaves empty (`noto_color_emoji_wasm.go`), so a consumer-listed font does not make emoji work in pristine D2 (`emoji.spec.mjs`, same result in Chromium, Firefox and WebKit):
+- With no emoji font, emoji take the primary font's placeholder glyph with a 12.91 px advance at 16 px; the browser then paints its own emoji, about 14 px wider for two emoji, so layout and paint disagree.
+- D2's own COLRv1 Noto Color Emoji (5 MB) listed by the consumer fails the whole compile: "color glyph ... uses unsupported COLRv1 paint without an outline fallback".
+- A bitmap (CBDT) emoji font is accepted but D2 still uses the placeholder glyph.
+- Firefox and WebKit refuse the CBDT bitmap font as a web font; that exposed a mount bug, now fixed: a font the engine rejects no longer throws out of `update`; the board paints and `UpdateReport.rejectedFonts` lists the refusal (`mount.spec.mjs`).
+Making colour emoji work needs a change in D2, not in d2web: a hook that lets the wasm host supply the bundled font bytes to the trusted path (a small patch carried in `docs/upstream` like the oracle patches, with `D2WEB_ALLOW_PATCHED`), or embedding the 2.35 MB brotli font in the wasm (about 16 MB gzip against the 15 MB budget). Neither is done; it is the user's decision.
+
 ## 3. Test plan (proposed)
 
 1. Unit: the font list is validated (names, URLs, checksum shape) and rejected with `ProtocolError` before any fetch.

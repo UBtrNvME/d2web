@@ -8,7 +8,8 @@ export interface MountOptions {
   fonts?: 'register' | 'consumer';
 }
 export interface Box { X: number; Y: number; Width: number; Height: number }
-export interface UpdateReport { board: string; orphaned: string[] }
+// `rejectedFonts` appears only when the engine refused a font in the result (spec 0007): the board is still painted, the browser falls back for those glyphs.
+export interface UpdateReport { board: string; orphaned: string[]; rejectedFonts?: { id: string; message: string }[] }
 export type D2EventType = 'click' | 'dblclick' | 'contextmenu' | 'hover' | 'focus';
 export interface D2Event { type: D2EventType; board: string; id: string; domEvent: Event }
 export interface Mount {
@@ -51,16 +52,19 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   const listeners = new Map<D2EventType, Set<(event: D2Event) => void>>();
   const alive = () => { if (disposed) throw new MountError('mount is disposed'); };
 
+  const rejected = new Map<string, string>();
   async function acquireFonts(fonts: CompileResult['fonts']) {
     for (const [id, data] of Object.entries(fonts ?? {})) {
       const family = fontFamily(id);
-      if (families.has(family)) continue;
+      if (families.has(family) || rejected.has(id)) continue;
       let entry = fontHolders.get(family);
       if (!entry) {
-        const face = new FontFace(family, decode(data) as BufferSource);
-        document.fonts.add(await face.load());
-        entry = fontHolders.get(family) ?? { face, holders: 0 };
-        fontHolders.set(family, entry);
+        try {
+          const face = new FontFace(family, decode(data) as BufferSource);
+          document.fonts.add(await face.load());
+          entry = fontHolders.get(family) ?? { face, holders: 0 };
+          fontHolders.set(family, entry);
+        } catch (error) { rejected.set(id, (error as Error).message); continue; }
       }
       entry.holders++;
       families.add(family);
@@ -183,7 +187,8 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       calibrate();
       const orphaned: string[] = [];
       for (const id of content.keys()) if (!applyContent(id)) orphaned.push(id);
-      return { board: path, orphaned };
+      const rejectedFonts = [...rejected].filter(([id]) => id in (result.fonts ?? {})).map(([id, message]) => ({ id, message }));
+      return { board: path, orphaned, ...(rejectedFonts.length ? { rejectedFonts } : {}) };
     },
     nodeBox(id) { alive(); return nodeBox(id); },
     setNodeContent(id, element) {
