@@ -82,3 +82,17 @@ test('a markdown D2 tooltip exposes literal markdown in its title today', async 
   await expect(tooltip).toBeEmpty();
   await expect(page.locator('#a strong, #a b')).toHaveCount(0);
 });
+
+test('a link on a nested node and on a container each keep their own name', async ({ page }) => {
+  await ready(page, 'group: Group {link: https://group.test; inner: Inner {link: https://inner.test}}');
+  const names = await page.evaluate(() => [...document.getElementById('a').shadowRoot.querySelectorAll('a[data-k="link"]')].map(a => [a.getAttribute('href'), a.getAttribute('aria-label')]));
+  expect(names).toContainEqual(['https://group.test', 'Group']);
+  expect(names).toContainEqual(['https://inner.test', 'Inner']);
+});
+
+test('a link on a connection is an anchor named by the connection label', async ({ page }) => {
+  await ready(page, 'a -> b: Edge {link: https://edge.test}');
+  const link = page.locator('#a a[href="https://edge.test"]');
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveAccessibleName('Edge');
+});
