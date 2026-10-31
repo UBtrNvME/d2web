@@ -62,6 +62,22 @@ Chosen by the user. Spec 0004 is a draft; nothing is built before it is accepted
 - [x] 5. (done 31 October 2026: `packages/d2web/src/association.ts`, unit tests in `test:unit`) Client helpers `getObject`, `objectsAt` (pure functions, unit tests in `test:unit`, incl. overlapping declarations and multi-file ranges).
 - [x] 6. (done 31 October 2026: `packages/d2web/tests/browser/association.spec.mjs` in `test:client`; clicks on a node and a connection resolve to `api` and `api -> db` in the source, the fill's owner text contains the value, `objectsAt` finds the node, light and dark associations are identical. Also removed a leftover debug test from events.spec.mjs) End to end in Chromium: click a node in a mounted board, join the event ID with `getObject`, and the source text at the returned range is the declaration; light and dark requests give the same association. README and ledger.
 
+## Feature map: every D2 capability to the web (plan 31 October 2026, awaiting approval)
+
+Chosen by the user before the next product slice. Research and documentation, no new public API. Goal: one generated, evidence-backed table of what D2 can express, how each piece reaches the web (compile result, scene primitive, DOM/CSS/SVG mechanism, browser behaviour), and whether the product paints it equal to native D2 today. Replaces the 8-row [capability matrix](../docs/capability-matrix.md) as the detailed reference; that file keeps the decisions.
+
+Inventory taken from the pinned source (counts are what the catalog must cover, and a test fails when the source gains an entry the catalog lacks): 22 simple reserved keywords, 21 style keywords, 24 shapes, 16 arrowheads, 8 `near` constants, 33 label/icon positions, 5 board-like keywords, fill patterns, 3 layout engines (dagre, ELK, TALA) with `direction`, `grid-*`, sequence diagrams, 19 catalog themes plus overrides, sketch, animation, markdown/code/LaTeX labels, icons and images, links and tooltips, classes/vars/globs/imports (compile-time only), layers/scenarios/steps, fonts. Beyond painting: the CLI exports (SVG, PNG, PDF, GIF/animation, ASCII, text), `fmt`, `watch`/`play`, LSP and the oracle edit API, each marked in scope, out of scope for the web runtime, or v2.
+
+- [ ] 1. Catalog: `tests/features/catalog.mjs` lists every entry with family, the D2 construct, a minimal D2 case (several value variants for ranged keywords) and its expected web mechanism class: `compile-only`, `scene-paint`, `interaction`, `export-only`, `editing (v2)`. A fast test (`check`) fails if the pinned source has a keyword, shape, arrowhead, theme or position the catalog does not name.
+- [ ] 2. Compile status: every case compiled by the product worker (native build) with TALA; record compiled, diagnostics and scene primitive kinds used. Fast, in `check` when under a few seconds.
+- [ ] 3. Paint status in Chromium: mount each case with the product painter and compare its raster with D2's native SVG for the same theme (the existing 5% bar and diff helper); record pass, differs (with the percentage), not painted, or crash. Own task `test:features`, in `check:browser`.
+- [ ] 4. Gap analysis: each non-pass is root-caused to a category (painter missing, scene lacks data, browser difference, native reference unstable, fonts) and linked to the primitive or API involved; unknown stays unknown.
+- [ ] 5. Generated `docs/feature-map.md` (written by the test, checked in): per-family tables with D2 construct, web mechanism, status and evidence, plus a rollup. Hand-written notes only for mechanisms and decisions. Linked from README and the capability matrix.
+- [ ] 6. Non-paint capabilities (exports, CLI, LSP, oracle, `fmt`): short table with scope decision proposed for each; the user decides.
+- [ ] 7. Then the user picks the next product slice from the gaps found.
+
+Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari measurements (the catalog can be re-run there later), and layout-engine quality comparisons.
+
 ## Painting and presentation (R2)
 
 - [x] HTML text selection fixed with a trailing newline per label; copy order is paint order, not semantic order.
