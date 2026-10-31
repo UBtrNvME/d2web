@@ -59,27 +59,18 @@ test('a D2 link with a tooltip carries both href and title', async ({ page }) =>
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute('href', 'https://example.test');
   await expect(link).toHaveAttribute('title', 'Some tip');
-  // The title is the empty overlay's accessible-name fallback, rather than the sibling node label.
-  await expect(link).toHaveAccessibleName('Some tip');
+  // The link is named by its D2 object's label; the tooltip stays the title.
+  await expect(link).toHaveAccessibleName('Click');
 });
 
-test('a link-only anchor is reachable by Tab but currently has no accessible name', async ({ page }) => {
+test('a link-only anchor is reachable by Tab and named by its node label', async ({ page }) => {
   await ready(page, source);
   const link = linkIn(page);
   await page.keyboard.press('Tab');
   await expect(page.locator('#a [data-id="x"]')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(link).toBeFocused();
-  await expect(link).toHaveAccessibleName('');
-});
-
-test('a link-only anchor should have an accessible name', async ({ page }) => {
-  await ready(page, source);
-  const link = linkIn(page);
-  await expect(link).toHaveCount(1);
-  // Defect: the overlay is empty and has no title/ARIA name; the named node group is its sibling.
-  test.fail(true, 'Link-only anchors have no accessible name in the current painter.');
-  await expect(link).not.toHaveAccessibleName('');
+  await expect(link).toHaveAccessibleName('Click');
 });
 
 test('a markdown D2 tooltip exposes literal markdown in its title today', async ({ page }) => {

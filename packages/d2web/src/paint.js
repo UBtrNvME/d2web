@@ -205,6 +205,20 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const labelOf = n => (n.Children ?? []).filter(c => c.ID?.startsWith(`${n.ID}:label:`)).map(c => c.Primitive?.Text).filter(Boolean).join(' ');
   const a11yAttrs = n => (objects.has(n) ? ` role="group" tabindex="0" aria-label="${esc(labelOf(n) || n.ID)}"` : '');
 
+  // A link region carries no object ID; its accessible name is the label of the smallest D2 object whose bounds hold the region (within its stroke).
+  function linkName(l) {
+    let best = '', area = Infinity;
+    for (const n of scene.Root?.Children ?? []) {
+      if (!n.ID || n.ID.startsWith('root:')) continue;
+      const b = subtreeBounds(n), m = n.Transform;
+      if (!b || !m) continue;
+      const x0 = m.A * b[0] + m.E - 4, y0 = m.D * b[1] + m.F - 4, x1 = m.A * b[2] + m.E + 4, y1 = m.D * b[3] + m.F + 4;
+      const r = l.Box;
+      if (r.X >= x0 && r.Y >= y0 && r.X + r.Width <= x1 && r.Y + r.Height <= y1 && (x1 - x0) * (y1 - y0) < area) { area = (x1 - x0) * (y1 - y0); best = labelOf(n); }
+    }
+    return best;
+  }
+
   function nodeHtml(n) {
     if (!n) return '';
     const heavy = n.Filters?.length || n.Blend || n.Animations?.length;
@@ -257,7 +271,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   }
 
   if (html) {
-    const links = (scene.Links ?? []).map(l => `<a data-k="link" ${l.URL ? `href="${esc(l.URL)}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
+    const links = (scene.Links ?? []).map(l => `<a data-k="link" ${l.URL ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     const body = nodeHtml(scene.Root);
     let sx = scene.LogicalWidth / v.Width, sy = scene.LogicalHeight / v.Height;
     if (scene.ViewportFit) sx = sy = Math.min(sx, sy);
