@@ -21,13 +21,6 @@ const part = (page, id) => page.locator(`#a [data-id="${id}"] [data-k=text]`).fi
 // The api node has a link, so a link region lies over its label: pointer actions go through the region (forced, no actionability wait).
 const linked = { force: true };
 
-// A linked object keeps its D2 identity: its link region resolves to the object it covers.
-// A linked object keeps its D2 identity: its link region resolves to the object it covers.
-test('debug', async ({ page }) => {
-  await ready(page);
-  console.log(await page.evaluate(() => { const l = document.getElementById('a').shadowRoot.querySelectorAll('[data-id="db:label:0"] [data-k=text]'); return [l.length, l[0]?.getBoundingClientRect().toJSON(), l[0]?.outerHTML.slice(0, 300), getComputedStyle(l[0]).visibility]; }));
-});
-
 test('click, double click and context menu report the object, for nodes and connections', async ({ page }) => {
   await ready(page);
   await part(page, 'api:label:0').click(linked);

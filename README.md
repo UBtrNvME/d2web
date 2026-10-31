@@ -18,7 +18,7 @@ The current priority is a pinned pipeline map and executable feature/capability 
 - [Native TALA and web comparison guide](docs/conformance.md)
 - [Capability matrix (R5 draft)](docs/capability-matrix.md)
 - [Product definition (v1)](docs/product.md)
-- [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted; name and licence open)](docs/specs/0003-packaging.md), [0004 association (proposed)](docs/specs/0004-association.md)
+- [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
 - [Imported Studio, upstream source and historical evidence](imports/README.md)
@@ -118,6 +118,7 @@ import { createClient, spawnWorker, mount } from 'd2web';
 const client = createClient({ spawn: spawnWorker() }); // or spawnWorker({ worker, exec, wasm }) to override URLs
 ```
 
+- Source association: `result.boards[i].association` lists each object with its label, content role, source declarations, property owners and scene nodes; `getObject(association, id)` and `objectsAt(association, { path, line, column })` look things up ([spec 0004](docs/specs/0004-association.md)). Positions are UTF-16 (`offset` is a JS string index); identity across edits is not provided.
 - Sizes: `d2web.wasm` 52.7 MB raw, about 13.6 MB gzip (serve it compressed); `index.js` about 8 KB gzip. A test fails above 15 MB and 40 KB gzip.
 - Serve the wasm as `application/wasm`; a wrong type still works but compiles without streaming.
 - The worker must be same-origin. A strict CSP needs `worker-src` and `'wasm-unsafe-eval'` in `script-src` (tested).

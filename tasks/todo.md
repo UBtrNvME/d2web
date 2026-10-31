@@ -12,7 +12,7 @@ Only what is still to do. Evidence and results are in [research findings](../doc
 - [x] First contract drafted: [spec 0001](../docs/specs/0001-compile-protocol.md) (proposed; its three open questions were answered 31 October 2026, see its section 8). Render options test: `test:research:options`.
 - [x] Spec 0001 accepted by the user, 31 October 2026.
 - [x] Slice 1 complete (31 October 2026), see below.
-- [ ] Slice 4 chosen: association (user, 31 October 2026), [spec 0004](../docs/specs/0004-association.md) drafted and waiting for acceptance; plan in tasks/todo.md.
+- [x] Slice 4 chosen: association (user, 31 October 2026), [spec 0004](../docs/specs/0004-association.md) accepted and built (31 October 2026).
 - [x] Slice 3 chosen: packaging (user, 31 October 2026), built; spec 0003 accepted.
 - [x] Slice 2 chosen: mount API (user, 31 October 2026), plan below. Spec 0002 accepted.
 
@@ -60,7 +60,7 @@ Chosen by the user. Spec 0004 is a draft; nothing is built before it is accepted
 - [x] 3. (done 31 October 2026: 100 boards, 0 unowned, no node with two owners; anonymous nodes belong to their nearest named ancestor; multi-file archives not in this test) Scene-node ownership: every scene node except `root`, `root:background` belongs to exactly one object over the example corpus (the join probe's prefix rule becomes a tested worker output); any exception is listed, not hidden.
 - [x] 4. (done 31 October 2026: `properties` by reflection over D2's Style keywords plus label; size 9.3% of the scene over 100 corpus boards, budget 15%; a held-nothing default is absent rather than null) Property sources: `properties` with owning declaration (class, glob, import, scenario override) and `source: null` for defaults; tests reuse the R1 cases (class fill, glob stroke, imported label, scenario override); payload size measured over the corpus and a budget recorded in spec 0004.
 - [x] 5. (done 31 October 2026: `packages/d2web/src/association.ts`, unit tests in `test:unit`) Client helpers `getObject`, `objectsAt` (pure functions, unit tests in `test:unit`, incl. overlapping declarations and multi-file ranges).
-- [ ] 6. End to end in Chromium: click a node in a mounted board, join the event ID with `getObject`, and the source text at the returned range is the declaration; light and dark requests give the same association. README and ledger.
+- [x] 6. (done 31 October 2026: `packages/d2web/tests/browser/association.spec.mjs` in `test:client`; clicks on a node and a connection resolve to `api` and `api -> db` in the source, the fill's owner text contains the value, `objectsAt` finds the node, light and dark associations are identical. Also removed a leftover debug test from events.spec.mjs) End to end in Chromium: click a node in a mounted board, join the event ID with `getObject`, and the source text at the returned range is the declaration; light and dark requests give the same association. README and ledger.
 
 ## Painting and presentation (R2)
 

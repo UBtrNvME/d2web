@@ -1,6 +1,6 @@
 # Spec 0004: association (D2 objects, source ranges and scene nodes)
 
-Status: **proposed**, not accepted. Builds on [spec 0001](0001-compile-protocol.md) (the `association` field of a board is `null` today), [spec 0002](0002-mount-api.md) (events carry a D2 object ID), [ADR 0002](../adr/0002-combined-boundary-and-painter.md) (scene plus a thin association layer keyed by revision, board path and ID) and [ADR 0007](../adr/0007-product-scope-v1.md) (read-only; editing is v2). Evidence: R1 in [research findings](../research-findings.md) (`test:research:identity`, `test:research:join`, `test:research:rich`).
+Status: **accepted** by the user on 31 October 2026 with the recommended answers to the four questions in section 7; built in slice 4. Builds on [spec 0001](0001-compile-protocol.md) (the `association` field of a board is `null` today), [spec 0002](0002-mount-api.md) (events carry a D2 object ID), [ADR 0002](../adr/0002-combined-boundary-and-painter.md) (scene plus a thin association layer keyed by revision, board path and ID) and [ADR 0007](../adr/0007-product-scope-v1.md) (read-only; editing is v2). Evidence: R1 in [research findings](../research-findings.md) (`test:research:identity`, `test:research:join`, `test:research:rich`).
 
 ## 1. What it is for
 
@@ -58,12 +58,12 @@ The payload is JSON beside the scene. Measured 31 October 2026 over the 100 boar
 | --- | --- | --- |
 | Object and connection IDs match scene nodes; generated nodes are `<owner>:<suffix>` | verified on named cases (not guaranteed by D2) | `test:research:join` |
 | Class and glob declarations own property values and are absent from `references` | verified | `test:research:identity` |
-| Payload built by the worker, equal in native and Node/WASM | proposed | step 2 test |
+| Payload built by the worker, equal in native and Node/WASM | verified (identity, imports, boards workspaces, all boards) | `test:wasm` |
 | Every scene node belongs to exactly one object on the example corpus | verified, 100 boards from the 80 single-file examples, 0 unowned (31 October 2026) | `test:wasm` |
-| Click in Chromium resolves to the declaring source text | proposed | step 5 browser test |
+| Click in Chromium resolves to the declaring source text | verified (node and connection) | `test:client` |
 | Property owners (class, glob, import, scenario override) | verified on `examples/research/identity` | `test:wasm` |
 | Size on the corpus | measured, 9.3 % of the scene | `test:wasm` |
-| `objectsAt` precision when declarations overlap | unknown | step 5 unit tests |
+| `objectsAt` smallest-range ordering and edge cases | verified on synthetic ranges; not on real nested declarations | `test:unit` |
 | Behaviour with non-TALA engines, very large boards | unknown | |
 
 ## 7. Open questions for the user
