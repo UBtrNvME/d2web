@@ -61,3 +61,29 @@ test('a failed compile has no association (and no boards)', () => {
   const r = native(request({ 'main.d2': 'a -> {' }));
   assert.equal(r.boards, undefined);
 });
+
+// Spec 0004 section 6: every scene node except the two helper nodes belongs to exactly one object, over the example corpus.
+test('every scene node of the example corpus has exactly one owner', { timeout: 600_000 }, () => {
+  const helpers = new Set(['root', 'root:background']);
+  // Anonymous nodes (empty ID) have no name to list; they belong to the nearest ancestor that is owned or a helper.
+  const unowned = (n, owned, covered = false) => {
+    const ok = covered || helpers.has(n.ID) || owned.includes(n.ID);
+    return [...(ok ? [] : [n.ID]), ...n.Children.flatMap(c => unowned(c, owned, ok))];
+  };
+  let boards = 0;
+  const failures = [], orphans = [];
+  for (const file of readdirSync(join(root, 'examples/files')).filter(f => f.endsWith('.d2'))) {
+    const text = readFileSync(join(root, 'examples/files', file), 'utf8');
+    const r = native(request({ 'main.d2': text }));
+    if (r.error) { failures.push(`${file}: ${r.error.message}`); continue; }
+    for (const board of r.boards) {
+      boards++;
+      const owned = board.association.objects.flatMap(o => o.nodes);
+      assert.equal(new Set(owned).size, owned.length, `${file}: a scene node has two owners`);
+      for (const id of unowned(board.scene.Root, owned)) orphans.push(`${file}${board.path}: ${JSON.stringify(id)}`);
+    }
+  }
+  console.log(`ownership: ${boards} boards, ${failures.length} files did not compile (${failures.slice(0, 3).join(' | ')}), ${orphans.length} unowned nodes ${orphans.slice(0, 5).join(' | ')}`);
+  assert(boards >= 70, `only ${boards} boards compiled`);
+  assert.deepEqual(orphans, []);
+});

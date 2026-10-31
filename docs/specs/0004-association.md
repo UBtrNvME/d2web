@@ -29,7 +29,7 @@ Pos    = { line, column, offset }  // line 0-based; column and offset in UTF-16 
 
 Rules:
 - The join key is (revision, board path, object `id`), as decided in ADR 0002. A board's association is complete for that board only; imported and layered boards each carry their own.
-- `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. Every scene node except the helper nodes `root` and `root:background` belongs to exactly one object (test, section 6).
+- `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. It lists the named scene nodes (`<id>` and `<id>:...`) of the object. Anonymous nodes (empty ID, the plain paint primitives) have no name to list; each belongs to its nearest named ancestor. Every scene node except the helpers `root` and `root:background` is covered by exactly one object (test, section 6). Owner lookup uses the observed `<ownerID>:<suffix>` convention inside the worker, where a test pins it, so consumers do not depend on it.
 - `properties` has an entry for each D2 style keyword the object has an effective value for, plus `label`. The source is the declaration that owns that value, which can be a class or glob declaration that is not in `references` (R1 finding). A defaulted value has `source: null`.
 - Imports: a `Source.path` is the file the declaration lives in, which can differ from the entry file.
 - Ranges are D2's, compiled with its UTF-16 position option. In that mode D2's `Byte` field holds the UTF-16 offset (observed 31 October 2026: `a: "😀"; b` puts `b` at column 9, offset 9, not byte 11), so the field is named `offset` here. Diagnostic ranges (spec 0001) come from the same compile and use the same offsets from now on.
@@ -59,7 +59,7 @@ The payload is JSON beside the scene. The step that builds it records its size o
 | Object and connection IDs match scene nodes; generated nodes are `<owner>:<suffix>` | verified on named cases (not guaranteed by D2) | `test:research:join` |
 | Class and glob declarations own property values and are absent from `references` | verified | `test:research:identity` |
 | Payload built by the worker, equal in native and Node/WASM | proposed | step 2 test |
-| Every scene node belongs to exactly one object on the example corpus | proposed | step 3 test |
+| Every scene node belongs to exactly one object on the example corpus | verified, 100 boards from the 80 single-file examples, 0 unowned (31 October 2026) | `test:wasm` |
 | Click in Chromium resolves to the declaring source text | proposed | step 5 browser test |
 | Size on the corpus | unknown until measured | step 4 |
 | `objectsAt` precision when declarations overlap | unknown | step 5 unit tests |
