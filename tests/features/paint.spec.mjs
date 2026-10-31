@@ -14,6 +14,8 @@ import { writeReport } from './report.mjs';
 const output = join(root, 'artifacts/feature-map');
 const shots = join(output, 'shots');
 mkdirSync(shots, { recursive: true });
+const browser = process.env.D2WEB_BROWSER ?? 'chromium';
+const suffix = browser === 'chromium' ? '' : `.${browser}`;
 const THRESHOLD = 0.05; // ADR 0002 / 0007 fidelity bar, over the whole image
 const INK_THRESHOLD = 0.25; // proposed (not an ADR): at most a quarter of the inked pixels may differ
 // Whole-image ratios hide a missing label on a small board, so the second metric divides by the pixels that carry ink in either image.
@@ -103,17 +105,17 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
       await page.evaluate(() => { window.currentMount?.dispose(); window.currentMount = null; window.currentResult = null; document.getElementById('native').replaceChildren(); }).catch(() => {});
     }
   }
-  writeFileSync(join(output, only ? 'paint.partial.json' : 'paint.json'), JSON.stringify(results, null, 1));
+  writeFileSync(join(output, only ? 'paint.partial.json' : `paint${suffix}.json`), JSON.stringify(results, null, 1));
   const counts = {};
   for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
   console.log('feature paint status:', JSON.stringify(counts));
   if (only) return;
   // Regression guard: a case that was ok in baseline.json must stay ok. UPDATE_BASELINE=1 rewrites it from this run (a measurement, not an endorsement).
-  const baselinePath = join(root, 'tests/features/baseline.json');
+  const baselinePath = join(root, `tests/features/baseline${suffix}.json`);
   const status = Object.fromEntries(results.map(r => [r.id, r.status]));
   if (process.env.UPDATE_BASELINE || !existsSync(baselinePath)) writeFileSync(baselinePath, JSON.stringify(status, null, 1) + '\n');
   const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
-  writeReport();
+  if (!suffix) writeReport(); // docs/feature-map.md describes Chromium; other browsers keep their own artifact and baseline
   const regressed = Object.keys(baseline).filter(id => baseline[id] === 'ok' && status[id] !== 'ok');
   const improved = Object.keys(status).filter(id => status[id] === 'ok' && baseline[id] !== 'ok');
   if (improved.length) console.log('improved since baseline (rerun with UPDATE_BASELINE=1):', improved.join(', '));

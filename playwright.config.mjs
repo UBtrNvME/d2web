@@ -11,7 +11,7 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { outputFolder: 'artifacts/report', open: 'never' }]],
   use: {
-    browserName: 'chromium',
+    browserName: process.env.D2WEB_BROWSER ?? 'chromium', // chromium (default), firefox or webkit; see docs/browser-support.md
     viewport: { width: 1280, height: 720 },
     deviceScaleFactor: 1,
     colorScheme: 'light',
