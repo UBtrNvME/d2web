@@ -11,7 +11,7 @@ Only what is still to do. Evidence and results are in [research findings](../doc
 - [x] Product scope v1 accepted 31 October 2026: ADR 0007 and [product.md](../docs/product.md).
 - [x] First contract drafted: [spec 0001](../docs/specs/0001-compile-protocol.md) (proposed; its three open questions were answered 31 October 2026, see its section 8). Render options test: `test:research:options`.
 - [x] Spec 0001 accepted by the user, 31 October 2026.
-- [ ] Next: slice 1 (below).
+- [x] Slice 1 complete (31 October 2026), see below. Next: choose slice 2 (candidates: association payload over the worker, images/local assets in the virtual filesystem, packaging of worker and wasm, mount/update/dispose API with the shadow-root host, edit contract for v2).
 
 ## Slice 1: compile protocol, render only (spec 0001)
 
@@ -22,7 +22,7 @@ Product code, not research. Each step ends with a passing test in `check` (or `c
 - [x] 3. (done 31 October 2026: `packages/d2web-wasm/compile` + `cmd/d2web`, tests in `packages/d2web-wasm/test/protocol.test.mjs` run by `test:wasm`; native and Node/WASM agree for tala, sketch, dark theme id, dagre, elk and all boards; gaps: `association` is null, images in the virtual filesystem are unreadable (remote and local images become placeholders), budget errors are matched by message because D2 has no typed error, SVG import limits are fixed, fonts travel as base64 beside the scenes, browser worker not yet exercised) Go wasm entry serving `compile` per spec: `ready`, `result`, typed errors, no partial boards, `available` board list, budget errors. Acceptance: native and Node/WASM give identical results for the corpus.
 - [x] 4. Host client (done 31 October 2026): `packages/d2web/src/client.ts` (latest-wins, stale results dropped as `SupersededError`, abort by terminate and respawn once a running compile is older than `supersedeAfterMs`, `TimeoutError` after `silentTimeoutMs` counted from posting plus a separate startup timeout), `packages/d2web/src/worker.js`; unit tests with scripted workers (`test:unit`) and `test:client` in Chromium with the real wasm (in `check:browser`). The browser run found a real bug: `imageasset` needs an explicit BaseDir because `os.Getwd` is not implemented on js; fixed in `compile.go`. Not yet covered: worker packaging/URLs, other browsers.
 - [x] 5. Painter (done 31 October 2026): `tests/scene-paint.mjs` moved unchanged to `packages/d2web/src/paint.js`; `packages/d2web-wasm/test/equivalence.test.mjs` (in `test:wasm`) shows the product worker's scene deep-equals the census scene for 7 single-file image-free cases, so the census thresholds carry over; `test:research:census` passes with the moved painter.
-- [ ] 6. End to end in Chromium: source in, painted board out, light and dark as two requests.
+- [x] 6. End to end (done 31 October 2026): `packages/d2web/test/browser/e2e.spec.mjs` (`test:client`, in `check:browser`): source to client to worker to wasm to scene plus fonts to painter to pixels, light (theme 0) and dark (theme 200) as two requests, each compared with native D2 for the same theme: 0.41% and 0.25% of pixels differ (bar 5%), dark differs from light. One small image-free board only; the corpus-wide figure remains the census (139 of 145 within 5%).
 
 ## Painting and presentation (R2)
 
