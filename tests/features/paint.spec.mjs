@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { open, diff } from '../../packages/d2web/tests/browser/harness.mjs';
+import { open } from '../../packages/d2web/tests/browser/harness.mjs';
 import { root } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
 
@@ -12,7 +12,22 @@ import { catalog } from './catalog.mjs';
 const output = join(root, 'artifacts/feature-map');
 const shots = join(output, 'shots');
 mkdirSync(shots, { recursive: true });
-const THRESHOLD = 0.05; // ADR 0002 / 0007 fidelity bar
+const THRESHOLD = 0.05; // ADR 0002 / 0007 fidelity bar, over the whole image
+const INK_THRESHOLD = 0.25; // proposed (not an ADR): at most a quarter of the inked pixels may differ
+// Whole-image ratios hide a missing label on a small board, so the second metric divides by the pixels that carry ink in either image.
+const diff = (page, a, b) => page.evaluate(async ({ a, b }) => {
+  const read = async b64 => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, i.width, i.height); x.drawImage(i, 0, 0); return { w: i.width, h: i.height, d: x.getImageData(0, 0, i.width, i.height).data }; };
+  const [x, y] = [await read(a), await read(b)];
+  if (x.w !== y.w || x.h !== y.h) return { sizeMismatch: [x.w, x.h, y.w, y.h] };
+  let different = 0, ink = 0;
+  for (let i = 0; i < x.d.length; i += 4) {
+    const bad = [0, 1, 2].some(k => Math.abs(x.d[i + k] - y.d[i + k]) > 25);
+    const inked = [x.d, y.d].some(d => [0, 1, 2].some(k => d[i + k] < 230));
+    if (bad) different++;
+    if (inked) ink++;
+  }
+  return { ratio: different / (x.w * x.h), inkRatio: ink ? different / ink : 0 };
+}, { a, b });
 
 // Native D2 with the same settings the product asks for. `--target=` renders the root board only.
 function native(entry) {
@@ -64,7 +79,7 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
       const [a, b] = [await shot('native'), await shot('scene')];
       const d = await diff(page, a, b);
       if (d.sizeMismatch) { row.status = 'size-mismatch'; row.detail = d.sizeMismatch.join(','); }
-      else { row.ratio = Number(d.ratio.toFixed(4)); row.status = d.ratio <= THRESHOLD ? 'ok' : 'differs'; }
+      else { row.ratio = Number(d.ratio.toFixed(4)); row.inkRatio = Number(d.inkRatio.toFixed(3)); row.status = d.ratio <= THRESHOLD && d.inkRatio <= INK_THRESHOLD ? 'ok' : 'differs'; }
       if (row.status !== 'ok') {
         const name = entry.id.replaceAll('/', '__');
         writeFileSync(join(shots, `${name}.native.png`), Buffer.from(a, 'base64'));
