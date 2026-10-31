@@ -42,6 +42,6 @@ Built (31 October 2026): `compile/fonts.go` (resolver over the consumer's faces 
 | Browser repaint with scene fallbacks renders CJK, Arabic, emoji; advances match | measured once, Chromium, one machine |
 | The worker can take consumer font bytes into D2's resolver chain | verified: `fonts_test.go`, `fallback-fonts.spec.mjs` (Arabic via Amiri; Japanese deliberately uncovered gives the warning) |
 | The painted run's browser width equals the scene's advance sum for Arabic | verified to 0.5 px in Chromium, Firefox and WebKit (one Amiri sample) |
-| Long RTL and mixed-direction text agrees with D2's advances | unknown |
-| Bold and italic on fallback fonts | unknown |
+| Hebrew, long Hebrew and Arabic sentences, mixed-direction lines, Japanese and an emoji agree with D2's advances | verified to 0.1 px in Chromium, Firefox and WebKit (`text-scripts.spec.mjs`; DejaVu Sans and M+ 1p read from the pinned go-text/typesetting-utils test data, not copied into the repository because their licence files are not shipped with them) |
+| Bold and italic on fallback fonts | measured: D2's scene font for a label is bold; fallback glyphs are painted with the face the consumer listed (regular here), no synthetic bold or italic (`font-synthesis: none`), and the advances still match. `style.italic` did not change the scene font on the probe label (unexplained). The resolver ignores the requested weight and style; to get a bold fallback the consumer lists a bold face and the order decides |
 | Firefox and WebKit text metrics | unknown |
