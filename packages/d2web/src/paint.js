@@ -16,7 +16,7 @@ const split = c => { const [r, g, b, a] = c.slice(5, -1).split(','); return [`rg
 
 export const fontFamily = id => 'scene-' + id.replace(/\W/g, '-');
 
-export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '', a11y = false } = {}) {
+export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '', a11y = false, association = [] } = {}) {
   if (!scene?.Root || !scene.ViewBox) throw new Error('scene needs Root and ViewBox');
   // Mask and filter regions cover the document with a margin; huge regions make Chromium drop content on large boards.
   const region = (({ X, Y, Width, Height }) => `x="${X - 1000}" y="${Y - 1000}" width="${Width + 2000}" height="${Height + 2000}"`)(scene.ViewBox);
@@ -207,21 +207,41 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   // focusable named group; the name is its label runs (or the ID when it has none). Paint is unchanged.
   const objects = new Set(a11y ? (scene.Root?.Children ?? []).filter(c => c.ID && !c.ID.startsWith('root:')) : []);
   const labelOf = n => (n.Children ?? []).filter(c => c.ID?.startsWith(`${n.ID}:label:`)).map(c => c.Primitive?.Text).filter(Boolean).join(' ');
-  const a11yAttrs = n => (objects.has(n) ? ` role="group" tabindex="0" aria-label="${esc(labelOf(n) || n.ID)}"` : '');
+  // Spec 0006: names, nesting and descriptions are D2's own data (association payload, link regions) in ARIA form; no wording of ours.
+  const info = new Map(association.map(o => [o.id, o]));
+  const spelling = id => id.replace(/[()]/g, '').replace(/\[\d+\]$/, ''); // `c.(d -> e)[0]` is D2's key; this is its source spelling `c.d -> e`
+  const nameOf = n => {
+    const o = info.get(n.ID);
+    if (o?.content) return o.label || n.ID; // markdown and code carry no label runs; the label is D2's text as written
+    return labelOf(n) || (o?.kind === 'connection' ? spelling(n.ID) : n.ID);
+  };
+  const domId = new Map([...objects].map((n, i) => [n, `${idPrefix}o${i}`]));
+  const byId = new Map([...objects].map(n => [n.ID, n]));
+  const owned = new Map();
+  for (const n of objects) { const parent = byId.get(info.get(n.ID)?.parent); if (parent) owned.set(parent, [...(owned.get(parent) ?? []), domId.get(n)]); }
+  const tooltips = new Map();
+  const a11yAttrs = n => {
+    if (!objects.has(n)) return '';
+    const o = info.get(n.ID);
+    const description = [o?.kind === 'connection' && labelOf(n) ? spelling(n.ID) : '', tooltips.get(n) ?? ''].filter(Boolean).join('. ');
+    return ` id="${domId.get(n)}" role="group" tabindex="0" aria-label="${esc(nameOf(n))}"${description ? ` aria-description="${esc(description)}"` : ''}${owned.has(n) ? ` aria-owns="${owned.get(n).join(' ')}"` : ''}`;
+  };
 
-  // A link region carries no object ID; its accessible name is the label of the smallest D2 object whose bounds hold the region (within its stroke).
-  function linkName(l) {
-    let best = '', area = Infinity;
+  // A link region carries no object ID; it belongs to the smallest D2 object whose bounds hold the region (within its stroke).
+  function objectFor(l) {
+    let best = null, area = Infinity;
     for (const n of scene.Root?.Children ?? []) {
       if (!n.ID || n.ID.startsWith('root:')) continue;
       const b = subtreeBounds(n), m = n.Transform;
       if (!b || !m) continue;
       const x0 = m.A * b[0] + m.E - 4, y0 = m.D * b[1] + m.F - 4, x1 = m.A * b[2] + m.E + 4, y1 = m.D * b[3] + m.F + 4;
       const r = l.Box;
-      if (r.X >= x0 && r.Y >= y0 && r.X + r.Width <= x1 && r.Y + r.Height <= y1 && (x1 - x0) * (y1 - y0) < area) { area = (x1 - x0) * (y1 - y0); best = labelOf(n); }
+      if (r.X >= x0 && r.Y >= y0 && r.X + r.Width <= x1 && r.Y + r.Height <= y1 && (x1 - x0) * (y1 - y0) < area) { area = (x1 - x0) * (y1 - y0); best = n; }
     }
     return best;
   }
+  const linkName = l => { const n = objectFor(l); return n ? nameOf(n) : ''; };
+  if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
   function nodeHtml(n) {
     if (!n) return '';

@@ -82,7 +82,7 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 
 - [x] HTML text selection fixed with a trailing newline per label; copy order is paint order, not semantic order.
 - [x] Accessibility grouping per D2 object: named focusable groups from scene IDs, pixel-identical, Tab order = paint order (`test:research:a11y`).
-- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy.
+- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), (done, spec 0006) names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy.
 - [ ] Trace the HTML-only edge differences (pixel snapping of fractional borders; geometry 3.9%, jupyter_aws_eks 2.5%).
 - [ ] Remaining text: fallback fonts across the corpus (WASM resolves none; large bytes), bidi/RTL, bold/italic fallback, the 3% of runs that miss D2's advances, decoration, markdown/code as DOM structure, LaTeX vector in the browser.
 - [ ] Images and animation: not comparable yet (native SVG links files, scene embeds); animation not painted; dark theme not covered; non-root boards not painted.
@@ -145,3 +145,4 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 - [x] Animation (spec 0005, accepted 31 Oct 2026 with the recommended answers): `src/animation.js` maps tracks to Web Animations, mount runs and cancels them; unit, browser and feature-map (shared 500 ms moment) tests. Open: Firefox/Safari, a drop-shadow blur check by eye (matched native within the bar).
 - [x] Browser compatibility (31 Oct 2026): Firefox works (29/29 client, 3/3 consumer, small paint differences); WebKit worker cannot start the wasm, user declared Safari unsupported for now. Open later: shallower Go start-up or a main-thread fallback.
 - [x] Theme overrides now compared with native through a d2-config block in the source (248 ok); remaining gaps are sketch shapes, shape: text kerning, LaTeX sizing (all documented, ADR 0009).
+- [x] Accessibility (spec 0006, accepted 31 Oct 2026 with the recommended answers): connection names in D2 spelling, markdown/code labels as written, aria-owns for containers, tooltip as aria-description; tests in a11y.spec.mjs (Chromium, Firefox, WebKit). Find-in-page finds painted text in Chromium (measured); screen readers untested.

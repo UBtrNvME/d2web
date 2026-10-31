@@ -2,5 +2,5 @@ export interface AnimationSpec { target: 'node' | 'primitive'; keyframes: Record
 export function fontFamily(assetId: string): string;
 export function paintScene(
   scene: unknown,
-  options?: { html?: boolean; cssMasks?: boolean | 'subtree'; idPrefix?: string; a11y?: boolean },
+  options?: { html?: boolean; cssMasks?: boolean | 'subtree'; idPrefix?: string; a11y?: boolean; association?: { id: string; kind: string; label?: string; content?: string; parent?: string }[] },
 ): { html: string; svg: string; stats: Record<string, number>; animated: boolean; animations: AnimationSpec[][] };

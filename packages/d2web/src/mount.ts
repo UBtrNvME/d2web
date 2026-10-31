@@ -166,7 +166,7 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       if (options.fonts !== 'consumer') await acquireFonts(result.fonts);
       alive();
       let html: string, specs: AnimationSpec[][];
-      try { ({ html, animations: specs } = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true })); } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
+      try { ({ html, animations: specs } = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true, association: found.association?.objects })); } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
       // Everything that can throw has happened; from here the swap cannot fail halfway.
       const template = document.createElement('template');
       template.innerHTML = html;

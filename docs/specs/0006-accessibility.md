@@ -1,6 +1,6 @@
 # Spec 0006: accessible names, structure and descriptions
 
-Status: **proposed** (31 October 2026; the user asked for this spec, nothing is built, nothing accepted). Builds on [spec 0002](0002-mount-api.md) (`a11y` mount option, named focusable groups), [spec 0004](0004-association.md) (D2's own object data) and [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web only expresses them with the web's accessibility attributes and adds no wording or behaviour of its own.
+Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [spec 0002](0002-mount-api.md) (`a11y` mount option, named focusable groups), [spec 0004](0004-association.md) (D2's own object data) and [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web only expresses them with the web's accessibility attributes and adds no wording or behaviour of its own.
 
 ## 1. Today (checked on a probe board)
 
