@@ -23,7 +23,7 @@ export const webForms = {
   sketch: 'SVG paths from D2 (hand-drawn look is D2\'s, not a browser feature)',
   render: 'Host sizing and scaling (`transform`)',
   config: 'Compile-time only',
-  animation: 'CSS or SMIL animation on the painted path, honouring `prefers-reduced-motion`',
+  animation: 'Web Animations on the painted element (timing from D2); pausing or reduced-motion handling belongs to the consumer, not to d2web (spec 0005)',
 };
 
 // Native paints something static here that the web does as behaviour. These are not gaps; test the behaviour instead.

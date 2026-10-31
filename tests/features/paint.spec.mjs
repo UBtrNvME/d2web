@@ -78,6 +78,8 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
           if (ref.skip || ref.error) { row.status = 'no-native'; row.detail = ref.skip ?? ref.error.slice(0, 200); continue; }
           await page.evaluate(svg => { document.getElementById('native').innerHTML = svg; document.querySelector('#native > svg').style.display = 'block'; }, ref.svg);
           await page.evaluate(() => document.fonts.ready);
+          // Spec 0005: animated cases are compared at one shared moment (500 ms), native CSS animation against the Web Animations the mount runs.
+          await page.evaluate(() => document.getAnimations().forEach(a => { a.pause(); a.currentTime = 500; }));
           const shot = async id => {
             await page.evaluate(id => { for (const el of document.querySelectorAll('#native,#scene')) el.style.visibility = el.id === id ? 'visible' : 'hidden'; }, id);
             return (await page.locator('#' + id).screenshot({ animations: 'disabled' })).toString('base64');

@@ -1,6 +1,6 @@
 # Spec 0005: animation painting
 
-Status: **proposed** (31 October 2026; the user asked for this spec, nothing is built, nothing accepted). Builds on [spec 0002](0002-mount-api.md), which lists animation painting as unpainted in v1, and on [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web translates them to the web and adds no behaviour of its own.
+Status: **accepted with the recommended answers to questions 1-3** (user, 31 October 2026). Builds on [spec 0002](0002-mount-api.md), which lists animation painting as unpainted in v1, and on [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web translates them to the web and adds no behaviour of its own.
 
 ## 1. What D2 provides
 

@@ -1,5 +1,7 @@
 // Painter: turns the scene JSON of spec 0001 (packages/d2web-wasm/scenejson) into SVG or HTML-first markup. It covers every primitive,
 // paint, clip, mask, filter and blend kind in the corpus; animations are not painted. Moved from the research tree; behaviour unchanged.
+import { animationSpecs } from './animation.js';
+
 const ALIGN = ['none', 'xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
 const BLEND = ['normal', 'multiply', 'darken', 'color-burn', 'overlay', 'lighten'];
 const CAP = ['butt', 'round', 'square'];
@@ -19,6 +21,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   // Mask and filter regions cover the document with a margin; huge regions make Chromium drop content on large boards.
   const region = (({ X, Y, Width, Height }) => `x="${X - 1000}" y="${Y - 1000}" width="${Width + 2000}" height="${Height + 2000}"`)(scene.ViewBox);
   let ids = 0;
+  const animations = []; // per animated node, in document order: the specs for `data-d2-anim="<index>"` (spec 0005)
   let inEffect = false;
   const stats = {};
   const v = scene.ViewBox;
@@ -118,6 +121,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     if (!n) return '';
     const attrs = [];
     if (n.ID) attrs.push(`data-id="${esc(n.ID)}"`);
+    if (n.Animations?.length) { attrs.push(`data-d2-anim="${animations.length}"`); animations.push(animationSpecs(n)); }
     if (!isIdentity(n.Transform)) attrs.push(`transform="${matrix(n.Transform)}"`);
     if (n.Opacity !== 1) attrs.push(`opacity="${num(n.Opacity)}"`);
     if (n.Blend) attrs.push(`style="mix-blend-mode:${BLEND[n.Blend]}"`);
@@ -282,6 +286,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       html: `<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:hidden;width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
       stats: { ...stats, links: scene.Links?.length ?? 0 },
       animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
+      animations,
     };
   }
   const body = node(scene.Root);
@@ -289,5 +294,6 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   return {
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${num(scene.LogicalWidth)}" height="${num(scene.LogicalHeight)}" viewBox="${[v.X, v.Y, v.Width, v.Height].map(num).join(' ')}" preserveAspectRatio="${fit}"><defs>${defs.join('')}</defs>${body}</svg>`,
     animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
+    animations,
   };
 }

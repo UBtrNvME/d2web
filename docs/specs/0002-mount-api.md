@@ -6,7 +6,7 @@ Status: **accepted** (user, 31 October 2026, with the three recommendations of s
 
 `mount` takes a successful compile result and paints one board into a consumer-provided element, isolated from the page's CSS, with D2 identity on events and the option to replace a node's painted content with a consumer element. It does not compile (that is the spec 0001 client), edit source, lay out consumer content (D2 owns layout; the consumer feeds measured sizes back as D2 `width`/`height` in its own source), or provide zoom/pan, selection, toolbars or application state.
 
-Not in this spec: animation painting (unpainted in v1), editing and undo (v2), React binding, browsers other than Chromium, non-root board navigation UI (a consumer mounts the board it wants).
+Not in this spec: animation painting (now spec 0005), editing and undo (v2), React binding, browsers other than Chromium, non-root board navigation UI (a consumer mounts the board it wants).
 
 ## 2. Surface
 

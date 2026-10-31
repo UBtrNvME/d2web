@@ -21,5 +21,5 @@ export const families = {
   sketch: ['Sketch mode', 'Hand-drawn rendering done by D2 at scene build; the painter draws the resulting paths.'],
   render: ['Render options', '`pad`, `scale`, `center` passed with the request.'],
   config: ['`d2-config` variables', 'Per-file configuration inside D2 source.'],
-  animation: ['Animation', 'Animated edges. The scene carries animation data; the painter does not animate yet.'],
+  animation: ['Animation', 'Animated edges. The scene carries typed tracks; the mount runs each as a Web Animation (spec 0005) and the case is compared with native at a shared moment (500 ms).'],
 };

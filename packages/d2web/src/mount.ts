@@ -1,4 +1,4 @@
-import { fontFamily, paintScene } from './paint.js';
+import { fontFamily, paintScene, type AnimationSpec } from './paint.js';
 import type { CompileResult } from './protocol.ts';
 
 // Spec 0002. A shadow-root host for one painted board: isolated from page CSS, D2 identity on events, optional consumer content per node.
@@ -43,6 +43,7 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   shadow.append(wrapper);
 
   let disposed = false;
+  let running: Animation[] = [];
   let board = '';
   let scene: { Root?: Node_ } | undefined;
   const families = new Set<string>();
@@ -164,12 +165,19 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       if (!found) throw new MountError(`result has no board "${path}"`);
       if (options.fonts !== 'consumer') await acquireFonts(result.fonts);
       alive();
-      let html: string;
-      try { html = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true }).html; } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
+      let html: string, specs: AnimationSpec[][];
+      try { ({ html, animations: specs } = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true })); } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
       // Everything that can throw has happened; from here the swap cannot fail halfway.
       const template = document.createElement('template');
       template.innerHTML = html;
+      for (const a of running) a.cancel();
       wrapper.replaceChildren(template.content);
+      running = [];
+      // Spec 0005: each D2 track runs as a Web Animation on its element; consumers can pause it through shadowRoot.getAnimations().
+      specs.forEach((list, i) => {
+        const el = wrapper.querySelector(`[data-d2-anim="${i}"]`);
+        for (const s of list) running.push((s.target === 'primitive' ? el?.firstElementChild : el)!.animate(s.keyframes as Keyframe[], s.options));
+      });
       board = path;
       scene = found.scene as { Root?: Node_ };
       calibrate();
@@ -194,6 +202,7 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
     dispose() {
       if (disposed) return;
       disposed = true;
+      for (const a of running) a.cancel();
       wrapper.remove();
       listeners.clear();
       content.clear();

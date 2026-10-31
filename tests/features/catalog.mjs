@@ -134,6 +134,7 @@ const config = (name, cfg) => add('config', name, [`config:${name}`], `vars: {d2
 config('sketch', 'sketch: true'); config('theme-id', 'theme-id: 4'); config('dark-theme-id', 'dark-theme-id: 200'); config('pad', 'pad: 40');
 config('layout-engine', 'layout-engine: dagre'); config('center', 'center: true');
 config('theme-overrides', 'theme-overrides: {B1: "#ff6600"}'); config('dark-theme-overrides', 'dark-theme-overrides: {B1: "#ff6600"}'); config('data', 'data: {k: v}');
+add('animation', 'animated-shape', ['style:animated'], 'x: Lift {style.animated: true}');
 add('animation', 'animated-edges', ['style:animated'], 'a -> b {style.animated: true}\nb -> c {style.animated: true; style.stroke-dash: 5}');
 
 export const catalog = entries;

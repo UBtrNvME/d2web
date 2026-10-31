@@ -252,5 +252,6 @@
  "config/theme-overrides": "ok",
  "config/dark-theme-overrides": "ok",
  "config/data": "ok",
+ "animation/animated-shape": "ok",
  "animation/animated-edges": "ok"
 }

@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -61,11 +61,11 @@ run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
-run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs"
+run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs"
 
 [tasks."test:native:corpus"]
 description = "Render every upstream D2 file and archived example with TALA"
