@@ -21,7 +21,7 @@ run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:client", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:dist", "test:consumer", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -253,3 +253,8 @@ run = "node packages/d2web/build.mjs"
 description = "Package artifacts: dist contents and the size budget (spec 0003), after a build"
 depends = ["build"]
 run = "node --test packages/d2web/test/dist.test.mjs"
+
+[tasks."test:consumer"]
+description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
+depends = ["build"]
+run = "pnpm exec playwright test packages/d2web/test/browser/consumer.spec.mjs --reporter=line --output=artifacts/d2web-consumer/run"

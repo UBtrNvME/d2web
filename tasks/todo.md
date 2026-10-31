@@ -41,13 +41,13 @@ Notes for later slices (not in this plan): association payload over the worker, 
 
 ## Slice 3: packaging (spec 0003, plan 31 October 2026)
 
-Chosen by the user. Spec 0003 is a draft; nothing is built before it is accepted. Artifacts and tests only: no registry publish, no licence choice (those are the user's, see the spec's questions 1 and 5).
+Chosen by the user. Spec 0003 was built after the user answered "continue working" to the drafted spec and its recommendations (31 October 2026); read that as acceptance of the recommended answers 2-4 and the name `d2web` as provisional. Questions 1 (final name) and 5 (licence) stay open and block any publish. Artifacts and tests only: no registry publish, no licence choice (those are the user's, see the spec's questions 1 and 5).
 
-- [ ] 1. Spec 0003 accepted by the user ([spec 0003](../docs/specs/0003-packaging.md); five open questions at its end).
-- [ ] 2. Build: `mise run build` produces `packages/d2web/dist/` (index.js ESM, index.d.ts, worker.js, wasm_exec.js, d2web.wasm, NOTICE.txt) with the release flags; refuses an unpinned or patched D2 checkout; `package.json` exports and `files`. `ready` gains `patched`.
-- [ ] 3. Worker and client: worker defaults next to itself and falls back from `compileStreaming`; `spawnWorker`; client rejects a mismatched protocol or scene version with `VersionError`.
-- [ ] 4. Size budget test (15 MB gzip wasm, 40 KB gzip index.js unless the user changes them).
-- [ ] 5. Consumer test: `pnpm pack` the package, install the tarball in a temporary consumer, load it in Chromium with native ESM and no bundler, then again under a restrictive CSP; compile and mount a board.
+- [x] 1. Spec 0003 taken as accepted with recommendations (see above) by the user ([spec 0003](../docs/specs/0003-packaging.md); five open questions at its end).
+- [x] 2. (done 31 October 2026: `packages/d2web/build.mjs`, `mise run build`, ~2 s warm; `dist/` has index.js 21 KB, per-file .d.ts, worker.js, wasm_exec.js, d2web.wasm 52.7 MB, NOTICE.txt from D2 LICENSE, THIRD_PARTY_NOTICES and Go LICENSE; `compile.Patched` set by -ldflags -X) Build: `mise run build` produces `packages/d2web/dist/` (index.js ESM, index.d.ts, worker.js, wasm_exec.js, d2web.wasm, NOTICE.txt) with the release flags; refuses an unpinned or patched D2 checkout; `package.json` exports and `files`. `ready` gains `patched`.
+- [x] 3. (done 31 October 2026: `VersionError` tested in `client.test.mjs`; `spawnWorker` and the worker's MIME fallback are exercised by `test:consumer`) Worker and client: worker defaults next to itself and falls back from `compileStreaming`; `spawnWorker`; client rejects a mismatched protocol or scene version with `VersionError`.
+- [x] 4. (done: `packages/d2web/test/dist.test.mjs`, task `test:dist`) Size budget test (15 MB gzip wasm, 40 KB gzip index.js unless the user changes them).
+- [x] 5. (done 31 October 2026: 3 of 3 pass, 7 s; `packages/d2web/test/browser/consumer.spec.mjs`, task `test:consumer`; see ledger) Consumer test: `pnpm pack` the package, install the tarball in a temporary consumer, load it in Chromium with native ESM and no bundler, then again under a restrictive CSP; compile and mount a board.
 - [ ] 6. Consumer docs in the README (hosting, MIME type, CSP, same-origin worker, sizes) and the ledger.
 
 ## Painting and presentation (R2)

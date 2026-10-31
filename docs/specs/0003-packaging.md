@@ -1,6 +1,6 @@
 # Spec 0003: packaging and distribution (build artifacts only)
 
-Status: **proposed**, not accepted. Builds on [spec 0001](0001-compile-protocol.md), [spec 0002](0002-mount-api.md), [ADR 0003](../adr/0003-runtime-shape.md) (worker-hosted wasm), [ADR 0006](../adr/0006-font-delivery.md) and [ADR 0008](../adr/0008-repository-layout.md) (patched builds are explicit). Scope: how a consumer gets the worker, the wasm and the TypeScript package. **Publishing to a registry is out of scope**: this spec produces and tests the artifacts; releasing them is the user's separate decision.
+Status: **accepted with the recommended answers to questions 2-4** (user said "continue working", 31 October 2026); questions 1 and 5 remain open. Builds on [spec 0001](0001-compile-protocol.md), [spec 0002](0002-mount-api.md), [ADR 0003](../adr/0003-runtime-shape.md) (worker-hosted wasm), [ADR 0006](../adr/0006-font-delivery.md) and [ADR 0008](../adr/0008-repository-layout.md) (patched builds are explicit). Scope: how a consumer gets the worker, the wasm and the TypeScript package. **Publishing to a registry is out of scope**: this spec produces and tests the artifacts; releasing them is the user's separate decision.
 
 ## 1. Measurements (31 October 2026, Go 1.27.3, D2 v0.9.0, darwin/arm64)
 

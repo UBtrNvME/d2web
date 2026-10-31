@@ -18,7 +18,7 @@ The current priority is a pinned pipeline map and executable feature/capability 
 - [Native TALA and web comparison guide](docs/conformance.md)
 - [Capability matrix (R5 draft)](docs/capability-matrix.md)
 - [Product definition (v1)](docs/product.md)
-- [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (proposed)](docs/specs/0003-packaging.md)
+- [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted; name and licence open)](docs/specs/0003-packaging.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
 - [Imported Studio, upstream source and historical evidence](imports/README.md)
@@ -69,6 +69,9 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run setup` | Install tools, root locked dependencies and upstream source for investigation |
 | `mise run browser:install` | Install Playwright Chromium and required OS packages |
 | `mise run doctor` | Print resolved tool versions |
+| `mise run build` | Build `packages/d2web/dist` (wasm, worker, ESM, types, notices) |
+| `mise run test:dist` | Build, then check dist contents and the size budget |
+| `mise run test:consumer` | Build, pack, and load the tarball in a bundler-free Chromium page, including under a strict CSP |
 | `mise run check:browser` | Every Chromium/Playwright suite (about 3 min) |
 | `mise run check:full` | `check` plus `check:browser`; what CI runs |
 | `mise run check` | Fast gate (about 10 s, no browser): validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
