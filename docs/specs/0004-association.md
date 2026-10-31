@@ -20,7 +20,7 @@ Object = {
   content?: 'markdown' | 'code' | 'latex' | 'sql_table' | 'class',   // absent for plain text
   nodes: [ sceneNodeId ],        // every scene node painting this object, listed explicitly
   references: [ Source ],        // declarations that name the object
-  properties: { fill?, stroke?, label?, ... : { value, source: Source | null } },   // source null = default
+  properties: { label, fill?, stroke?, ... : { value, source: Source | null } },   // absent = D2 default
   src?: id, dst?: id             // connections only
 }
 Source = { path, start: Pos, end: Pos }
@@ -30,7 +30,7 @@ Pos    = { line, column, offset }  // line 0-based; column and offset in UTF-16 
 Rules:
 - The join key is (revision, board path, object `id`), as decided in ADR 0002. A board's association is complete for that board only; imported and layered boards each carry their own.
 - `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. It lists the named scene nodes (`<id>` and `<id>:...`) of the object. Anonymous nodes (empty ID, the plain paint primitives) have no name to list; each belongs to its nearest named ancestor. Every scene node except the helpers `root` and `root:background` is covered by exactly one object (test, section 6). Owner lookup uses the observed `<ownerID>:<suffix>` convention inside the worker, where a test pins it, so consumers do not depend on it.
-- `properties` has an entry for each D2 style keyword the object has an effective value for, plus `label`. The source is the declaration that owns that value, which can be a class or glob declaration that is not in `references` (R1 finding). A defaulted value has `source: null`.
+- `properties` has an entry for `label` and for each D2 style keyword (named as in D2's JSON: `fill`, `strokeWidth`, `fontSize`, `3d`, ...) for which D2 holds a value. The source is the declaration that owns that value, which can be a class, glob or imported-file declaration that is not in `references` (R1 finding). A value D2 holds no declaration for (theme or builder default) is absent from `properties`; `source` is null only if D2 reports no key for a held value.
 - Imports: a `Source.path` is the file the declaration lives in, which can differ from the entry file.
 - Ranges are D2's, compiled with its UTF-16 position option. In that mode D2's `Byte` field holds the UTF-16 offset (observed 31 October 2026: `a: "😀"; b` puts `b` at column 9, offset 9, not byte 11), so the field is named `offset` here. Diagnostic ranges (spec 0001) come from the same compile and use the same offsets from now on.
 
@@ -43,7 +43,7 @@ Pure functions over a board's `association`, no DOM and no worker:
 
 ## 4. Size and cost
 
-The payload is JSON beside the scene. The step that builds it records its size on the corpus boards (bytes and share of the scene's size) and fails a test above a budget set after the first measurement (open question 4). It is always on in v1.
+The payload is JSON beside the scene. Measured 31 October 2026 over the 100 boards of the 80 single-file examples: 2.4 MB of association against 26.4 MB of scene, 9.3 % overall (a tiny board can exceed its own scene: worst 105 %). The budget, enforced by `test:wasm`, is 15 % of the scene over that corpus. It is always on in v1.
 
 ## 5. What this does not do
 
@@ -61,7 +61,8 @@ The payload is JSON beside the scene. The step that builds it records its size o
 | Payload built by the worker, equal in native and Node/WASM | proposed | step 2 test |
 | Every scene node belongs to exactly one object on the example corpus | verified, 100 boards from the 80 single-file examples, 0 unowned (31 October 2026) | `test:wasm` |
 | Click in Chromium resolves to the declaring source text | proposed | step 5 browser test |
-| Size on the corpus | unknown until measured | step 4 |
+| Property owners (class, glob, import, scenario override) | verified on `examples/research/identity` | `test:wasm` |
+| Size on the corpus | measured, 9.3 % of the scene | `test:wasm` |
 | `objectsAt` precision when declarations overlap | unknown | step 5 unit tests |
 | Behaviour with non-TALA engines, very large boards | unknown | |
 

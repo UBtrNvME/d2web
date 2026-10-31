@@ -1,6 +1,7 @@
 package compile
 
 import (
+	"reflect"
 	"strings"
 
 	"github.com/d2lang/d2/d2ast"
@@ -22,16 +23,24 @@ type Source struct {
 	End   Pos    `json:"end"`
 }
 
+// Property is an effective value and the declaration that owns it: possibly a class, glob or imported file rather than the object's own
+// references. Source is nil when D2 reports no declaration.
+type Property struct {
+	Value  string  `json:"value"`
+	Source *Source `json:"source"`
+}
+
 type AssocObject struct {
-	ID         string   `json:"id"`
-	Kind       string   `json:"kind"`
-	Parent     string   `json:"parent,omitempty"`
-	Label      string   `json:"label"`
-	Content    string   `json:"content,omitempty"`
-	Nodes      []string `json:"nodes"`
-	References []Source `json:"references"`
-	Src        string   `json:"src,omitempty"`
-	Dst        string   `json:"dst,omitempty"`
+	ID         string              `json:"id"`
+	Kind       string              `json:"kind"`
+	Parent     string              `json:"parent,omitempty"`
+	Label      string              `json:"label"`
+	Content    string              `json:"content,omitempty"`
+	Nodes      []string            `json:"nodes"`
+	References []Source            `json:"references"`
+	Properties map[string]Property `json:"properties"`
+	Src        string              `json:"src,omitempty"`
+	Dst        string              `json:"dst,omitempty"`
 }
 
 type Association struct {
@@ -41,6 +50,27 @@ type Association struct {
 func source(r d2ast.Range) Source {
 	pos := func(p d2ast.Position) Pos { return Pos{p.Line, p.Column, p.Byte} }
 	return Source{Path: r.Path, Start: pos(r.Start), End: pos(r.End)}
+}
+
+func scalar(sc *d2graph.Scalar) Property {
+	p := Property{Value: sc.Value}
+	if sc.MapKey != nil {
+		src := source(sc.MapKey.Range)
+		p.Source = &src
+	}
+	return p
+}
+
+// properties lists the label and every style keyword D2 holds a value for, named as in D2's own JSON (fontSize, strokeWidth, 3d, ...).
+func properties(label d2graph.Scalar, style d2graph.Style) map[string]Property {
+	out := map[string]Property{"label": scalar(&label)}
+	v, t := reflect.ValueOf(style), reflect.TypeOf(style)
+	for i := 0; i < t.NumField(); i++ {
+		if sc, ok := v.Field(i).Interface().(*d2graph.Scalar); ok && sc != nil {
+			out[strings.Split(t.Field(i).Tag.Get("json"), ",")[0]] = scalar(sc)
+		}
+	}
+	return out
 }
 
 func content(o *d2graph.Object) string {
@@ -96,7 +126,7 @@ func associate(g *d2graph.Graph, doc *d2scene.Document) *Association {
 	nodes := owners(doc, ids)
 	a := &Association{Objects: []AssocObject{}}
 	for _, o := range g.Objects {
-		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}}
+		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style)}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}
@@ -111,7 +141,7 @@ func associate(g *d2graph.Graph, doc *d2scene.Document) *Association {
 		a.Objects = append(a.Objects, out)
 	}
 	for _, e := range g.Edges {
-		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
+		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Properties: properties(e.Label, e.Style), Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}

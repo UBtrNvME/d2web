@@ -87,3 +87,36 @@ test('every scene node of the example corpus has exactly one owner', { timeout: 
   assert(boards >= 70, `only ${boards} boards compiled`);
   assert.deepEqual(orphans, []);
 });
+
+test('property sources: class, glob, import and scenario override own their values', () => {
+  const directory = join(root, 'examples/research/identity');
+  const files = Object.fromEntries(['main.d2', 'shared.d2'].map(f => [f, readFileSync(join(directory, f), 'utf8')]));
+  const r = native(request(files));
+  assert.equal(r.error, undefined);
+  const base = r.boards.find(b => b.path === ''), changed = r.boards.find(b => b.path === '/scenarios/changed');
+  const local = byId(base, 'local').properties;
+  assert.equal(local.fill.value, '#abcdef');
+  assert.equal(local.fill.source.path, 'main.d2');
+  assert.equal(local.fill.source.start.line, 3, 'the class declaration, not a reference of `local`');
+  assert.equal(local.stroke.value, '#123456');
+  assert.notDeepEqual(local.stroke.source, local.fill.source, 'the glob owns the stroke');
+  assert(!byId(base, 'local').references.some(s => s.start.line === 3));
+  assert.equal(byId(base, 'imported.child').properties.label.source.path, 'shared.d2');
+  assert.equal(byId(changed, 'imported.child').properties.fill.value, '#fedcba');
+  assert.equal(byId(changed, 'imported.child').properties.fill.source.path, 'main.d2');
+  assert.equal(byId(changed, 'imported.child').properties.label.source.path, 'shared.d2');
+  assert.equal(byId(changed, 'local').properties.label.value, 'changed');
+  assert.equal(byId(base, 'local').properties.opacity, undefined, 'a value D2 holds no declaration for is absent, not defaulted');
+});
+
+test('size: the association payload against the scene over the example corpus', { timeout: 600_000 }, () => {
+  let association = 0, scene = 0, boards = 0, worst = 0;
+  for (const file of readdirSync(join(root, 'examples/files')).filter(f => f.endsWith('.d2'))) {
+    for (const board of native(request({ 'main.d2': readFileSync(join(root, 'examples/files', file), 'utf8') })).boards ?? []) {
+      const [a, s] = [JSON.stringify(board.association).length, JSON.stringify(board.scene).length];
+      association += a; scene += s; boards++; worst = Math.max(worst, a / s);
+    }
+  }
+  console.log(`association ${association} B, scene ${scene} B over ${boards} boards: ${(100 * association / scene).toFixed(1)}% overall, ${(100 * worst).toFixed(1)}% worst board`);
+  assert(association / scene < 0.15, 'association grew past 15% of the scene (9.3% when measured)');
+});
