@@ -5,7 +5,8 @@
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "tests/react-entry.tsx"]
+  "include": ["packages/d2web/src", "research/geometry", "tests/react-entry.tsx"]
 }

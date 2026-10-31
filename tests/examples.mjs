@@ -27,7 +27,7 @@ export function pathData(commands) {
   }).join(' ');
 }
 
-const goEnv = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
+export const goEnv = { ...process.env, GOCACHE: join(root, '.cache/go-build'), GOMODCACHE: join(root, '.cache/go-mod') };
 
 // Runs inside the pinned D2 source so probes resolve its Go module.
 export function goRun(command, args, options = {}) {
@@ -44,6 +44,16 @@ export function goProbe(source, binary, wasm = true) {
   if (!wasm) return probe;
   goRun('go', ['build', '-mod=readonly', '-o', `${binary}.wasm`, source], { env: { ...goEnv, GOOS: 'js', GOARCH: 'wasm' } });
   probe.goRoot = goRun('go', ['env', 'GOROOT']).trim();
-  probe.wasm = args => goRun(join(probe.goRoot, 'lib/wasm/go_js_wasm_exec'), [`${binary}.wasm`, ...args]);
+  // A js/wasm run takes ~1-3s but about 1 in 20-50 hangs forever under parallel load (reproduced with plain
+  // concurrent runs, independent of stdin and memory). Fail fast and retry hangs; a deterministic hang still fails.
+  probe.wasm = args => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return goRun(join(probe.goRoot, 'lib/wasm/go_js_wasm_exec'), [`${binary}.wasm`, ...args], { timeout: 30_000 });
+      } catch (error) {
+        if (attempt === 3 || error.actual?.code !== 'ETIMEDOUT') throw error;
+      }
+    }
+  };
   return probe;
 }

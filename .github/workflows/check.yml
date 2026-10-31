@@ -24,7 +24,7 @@ jobs:
       - uses: jdx/mise-action@v5
       - run: mise run setup
       - run: mise run browser:install
-      - run: mise run check
+      - run: mise run check:full
       - if: ${{ inputs.full_corpus == true }}
         run: mise run test:native:corpus
       - uses: actions/upload-artifact@v7

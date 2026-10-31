@@ -1,0 +1,9 @@
+classes: {
+  hot: {style.stroke: red}
+}
+imp: @shared
+imp.a -> imp.b: local extra
+x -> y: {class: hot}
+x -> y: plain
+(x -> y)[1].style.stroke-width: 5
+(* -> *)[*].style.opacity: 0.8

@@ -16,6 +16,10 @@ The current priority is a pinned pipeline map and executable feature/capability 
 - [D2 → React porting map](docs/porting-map.md)
 - [Research findings: frameworks, source identity, browser composition and native operations](docs/research-findings.md)
 - [Native TALA and web comparison guide](docs/conformance.md)
+- [Capability matrix (R5 draft)](docs/capability-matrix.md)
+- [Product definition (v1)](docs/product.md)
+- [Spec 0001: compile protocol and scene bridge (proposed)](docs/specs/0001-compile-protocol.md)
+- [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
 - [Imported Studio, upstream source and historical evidence](imports/README.md)
 - [Development rules](AGENTS.md)
@@ -27,7 +31,9 @@ The current priority is a pinned pipeline map and executable feature/capability 
 | `docs/` | Current requirements, mapping and validation guidance |
 | `examples/` | Repository-owned conformance inputs, imports, assets and upstream license |
 | `tests/` | Node assertions and Playwright comparisons; no second examples tree |
-| `src/` | Reusable d2web types, validation and React rendering components |
+| `packages/d2web/` | The product TypeScript package (protocol types now; host client and painter in slice 1) |
+| `packages/d2web-wasm/` | Product Go module (created in slice 1 step 2) |
+| `research/` | Research probes, Playwright specs (`research/browser/`) and the earlier React geometry adapter (`research/geometry/`) |
 | `scripts/` | Repository maintenance commands |
 | `imports/` | Historical evidence and local external source copies; D2 source is in `imports/d2/`, Studio in `imports/d2-architecture-studio/` |
 | `artifacts/` | Ignored generated references, logs, screenshots and reports |
@@ -50,10 +56,10 @@ Mise supplies Node.js 24, Go 1.27.3 and D2 0.9.0. Corepack provides the package-
 The existing Studio commands below are optional reference-consumer tooling, separate from d2web development:
 
 ```sh
-mise run app:setup
-mise run dev
+mise run studio:setup
+mise run studio:dev
 # In a separate shell:
-mise run check:app
+mise run studio:check
 ```
 
 The imported Studio stays in its independent Git checkout at the user's request. Its source and history are preserved and the outer repository explicitly ignores it to prevent accidental gitlink staging. It is not a submodule: an outer clone alone does not restore it. Restore that checkout separately before running the app commands; [import provenance](imports/README.md) records its identity and commit. Inspect its changes with `mise exec -- git -C imports/d2-architecture-studio status --short`.
@@ -63,10 +69,16 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run setup` | Install tools, root locked dependencies and upstream source for investigation |
 | `mise run browser:install` | Install Playwright Chromium and required OS packages |
 | `mise run doctor` | Print resolved tool versions |
-| `mise run check` | Validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
+| `mise run check:browser` | Every Chromium/Playwright suite (about 3 min) |
+| `mise run check:full` | `check` plus `check:browser`; what CI runs |
+| `mise run check` | Fast gate (about 10 s, no browser): validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
 | `mise run test:scene` | Build the native/WASM geometry scene probe and check Node/WASM equivalence |
 | `mise run test:research:identity` | Compare selected source/identity projections in native and Node/WASM |
 | `mise run test:research:operations` | Characterize native edit mutation and text premeasurement behavior |
+| `mise run test:research:lifecycle` | Two boards per document under hostile host CSS: ID collisions, style isolation, lifecycle effects |
+| `mise run test:research:content` | Consumer element replacing one painted node: surroundings unchanged, hit testing, events, restore |
+| `mise run test:research:handshake` | Measured card sizes recompiled through D2 width/height with TALA |
+| `mise run test:research:transaction` | Copy-on-write edit wrapper: failed edits publish nothing, glob-index panic, index renumbering |
 | `mise run test:research:composition` | Compare HTML/SVG placement, interaction, CSS leakage and overflow |
 | `mise run research:reactflow:setup` | Explicitly install the pinned framework into ignored experiment artifacts |
 | `mise run test:research:reactflow` | Test actual React Flow fixed-bound custom nodes and native connection path after setup |
@@ -76,19 +88,19 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run test:research:text` | Export native text/font assets and compare browser metrics with font controls |
 | `mise run test:research:host` | Quick native lifecycle/React portal check using the imported shadcn Card; requires the local Studio import/dependencies |
 | `mise run test:research:consumer` | Pack/import a native module, compile Card themes, test explicit native resizing and base/resized image parity; requires Studio dependencies |
-| `mise run typecheck:renderer` | Typecheck the standalone React geometry adapter |
+| `mise run typecheck` | Typecheck the standalone React geometry adapter |
 | `mise run test:native:corpus` | Render all 147 repository-owned file/archive runs with TALA |
 | `mise run test:parity` | Compare native SVGs to actual web scenes from `D2_WEB_OUTPUT` |
-| `mise run app:setup` | Install the imported Studio with its frozen lockfile |
-| `mise run dev` | Start the Studio on loopback, default port 5173 |
-| `mise run lint` / `mise run typecheck` | Run the Studio's existing ESLint rules / TypeScript check |
-| `mise run test:app` | Run imported document, compaction and rich-content WASM assertions |
-| `mise run build` | Build the Studio locally without deploying |
-| `mise run check:app` | Run lint, typecheck, imported assertions and build; lint currently fails |
+| `mise run studio:setup` | Install the imported Studio with its frozen lockfile |
+| `mise run studio:dev` | Start the Studio on loopback, default port 5173 |
+| `mise run studio:lint` / `mise run studio:typecheck` | Run the Studio's existing ESLint rules / TypeScript check |
+| `mise run studio:test` | Run imported document, compaction and rich-content WASM assertions |
+| `mise run studio:build` | Build the Studio locally without deploying |
+| `mise run studio:check` | Run lint, typecheck, imported assertions and build; lint currently fails |
 | `mise run clean` | Delete the local generated files and caches listed below |
 | `mise tasks` | Discover all commands |
 
-`check` and [CI](.github/workflows/check.yml) validate d2web and one native-versus-React geometry case. `check:app` is the separate, failing gate for the imported reference consumer and is not counted as a passing d2web check. Future Studio adoption will need its own integration checks. The comparison self-tests do not establish React parity; the dedicated React geometry test is the first real comparison. See the [porting map](docs/porting-map.md#react-geometry-adapter) for its exact subset and limits.
+`check` and [CI](.github/workflows/check.yml) validate d2web and one native-versus-React geometry case. `studio:check` is the separate, failing gate for the imported reference consumer and is not counted as a passing d2web check. Future Studio adoption will need its own integration checks. The comparison self-tests do not establish React parity; the dedicated React geometry test is the first real comparison. See the [porting map](docs/porting-map.md#react-geometry-adapter) for its exact subset and limits.
 
 Root rendering dependencies and build tools are pinned in `package.json`/`pnpm-lock.yaml`. `pnpm-workspace.yaml` permits esbuild's installation script only and includes only the root package; the imported Studio retains its own workspace policy and package-manager selection.
 

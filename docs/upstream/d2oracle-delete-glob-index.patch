@@ -1,0 +1,13 @@
+diff --git a/d2oracle/edit.go b/d2oracle/edit.go
+index 59e65ef..683afb3 100644
+--- a/d2oracle/edit.go
++++ b/d2oracle/edit.go
+@@ -1027,7 +1027,7 @@ func Delete(g *d2graph.Graph, boardPath []string, key string) (_ *d2graph.Graph,
+ 						}
+ 						for i := len(e2.References) - 1; i >= 0; i-- {
+ 							ref := e2.References[i]
+-							if ref.MapKey.EdgeIndex != nil {
++							if ref.MapKey.EdgeIndex != nil && ref.MapKey.EdgeIndex.Int != nil {
+ 								*ref.MapKey.EdgeIndex.Int--
+ 							}
+ 						}

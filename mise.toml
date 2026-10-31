@@ -15,9 +15,17 @@ description = "Verify the development tools are available through mise"
 run = ["node --version", "corepack --version", "pnpm --version", "go version", "d2 --version"]
 
 [tasks.check]
-description = "Check tooling, native TALA examples, and automated image comparison"
-depends = ["doctor", "reference:fetch", "test:unit", "typecheck:renderer", "test:comparison", "test:research:identity", "test:research:operations", "test:research:text", "test:research:connections", "test:research:composition"]
+description = "Fast gate (about 20 s): tooling, pinned D2 source, unit tests, typecheck, Node/WASM probes. No browser."
+depends = ["doctor", "reference:fetch", "test:unit", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
 run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
+
+[tasks."check:browser"]
+description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
+depends = ["test:comparison", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+
+[tasks."check:full"]
+description = "Everything CI runs on a pull request: check plus check:browser"
+depends = ["check", "check:browser"]
 
 [tasks."reference:fetch"]
 description = "Get the official D2 v0.9.0 source if absent and verify its commit"
@@ -27,13 +35,33 @@ run = [
   "test -d imports/d2/.git && test \"$(git -C imports/d2 rev-parse HEAD)\" = d5a51743b6d5c00f1ec6f8340003f5d5a6ba4eda || { echo 'imports/d2 is not a D2 v0.9.0 checkout (d5a5174); remove it and rerun mise run reference:fetch' >&2; exit 1; }",
 ]
 
+[tasks."reference:patch"]
+description = "Apply docs/upstream/*.patch to the pinned D2 checkout for Go probes (opt-in; the native TALA binary is unaffected)"
+depends = ["reference:fetch"]
+run = "node tests/upstream-patches.mjs --apply"
+
+[tasks."reference:unpatch"]
+description = "Revert docs/upstream/*.patch so the pinned D2 checkout is pristine again"
+run = "node tests/upstream-patches.mjs --revert"
+
 [tasks."test:native"]
 description = "Render the fast upstream examples with TALA, preserving files and boards"
 run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs"
+
+[tasks."test:wasm"]
+description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
+depends = ["reference:fetch"]
+dir = "packages/d2web-wasm"
+env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root}}/.cache/go-mod" }
+run = ["go test -mod=readonly ./...", "node --test test/protocol.test.mjs"]
+
+[tasks."test:watch"]
+description = "Re-run the repository unit tests on every change (the fast inner loop)"
+run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs"
 
 [tasks."test:native:corpus"]
 description = "Render every upstream D2 file and archived example with TALA"
@@ -55,56 +83,118 @@ run = ["node --test tests/scene.test.mjs", "node --test tests/geometry-scene.tes
 
 [tasks."test:research:identity"]
 description = "Probe native/Node-WASM semantic and source association without selecting an architecture"
-run = "node --test tests/research-identity.test.mjs"
+run = "node --test research/identity.test.mjs"
+
+[tasks."test:research:join"]
+description = "Stress the scene/semantic ID join under rename, parallel-edge deletion and structured content"
+run = "node --test research/join.test.mjs"
+
+[tasks."test:research:transaction:node"]
+description = "Node half: copy-on-write edit wrapper over d2oracle in native and Node/WASM"
+run = "node --test research/transaction.test.mjs"
+
+[tasks."test:research:transaction"]
+description = "Copy-on-write edit wrapper over d2oracle: failed edits publish nothing, glob-index panic, renumbering, boards, then the same requests in Chromium WASM"
+depends = ["test:research:transaction:node"]
+run = "pnpm exec playwright test research/browser/transaction.spec.mjs --reporter=line --output=artifacts/research-transaction/run"
 
 [tasks."test:research:operations"]
 description = "Characterize native edit mutation and text-measurement keys in native and Node-WASM"
-run = "node --test tests/research-operations.test.mjs"
+run = "node --test research/operations.test.mjs"
 
 [tasks."test:research:composition"]
 description = "Compare HTML-in-SVG and sibling HTML interaction, CSS leakage and fixed-bound overflow"
 depends = ["test:scene"]
-run = "pnpm exec playwright test research-composition.spec.mjs --reporter=line --output=artifacts/research-composition/run"
+run = "pnpm exec playwright test research/browser/composition.spec.mjs --reporter=line --output=artifacts/research-composition/run"
 
 [tasks."research:reactflow:setup"]
 description = "Explicitly install pinned React Flow into ignored experiment artifacts only"
-run = "node tests/research-reactflow.mjs --setup"
+run = "node research/reactflow.mjs --setup"
 
 [tasks."test:research:reactflow"]
 description = "Build and test the bounded native-route React Flow experiment after its explicit setup"
 depends = ["test:scene"]
-run = ["node tests/research-reactflow.mjs", "pnpm exec playwright test research-reactflow.spec.mjs --reporter=line --output=artifacts/research-reactflow/run"]
+run = ["node research/reactflow.mjs", "pnpm exec playwright test research/browser/reactflow.spec.mjs --reporter=line --output=artifacts/research-reactflow/run"]
 
 [tasks."test:research:connections"]
 description = "Probe browser-native SVG connection paint, separate hit targets and inverse coordinates"
 depends = ["test:scene"]
-run = "pnpm exec playwright test research-native-connections.spec.mjs --reporter=line --output=artifacts/research-native-connections/run"
+run = "pnpm exec playwright test research/browser/native-connections.spec.mjs --reporter=line --output=artifacts/research-native-connections/run"
 
 [tasks."research:jointjs:setup"]
 description = "Explicitly install pinned framework-free JointJS Core into ignored research artifacts"
-run = "node tests/research-jointjs.mjs --setup"
+run = "node research/jointjs.mjs --setup"
 
 [tasks."test:research:jointjs"]
 description = "Compare JointJS Core fixed bounds and native paths without a React dependency"
 depends = ["test:scene"]
-run = ["node tests/research-jointjs.mjs", "pnpm exec playwright test research-jointjs.spec.mjs --reporter=line --output=artifacts/research-jointjs/run"]
+run = ["node research/jointjs.mjs", "pnpm exec playwright test research/browser/jointjs.spec.mjs --reporter=line --output=artifacts/research-jointjs/run"]
+
+[tasks."test:research:text:node"]
+description = "Node half: native D2 font assets and text metrics"
+run = "node --test research/text.mjs"
 
 [tasks."test:research:text"]
 description = "Characterize native D2 font assets and browser HTML/SVG text metrics"
-run = ["node --test tests/research-text.mjs", "pnpm exec playwright test research-text.spec.mjs --reporter=line --output=artifacts/research-text/run"]
+depends = ["test:research:text:node"]
+run = "pnpm exec playwright test research/browser/text.spec.mjs --reporter=line --output=artifacts/research-text/run"
+
+[tasks."test:research:rich:node"]
+description = "Node half: what the native scene emits for rich labels"
+run = "node --test research/rich.test.mjs"
+
+[tasks."test:research:rich"]
+description = "Characterize what the native scene emits for rich labels and repaint markdown/code runs in Chromium against native SVG"
+depends = ["test:research:rich:node"]
+run = ["node research/rich-browser.mjs", "pnpm exec playwright test research/browser/rich.spec.mjs --reporter=line --output=artifacts/research-rich/run"]
+
+[tasks."test:research:census"]
+description = "Build native scenes for every corpus board, tally what a browser must paint and repaint every root board in Chromium as SVG and as HTML-first markup against native SVG"
+run = ["node research/census.mjs", "pnpm exec playwright test research/browser/census.spec.mjs research/browser/paint.spec.mjs research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/run", "D2_CSS_MASKS=subtree pnpm exec playwright test research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/run"]
+
+[tasks."test:research:lifecycle"]
+description = "Two painted boards per document under hostile host CSS: ID collisions, style isolation, mount/update/failure/dispose/remount effects"
+depends = ["test:research:census"]
+run = "pnpm exec playwright test research/browser/lifecycle.spec.mjs --reporter=line --output=artifacts/research-census/run"
+
+[tasks."test:research:content"]
+description = "Consumer element replaces one painted node in the HTML-first output: unchanged surroundings, hit testing, events, restore"
+depends = ["test:research:census"]
+run = "pnpm exec playwright test research/browser/consumer-content.spec.mjs --reporter=line --output=artifacts/research-census/run"
+
+[tasks."test:research:a11y"]
+description = "HTML-first painter names every D2 object from scene IDs and label runs: accessibility tree, Tab order and pixel identity"
+depends = ["test:research:census"]
+run = "pnpm exec playwright test research/browser/a11y.spec.mjs --reporter=line --output=artifacts/research-census/run"
+
+[tasks."test:research:loop"]
+description = "Chromium WASM: measured DOM cards drive D2 width/height, TALA recompile in the page, ResizeObserver growth, latency"
+run = "pnpm exec playwright test research/browser/loop.spec.mjs --reporter=line --output=artifacts/research-loop/run"
+
+[tasks."test:research:shadcn"]
+description = "Opt-in, not in check (needs the ignored imports/d2-architecture-studio checkout with its dependencies): real shadcn Card in React: Tailwind tokens, measured sizes through the persistent wasm loop, content growth and theme switch"
+run = "pnpm exec playwright test research/browser/shadcn.spec.mjs --reporter=line --output=artifacts/research-shadcn/run"
+
+[tasks."test:research:options"]
+description = "Theme id, dark theme id and sketch reach the built scene identically in native and Node/WASM"
+run = "node --test research/options.test.mjs"
+
+[tasks."test:research:handshake"]
+description = "Measured card sizes fed back as D2 width/height and recompiled with TALA: honoured sizes, re-routed edges, rejected values"
+run = "node --test research/handshake.test.mjs"
 
 [tasks."test:research:host"]
 description = "Quick native mount/dispose and consumer React/shadcn portal ownership check"
 depends = ["test:scene"]
-run = ["node tests/research-host.mjs", "pnpm exec playwright test research-host.spec.mjs --reporter=line --output=artifacts/research-host/run"]
+run = ["node research/host.mjs", "pnpm exec playwright test research/browser/host.spec.mjs --reporter=line --output=artifacts/research-host/run"]
 
 [tasks."test:research:consumer"]
 description = "Pack a native module, test Card themes/native resizing, and compare base/resized web scenes with native SVG"
 depends = ["test:scene"]
 env = { D2_NATIVE_OUTPUT = "artifacts/research-consumer/native", D2_WEB_OUTPUT = "artifacts/research-consumer/web" }
-run = ["node tests/research-consumer.mjs", "pnpm exec playwright test research-consumer.spec.mjs parity.spec.mjs --reporter=line --output=artifacts/research-consumer/run"]
+run = ["node research/consumer.mjs", "pnpm exec playwright test research/browser/consumer.spec.mjs parity.spec.mjs --reporter=line --output=artifacts/research-consumer/run"]
 
-[tasks."typecheck:renderer"]
+[tasks."typecheck"]
 description = "Typecheck the standalone typed React geometry adapter"
 run = "pnpm exec tsc --noEmit"
 
@@ -116,36 +206,36 @@ run = "pnpm exec playwright test parity.spec.mjs"
 description = "Remove local caches and generated output; preserve dependencies and saved state"
 run = "node scripts/clean.mjs"
 
-[tasks."app:setup"]
+[tasks."studio:setup"]
 description = "Install the separate imported Studio's locked dependencies"
 dir = "imports/d2-architecture-studio"
 run = "pnpm install --frozen-lockfile"
 
-[tasks.dev]
+[tasks."studio:dev"]
 description = "Run the imported Studio on loopback (default port 5173)"
 dir = "imports/d2-architecture-studio"
 run = "pnpm run dev"
 
-[tasks.lint]
+[tasks."studio:lint"]
 description = "Report imported Studio lint failures without relaxing its rules"
 dir = "imports/d2-architecture-studio"
 run = "pnpm run lint"
 
-[tasks.typecheck]
+[tasks."studio:typecheck"]
 description = "Typecheck the imported Studio without writing incremental state"
 dir = "imports/d2-architecture-studio"
 run = "pnpm exec tsc --noEmit --incremental false"
 
-[tasks.build]
+[tasks."studio:build"]
 description = "Build the imported Studio locally; does not deploy"
 dir = "imports/d2-architecture-studio"
 run = "pnpm run build"
 
-[tasks."test:app"]
+[tasks."studio:test"]
 description = "Run the imported document, compaction and rich-content assertions against WASM"
 dir = "imports/d2-architecture-studio"
 run = ["node scripts/test-d2-document.mjs", "node scripts/test-d2-compact.mjs", "node scripts/test-d2-content.mjs"]
 
-[tasks."check:app"]
+[tasks."studio:check"]
 description = "Validate the imported Studio baseline (currently fails lint)"
-depends = ["lint", "typecheck", "test:app", "build"]
+depends = ["studio:lint", "studio:typecheck", "studio:test", "studio:build"]

@@ -1,0 +1,7 @@
+{
+  "name": "d2web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "D2 browser runtime: worker-hosted D2 Go/WASM compile and native HTML/SVG painting (spec 0001)"
+}

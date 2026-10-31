@@ -304,7 +304,7 @@ This fixture has no visible text, external assets, gradients, effects or nested 
 
 ## React geometry adapter
 
-The geometry mapping above now has a standalone React implementation in [GeometryScene.tsx](../src/GeometryScene.tsx), with its typed boundary and decoder in [geometry-scene.ts](../src/geometry-scene.ts). The native investigation helper adds an explicit `Kind` discriminator to each supported scene node, while retaining D2's field names, numbers, child order and paints. The original raw scene/type trace remains available for diagnosis. This is an experimental geometry contract, not an upstream or general scene API.
+The geometry mapping above now has a standalone React implementation in [GeometryScene.tsx](../research/geometry/GeometryScene.tsx), with its typed boundary and decoder in [geometry-scene.ts](../research/geometry/geometry-scene.ts). The native investigation helper adds an explicit `Kind` discriminator to each supported scene node, while retaining D2's field names, numbers, child order and paints. The original raw scene/type trace remains available for diagnosis. This is an experimental geometry contract, not an upstream or general scene API.
 
 Supported variants are groups, rectangles, ellipses and paths containing move/line/close commands, with solid NRGBA paint. Transforms, node opacity, stroke width/caps/joins/dashes and viewport dimensions map to their corresponding native SVG attributes. Null paint maps to `none`; alpha maps to `A/255`. D2's zero miter-limit default maps to SVG's default `4`. No full SVG is embedded, and no route, shape or palette is reconstructed with CSS.
 
@@ -318,7 +318,7 @@ The test harness builds a local browser bundle and loads a native-generated scen
 
 The browser test also checks the accessible diagram name, one SVG with two rectangles/one ellipse/two paths, no image or foreign-object substitute, the source stroke width, no console/page errors, and a React paint update that preserves the existing rectangle DOM element. `artifacts/scene-probe/react.png` retains the original comparison rendering before that update. Changing the fixture through the test harness is not a D2 source-editing implementation.
 
-`mise run test:scene` builds the scene probe/reference/bundle and checks native/Node-WASM equality plus malformed/unsupported wire data. `mise run typecheck:renderer` checks the standalone TypeScript. Root `check` includes both and the React browser comparison in the same Playwright invocation as the existing tests, preserving output/report isolation. The full `D2_WEB_OUTPUT` corpus integration remains pending; this proof covers one geometry fixture.
+`mise run test:scene` builds the scene probe/reference/bundle and checks native/Node-WASM equality plus malformed/unsupported wire data. `mise run typecheck` checks the standalone TypeScript. Root `check` includes both and the React browser comparison in the same Playwright invocation as the existing tests, preserving output/report isolation. The full `D2_WEB_OUTPUT` corpus integration remains pending; this proof covers one geometry fixture.
 
 ## Handoff
 

@@ -1,0 +1,14 @@
+x -> y: root edge
+layers: {
+  detail: {
+    a -> b: first
+    a -> b: second
+    (a -> b)[1].style.stroke: red
+  }
+}
+scenarios: {
+  alt: {
+    x.style.fill: blue
+  }
+}
+imp: @shared

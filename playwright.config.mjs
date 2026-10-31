@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests/browser',
+  testDir: '.',
+  testMatch: ['tests/browser/*.spec.mjs', 'research/browser/*.spec.mjs'],
   outputDir: './artifacts/playwright',
   snapshotPathTemplate: '{testDir}/../../artifacts/native-png/{testName}/{arg}{ext}',
   updateSnapshots: 'none',
