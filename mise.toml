@@ -16,12 +16,12 @@ run = ["node --version", "corepack --version", "pnpm --version", "go version", "
 
 [tasks.check]
 description = "Fast gate (about 20 s): tooling, pinned D2 source, unit tests, typecheck, Node/WASM probes. No browser."
-depends = ["doctor", "reference:fetch", "test:unit", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
+depends = ["doctor", "reference:fetch", "test:unit", "test:features", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
 run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:client", "test:dist", "test:consumer", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -258,3 +258,12 @@ run = "node --test packages/d2web/tests/dist.test.mjs"
 description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
 depends = ["build"]
 run = "pnpm exec playwright test packages/d2web/tests/browser/consumer.spec.mjs --reporter=line --output=artifacts/d2web-consumer/run"
+
+[tasks."test:features"]
+description = "Feature map, fast half: the catalog covers every keyword, shape, arrowhead, theme and position of the pinned D2 source, and every case compiles (about 3 s)"
+depends = ["reference:fetch"]
+run = "node --test tests/features/catalog.test.mjs tests/features/compile.test.mjs"
+
+[tasks."test:features:paint"]
+description = "Feature map, browser half: every catalog case mounted in Chromium and compared with native D2; writes artifacts/feature-map/paint.json (set FEATURES_ONLY=<id fragment> for a subset)"
+run = "pnpm exec playwright test tests/features/paint.spec.mjs --reporter=line --output=artifacts/feature-map/run"
