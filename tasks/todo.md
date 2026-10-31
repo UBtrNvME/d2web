@@ -12,6 +12,7 @@ Only what is still to do. Evidence and results are in [research findings](../doc
 - [x] First contract drafted: [spec 0001](../docs/specs/0001-compile-protocol.md) (proposed; its three open questions were answered 31 October 2026, see its section 8). Render options test: `test:research:options`.
 - [x] Spec 0001 accepted by the user, 31 October 2026.
 - [x] Slice 1 complete (31 October 2026), see below.
+- [x] Slice 3 chosen: packaging (user, 31 October 2026), plan below, spec 0003 drafted.
 - [x] Slice 2 chosen: mount API (user, 31 October 2026), plan below. Spec 0002 accepted.
 
 ## Slice 1: compile protocol, render only (spec 0001)
@@ -37,6 +38,17 @@ Each step ends with a passing test and its own commit; browser steps run in `che
 - [x] 6. Fonts and end to end (done 31 October 2026: `packages/d2web/test/browser/fonts.spec.mjs`; families registered once and shared by two mounts, kept until the last dispose, `fonts: 'consumer'` registers nothing; client plus mount, light and dark as two requests, within the 5% bar of native D2). Two mounts under hostile CSS are in `mount.spec.mjs`. Slice 2 complete.
 
 Notes for later slices (not in this plan): association payload over the worker, images in the virtual filesystem, packaging of worker and wasm, animation painting, other browsers, v2 editing contract.
+
+## Slice 3: packaging (spec 0003, plan 31 October 2026)
+
+Chosen by the user. Spec 0003 is a draft; nothing is built before it is accepted. Artifacts and tests only: no registry publish, no licence choice (those are the user's, see the spec's questions 1 and 5).
+
+- [ ] 1. Spec 0003 accepted by the user ([spec 0003](../docs/specs/0003-packaging.md); five open questions at its end).
+- [ ] 2. Build: `mise run build` produces `packages/d2web/dist/` (index.js ESM, index.d.ts, worker.js, wasm_exec.js, d2web.wasm, NOTICE.txt) with the release flags; refuses an unpinned or patched D2 checkout; `package.json` exports and `files`. `ready` gains `patched`.
+- [ ] 3. Worker and client: worker defaults next to itself and falls back from `compileStreaming`; `spawnWorker`; client rejects a mismatched protocol or scene version with `VersionError`.
+- [ ] 4. Size budget test (15 MB gzip wasm, 40 KB gzip index.js unless the user changes them).
+- [ ] 5. Consumer test: `pnpm pack` the package, install the tarball in a temporary consumer, load it in Chromium with native ESM and no bundler, then again under a restrictive CSP; compile and mount a board.
+- [ ] 6. Consumer docs in the README (hosting, MIME type, CSP, same-origin worker, sizes) and the ledger.
 
 ## Painting and presentation (R2)
 
