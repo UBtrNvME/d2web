@@ -21,7 +21,7 @@ run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs packages/d2web/test/client.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -59,9 +59,13 @@ dir = "packages/d2web-wasm"
 env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root}}/.cache/go-mod" }
 run = ["go test -mod=readonly ./...", "node --test test/protocol.test.mjs"]
 
+[tasks."test:client"]
+description = "Host client against the real worker and wasm in Chromium (spec 0001 section 3.4): latest-wins, abort by respawn, silent-worker timeout"
+run = "pnpm exec playwright test packages/d2web/test/browser/client.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
-run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs"
+run = "node --test --watch tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/test/request.test.mjs packages/d2web/test/client.test.mjs"
 
 [tasks."test:native:corpus"]
 description = "Render every upstream D2 file and archived example with TALA"

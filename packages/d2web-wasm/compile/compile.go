@@ -263,8 +263,9 @@ func run(ctx context.Context, req *Request, res *Result) {
 }
 
 func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2target.Diagram) (*d2scene.Document, error) {
+	// BaseDir is explicit because a browser has no working directory (os.Getwd is not implemented on js).
 	// Offline: remote images become the builder's placeholder, and files in the virtual filesystem are not readable as images yet.
-	resolver, err := imageasset.New(imageasset.Options{HTTPClient: &http.Client{Transport: offline{}}, Limits: imageasset.Limits{
+	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: offline{}}, Limits: imageasset.Limits{
 		MaxFetchedBytes: 1 << 22, MaxEncodedBytes: 1 << 22, MaxDecompressedBytes: 1 << 22, MaxSVGBytes: 1 << 20,
 		MaxDecodedWidth: 4096, MaxDecodedHeight: 4096, MaxDecodedPixels: 1 << 24,
 		MaxAssets: 256, MaxCumulativeEncodedBytes: 32 << 20, MaxCumulativeDecodedBytes: 128 << 20,
