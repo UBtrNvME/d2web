@@ -80,6 +80,10 @@ run = "pnpm exec playwright install --with-deps chromium"
 description = "Run the d2web browser suites and the feature-map paint comparison in Firefox (docs/browser-support.md)"
 run = "D2WEB_BROWSER=firefox pnpm exec playwright test packages/d2web/tests/browser/*.spec.mjs tests/features/paint.spec.mjs"
 
+[tasks."test:webkit"]
+description = "Run the WebKit-safe d2web suites and the feature-map paint comparison in WebKit, wasm on the page thread (docs/browser-support.md)"
+run = "D2WEB_BROWSER=webkit D2WEB_MAIN_THREAD=1 pnpm exec playwright test packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/association.spec.mjs tests/features/paint.spec.mjs"
+
 [tasks."test:comparison"]
 description = "Verify screenshot comparison and native-equivalent Chromium/WASM scene data"
 depends = ["test:native", "test:scene"]

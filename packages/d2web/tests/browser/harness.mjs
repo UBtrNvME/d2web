@@ -25,11 +25,26 @@ export async function open(page, { body = '', css = '' } = {}) {
   });
   await page.goto('https://host.test/');
   await page.addScriptTag({ url: '/d2web.js' });
-  await page.evaluate(render => {
-    window.client = d2web.createClient({ spawn: () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm') });
+  await page.evaluate(({ render, mainThread }) => {
+    // D2WEB_MAIN_THREAD=1 runs the wasm on the page thread behind the same WorkerLike surface: WebKit's workers cannot start it (docs/browser-support.md).
+    // One Go runtime per page, so tests that respawn the worker cannot run in this mode.
+    const spawnMain = () => {
+      const w = { onmessage: null, onerror: null, terminate() {}, postMessage(message) { booted.then(() => self.d2webCompile(JSON.stringify(message))).then(r => w.onmessage({ data: JSON.parse(r) })); } };
+      window.booted ??= (async () => {
+        await new Promise(resolve => { const t = document.createElement('script'); t.src = '/wasm_exec.js'; t.onload = resolve; document.head.append(t); });
+        const go = new Go(); go.argv = ['d2web', '--serve'];
+        const { instance } = await WebAssembly.instantiateStreaming(fetch('/d2web.wasm'), go.importObject);
+        go.run(instance);
+        while (!self.d2webReady) await new Promise(resolve => setTimeout(resolve, 2));
+      })();
+      const booted = window.booted;
+      booted.then(() => w.onmessage({ data: JSON.parse(self.d2webReady) }));
+      return w;
+    };
+    window.client = d2web.createClient({ spawn: mainThread ? spawnMain : () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm') });
     let revision = 0;
     window.compile = (source, override = {}) => window.client.compile({ revision: ++revision, files: { 'main.d2': source }, entry: 'main.d2', render: { ...render, ...override }, ...override.request });
-  }, defaultRender);
+  }, { render: defaultRender, mainThread: !!process.env.D2WEB_MAIN_THREAD });
 }
 
 // Fraction of pixels whose channel differs by more than 25 (alpha composited on white) between two base64 PNGs.
