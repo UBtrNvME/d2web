@@ -124,9 +124,23 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
     return undefined;
   }
 
-  // The D2 object an element belongs to: the group that is a direct child of the scene root (and not a root:* helper).
+  // Link regions are anchors laid over the board, outside the object groups, and carry no object ID. They belong to the smallest painted
+  // object whose box contains the region's centre (shape links and label links both sit inside their object).
+  function objectOfLink(a: HTMLElement): string | undefined {
+    const [x, y, w, h] = [a.style.left, a.style.top, a.style.width, a.style.height].map(parseFloat);
+    let best: { id: string; area: number } | undefined;
+    for (const child of scene?.Root?.Children ?? []) {
+      const box = child.ID && !child.ID.startsWith('root:') ? nodeBox(child.ID) : undefined;
+      if (box && x + w / 2 >= box.X && x + w / 2 <= box.X + box.Width && y + h / 2 >= box.Y && y + h / 2 <= box.Y + box.Height && (!best || box.Width * box.Height < best.area)) best = { id: child.ID!, area: box.Width * box.Height };
+    }
+    return best?.id;
+  }
+
+  // The D2 object an element belongs to: the group that is a direct child of the scene root (and not a root:* helper), or for a link region
+  // the object it covers.
   function objectOf(el: Element | null): string | undefined {
     for (; el && el !== wrapper; el = el.parentElement) {
+      if ((el as HTMLElement).dataset?.k === 'link') return objectOfLink(el as HTMLElement);
       const id = (el as HTMLElement).dataset?.id;
       if (id && !id.startsWith('root:') && (el.parentElement as HTMLElement | null)?.dataset?.id === 'root') return id;
     }
@@ -136,7 +150,8 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   const emit = (type: D2EventType, id: string, domEvent: Event) => { for (const fn of listeners.get(type) ?? []) fn({ type, board, id, domEvent }); };
   const delegate = (domType: string, type: D2EventType, accept: (e: Event) => string | undefined = e => objectOf(e.target as Element)) =>
     wrapper.addEventListener(domType, e => { const id = accept(e); if (id !== undefined) emit(type, id, e); });
-  delegate('click', 'click'); delegate('dblclick', 'dblclick'); delegate('contextmenu', 'contextmenu'); delegate('focusin', 'focus');
+  delegate('click', 'click'); delegate('dblclick', 'dblclick'); delegate('contextmenu', 'contextmenu'); // focus is the object's own group taking focus (its link region has its own, native focus).
+  delegate('focusin', 'focus', e => { const t = e.target as HTMLElement; return t.dataset?.id && objectOf(t) === t.dataset.id ? t.dataset.id : undefined; });
   // hover fires when the pointer enters or leaves an object, not for movement between its parts.
   delegate('pointerover', 'hover', e => { const to = objectOf(e.target as Element); return to !== objectOf((e as PointerEvent).relatedTarget as Element | null) ? to : undefined; });
   delegate('pointerout', 'hover', e => { const from = objectOf(e.target as Element); return from !== objectOf((e as PointerEvent).relatedTarget as Element | null) ? from : undefined; });
