@@ -57,7 +57,7 @@ export interface Diagnostic {
 export interface BoardResult {
   path: string;
   scene: unknown; // designed scene encoding, versioned by sceneVersion (not built yet)
-  association: unknown; // keyed by (revision, board path, object ID)
+  association: Association; // keyed by (revision, board path, object ID); spec 0004
 }
 
 export type ErrorCode = 'compile' | 'budget' | 'layout' | 'internal';
@@ -81,3 +81,20 @@ export interface CompileResult {
 
 export type HostMessage = CompileRequest;
 export type WorkerMessage = WorkerReady | CompileResult;
+
+// Spec 0004. Positions are D2's with UTF-16 positions enabled: line and column 0-based, offset from the start of the file, all in UTF-16 code
+// units, so `offset` is a JS string index. Diagnostic ranges use the same offsets.
+export interface Pos { line: number; column: number; offset: number }
+export interface Source { path: string; start: Pos; end: Pos }
+export interface AssociationObject {
+  id: string;
+  kind: 'shape' | 'connection';
+  parent?: string;
+  label: string;
+  content?: 'markdown' | 'code' | 'latex' | 'sql_table' | 'class';
+  nodes: string[];
+  references: Source[];
+  src?: string;
+  dst?: string;
+}
+export interface Association { objects: AssociationObject[] }

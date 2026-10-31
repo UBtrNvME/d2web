@@ -40,7 +40,7 @@ All messages are structured-clone JSON-like objects with `v` (protocol version, 
 ```
 { v, type: 'result', id, revision, millis,
   boards: [ { path, scene, association } ],
-  diagnostics: [ { severity, message, board?, file?, range? } ],   // range is byte offsets within `file`
+  diagnostics: [ { severity, message, board?, file?, range? } ],   // range is UTF-16 offsets within `file` (changed with spec 0004; were bytes)
   fonts: { '<asset id>': <bytes> },      // beside the scenes, deduplicated; never inside them
   echo: { layout, render } }
 ```

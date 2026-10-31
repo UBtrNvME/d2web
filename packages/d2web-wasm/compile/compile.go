@@ -85,7 +85,7 @@ type Diagnostic struct {
 type Board struct {
 	Path        string          `json:"path"`
 	Scene       json.RawMessage `json:"scene"`
-	Association any             `json:"association"` // not built yet (spec 0001 section 7)
+	Association *Association    `json:"association"`
 }
 
 type Error struct {
@@ -186,6 +186,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 	opts := &d2svg.RenderOpts{Pad: &req.Render.Pad, Scale: &req.Render.Scale, Center: &req.Render.Center, ThemeID: &req.Render.ThemeID, ThemeOverrides: req.Render.ThemeOverrides, Sketch: &req.Render.Sketch}
 	layout := req.Layout
 	var target *d2target.Diagram
+	var graph *d2graph.Graph
 	func() {
 		// D2 layout code can panic on odd input (a recovered oracle panic was seen in research); report it as a layout error.
 		defer func() {
@@ -193,8 +194,8 @@ func run(ctx context.Context, req *Request, res *Result) {
 				fail(res, "layout", fmt.Sprint("panic: ", r), nil)
 			}
 		}()
-		target, _, err = d2lib.Compile(ctx, source, &d2lib.CompileOptions{
-			InputPath: req.Entry, FS: fsys, Ruler: ruler, Layout: &layout,
+		target, graph, err = d2lib.Compile(ctx, source, &d2lib.CompileOptions{
+			InputPath: req.Entry, FS: fsys, Ruler: ruler, Layout: &layout, UTF16Pos: true,
 			LayoutResolver: func(name string) (d2graph.LayoutGraph, error) {
 				return func(ctx context.Context, g *d2graph.Graph) error {
 					switch name {
@@ -217,19 +218,21 @@ func run(ctx context.Context, req *Request, res *Result) {
 		return
 	}
 	diagrams := map[string]*d2target.Diagram{}
-	var walk func(string, *d2target.Diagram)
-	walk = func(path string, d *d2target.Diagram) {
-		diagrams[path] = d
+	graphs := map[string]*d2graph.Graph{}
+	var walk func(string, *d2target.Diagram, *d2graph.Graph)
+	walk = func(path string, d *d2target.Diagram, g *d2graph.Graph) {
+		diagrams[path], graphs[path] = d, g
 		for _, group := range []struct {
 			name   string
 			boards []*d2target.Diagram
-		}{{"layers", d.Layers}, {"scenarios", d.Scenarios}, {"steps", d.Steps}} {
-			for _, child := range group.boards {
-				walk(path+"/"+group.name+"/"+child.Name, child)
+			graphs []*d2graph.Graph
+		}{{"layers", d.Layers, g.Layers}, {"scenarios", d.Scenarios, g.Scenarios}, {"steps", d.Steps, g.Steps}} {
+			for i, child := range group.boards {
+				walk(path+"/"+group.name+"/"+child.Name, child, group.graphs[i])
 			}
 		}
 	}
-	walk("", target)
+	walk("", target, graph)
 	for path := range diagrams {
 		res.Available = append(res.Available, path)
 	}
@@ -261,7 +264,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 		for id, bytes := range fonts {
 			res.Fonts[string(id)] = bytes
 		}
-		res.Boards = append(res.Boards, Board{Path: path, Scene: data})
+		res.Boards = append(res.Boards, Board{Path: path, Scene: data, Association: associate(graphs[path], doc)})
 	}
 }
 

@@ -24,7 +24,7 @@ Object = {
   src?: id, dst?: id             // connections only
 }
 Source = { path, start: Pos, end: Pos }
-Pos    = { line, column, byte }  // D2's own position: line 0-based, column in UTF-16 units, byte offset in the file
+Pos    = { line, column, offset }  // line 0-based; column and offset in UTF-16 units, so offset is a JS string index
 ```
 
 Rules:
@@ -32,7 +32,7 @@ Rules:
 - `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. Every scene node except the helper nodes `root` and `root:background` belongs to exactly one object (test, section 6).
 - `properties` has an entry for each D2 style keyword the object has an effective value for, plus `label`. The source is the declaration that owns that value, which can be a class or glob declaration that is not in `references` (R1 finding). A defaulted value has `source: null`.
 - Imports: a `Source.path` is the file the declaration lives in, which can differ from the entry file.
-- Ranges are D2's. They are not translated, so a consumer can hand them to anything that already speaks D2 positions.
+- Ranges are D2's, compiled with its UTF-16 position option. In that mode D2's `Byte` field holds the UTF-16 offset (observed 31 October 2026: `a: "😀"; b` puts `b` at column 9, offset 9, not byte 11), so the field is named `offset` here. Diagnostic ranges (spec 0001) come from the same compile and use the same offsets from now on.
 
 ## 3. Client helpers (package `d2web`)
 
@@ -67,7 +67,7 @@ The payload is JSON beside the scene. The step that builds it records its size o
 
 ## 7. Open questions for the user
 
-1. Ranges as D2's `{line, column, byte}` triple (recommended), or byte offsets only like diagnostics?
+1. Ranges as D2's position triple (recommended), or offsets only like diagnostics? Answered yes to the triple; the third member is a UTF-16 `offset`, not a byte (see section 2).
 2. Include effective property sources (`properties`) in v1 (recommended; it is the part editors cannot get elsewhere), or only `references`?
 3. Always on (recommended), or a request flag `association: false` to skip the cost?
 4. Size budget: set after the first measurement and recorded here, unless you want a number now.

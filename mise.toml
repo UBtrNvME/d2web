@@ -57,7 +57,7 @@ description = "Go tests for the product module (packages/d2web-wasm): scene enco
 depends = ["reference:fetch"]
 dir = "packages/d2web-wasm"
 env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root}}/.cache/go-mod" }
-run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs"]
+run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs tests/association.test.mjs"]
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
