@@ -48,7 +48,7 @@ Chosen by the user. Spec 0003 was built after the user answered "continue workin
 - [x] 3. (done 31 October 2026: `VersionError` tested in `client.test.mjs`; `spawnWorker` and the worker's MIME fallback are exercised by `test:consumer`) Worker and client: worker defaults next to itself and falls back from `compileStreaming`; `spawnWorker`; client rejects a mismatched protocol or scene version with `VersionError`.
 - [x] 4. (done: `packages/d2web/test/dist.test.mjs`, task `test:dist`) Size budget test (15 MB gzip wasm, 40 KB gzip index.js unless the user changes them).
 - [x] 5. (done 31 October 2026: 3 of 3 pass, 7 s; `packages/d2web/test/browser/consumer.spec.mjs`, task `test:consumer`; see ledger) Consumer test: `pnpm pack` the package, install the tarball in a temporary consumer, load it in Chromium with native ESM and no bundler, then again under a restrictive CSP; compile and mount a board.
-- [ ] 6. Consumer docs in the README (hosting, MIME type, CSP, same-origin worker, sizes) and the ledger.
+- [x] 6. (done: README "Using the built package") Consumer docs in the README (hosting, MIME type, CSP, same-origin worker, sizes) and the ledger.
 
 ## Painting and presentation (R2)
 
