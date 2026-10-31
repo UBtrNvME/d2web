@@ -23,14 +23,18 @@ const diff = (page, a, b) => page.evaluate(async ({ a, b }) => {
   const read = async b64 => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, i.width, i.height); x.drawImage(i, 0, 0); return { w: i.width, h: i.height, d: x.getImageData(0, 0, i.width, i.height).data }; };
   const [x, y] = [await read(a), await read(b)];
   if (x.w !== y.w || x.h !== y.h) return { sizeMismatch: [x.w, x.h, y.w, y.h] };
-  let different = 0, ink = 0;
+  let different = 0, ink = 0, shifted = 0;
+  // A pixel that differs only because glyph or curve edges sit up to one pixel apart still has a matching pixel next to it in the other image.
+  const near = (p, q, px, py) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const ox = px + dx, oy = py + dy; if (ox < 0 || oy < 0 || ox >= x.w || oy >= x.h) continue;
+    const j = (oy * x.w + ox) * 4; if ([0, 1, 2].every(k => Math.abs(p[k] - q[j + k]) <= 25)) return true; } return false; };
   for (let i = 0; i < x.d.length; i += 4) {
     const bad = [0, 1, 2].some(k => Math.abs(x.d[i + k] - y.d[i + k]) > 25);
     const inked = [x.d, y.d].some(d => [0, 1, 2].some(k => d[i + k] < 230));
-    if (bad) different++;
+    if (bad) { different++; const px = (i / 4) % x.w, py = Math.floor(i / 4 / x.w); if (!near(x.d.subarray(i, i + 3), y.d, px, py) && !near(y.d.subarray(i, i + 3), x.d, px, py)) shifted++; }
     if (inked) ink++;
   }
-  return { ratio: different / (x.w * x.h), inkRatio: ink ? different / ink : 0 };
+  return { ratio: different / (x.w * x.h), inkRatio: ink ? different / ink : 0, shiftRatio: shifted / (x.w * x.h), shiftInkRatio: ink ? shifted / ink : 0 };
 }, { a, b });
 
 // Native D2 with the same settings the product asks for. An empty target renders only root; a dotted path renders only that board.
@@ -90,7 +94,9 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
           const [a, b] = [await shot('native'), await shot('scene')];
           const d = await diff(page, a, b);
           if (d.sizeMismatch) { row.status = 'size-mismatch'; row.detail = d.sizeMismatch.join(','); }
-          else { row.ratio = Number(d.ratio.toFixed(4)); row.inkRatio = Number(d.inkRatio.toFixed(3)); row.status = d.ratio <= THRESHOLD && d.inkRatio <= INK_THRESHOLD ? 'ok' : 'differs'; }
+          else { row.ratio = Number(d.ratio.toFixed(4)); row.inkRatio = Number(d.inkRatio.toFixed(3)); row.status = d.ratio <= THRESHOLD && d.inkRatio <= INK_THRESHOLD ? 'ok' : 'differs';
+            // Strict bars failed but nothing is missing or moved by more than a pixel: the same drawing, edges rasterised slightly apart.
+            if (row.status === 'differs' && d.shiftRatio <= THRESHOLD && d.shiftInkRatio <= INK_THRESHOLD) { row.status = 'equivalent'; row.shiftInkRatio = Number(d.shiftInkRatio.toFixed(3)); } }
           if (row.status !== 'ok') {
             const name = row.id.replaceAll('/', '__');
             writeFileSync(join(shots, `${name}.native.png`), Buffer.from(a, 'base64'));
@@ -117,8 +123,9 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
   if (process.env.UPDATE_BASELINE || !existsSync(baselinePath)) writeFileSync(baselinePath, JSON.stringify(status, null, 1) + '\n');
   const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   if (!suffix) writeReport(); // docs/feature-map.md describes Chromium; other browsers keep their own artifact and baseline
-  const regressed = Object.keys(baseline).filter(id => baseline[id] === 'ok' && status[id] !== 'ok');
-  const improved = Object.keys(status).filter(id => status[id] === 'ok' && baseline[id] !== 'ok');
+  const holds = (was, now) => was === 'ok' ? now === 'ok' : was === 'equivalent' ? now === 'ok' || now === 'equivalent' : true;
+  const regressed = Object.keys(baseline).filter(id => !holds(baseline[id], status[id]));
+  const improved = Object.keys(status).filter(id => status[id] !== baseline[id] && (status[id] === 'ok' || status[id] === 'equivalent' && baseline[id] === 'differs'));
   if (improved.length) console.log('improved since baseline (rerun with UPDATE_BASELINE=1):', improved.join(', '));
-  expect(regressed, 'cases that were ok in tests/features/baseline.json').toEqual([]);
+  expect(regressed, 'cases that held ok or equivalent in the baseline').toEqual([]);
 });

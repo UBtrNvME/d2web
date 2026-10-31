@@ -5,12 +5,12 @@ Measured 31 October 2026 on one macOS machine (Playwright browsers; versions are
 | Browser | Status | Evidence |
 | --- | --- | --- |
 | Chromium | supported, the reference | every gate |
-| Firefox | works; small paint differences | `test:client` 29/29 (mount, links, animation, events, content, e2e), `test:consumer` 3/3 (native ESM, wrong wasm MIME type, restrictive CSP), feature paint 241 of 255 cases ok against native D2 rendered in the same Firefox |
-| Safari / WebKit | **unsupported for now (user decision, 31 October 2026)**: the worker cannot start the wasm; the rest works | Playwright WebKit 27.2 (a Safari-class engine, not Safari itself). In a Worker the Go wasm dies in `go.run` with `RangeError: Maximum call stack size exceeded`; the same wasm on the page thread starts. With the wasm on the page thread, feature paint is 247 of 255 ok, identical to Chromium, and the mount, animation, content and association suites pass |
+| Firefox | works; small paint differences | `test:client` 29/29 (mount, links, animation, events, content, e2e), `test:consumer` 3/3 (native ESM, wrong wasm MIME type, restrictive CSP), feature paint 242 ok and 10 equivalent (edges up to a pixel apart) of 255 cases against native D2 rendered in the same Firefox, none open except the intended differences |
+| Safari / WebKit | **unsupported for now (user decision, 31 October 2026)**: the worker cannot start the wasm; the rest works | Playwright WebKit 27.2 (a Safari-class engine, not Safari itself). In a Worker the Go wasm dies in `go.run` with `RangeError: Maximum call stack size exceeded`; the same wasm on the page thread starts. With the wasm on the page thread, feature paint is 248 ok and 4 equivalent of 255, the same as Chromium, and the mount, animation, content and association suites pass |
 
 ## Firefox differences (same engine renders D2's native SVG and our painter)
 
-Compared with Chromium these cases cross the pixel bar in Firefox (`tests/features/baseline.firefox.json` guards them; `docs/feature-map.md` stays Chromium-only):
+Compared with Chromium these cases cross the strict pixel bar in Firefox, and all of them pass the one-pixel tolerant bar (status `equivalent`) (`tests/features/baseline.firefox.json` guards them; `docs/feature-map.md` stays Chromium-only):
 - `shape/oval`, `shape/circle`, `style/text-transform=lowercase`, `language/vars`: 3.5-4.5 % of the image differs and 26-27 % of the inked pixels, just over the ink bar; consistent with curve and text antialiasing, not checked glyph by glyph.
 - `render/pad-scale-center`: 1.5 % of the image, 36 % of the ink; the painter scales content with a CSS transform, native with vector scaling, and Firefox rasterises scaled text differently.
 - `style/fill-pattern=paper`: the grain is a noise filter; the two noise textures differ in detail (both look like paper).

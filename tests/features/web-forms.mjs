@@ -29,4 +29,6 @@ export const webForms = {
 // Native paints something static here that the web does as behaviour. These are not gaps; test the behaviour instead.
 export const byDesign = [
   { match: /^content\/(link|tooltip)/, text: 'Native adds a corner badge and canvas room per link or tooltip. On the web a link is an anchor and a tooltip appears on hover or focus; no badge is painted and the smaller canvas is correct.' },
+  { match: /^shape\/text$/, text: 'Native embeds a subset font without GPOS kerning; the web draws the scene\'s full font and the browser applies kerning, as it does for any web text. The line is 0.7 px wider in native layout terms and the glyphs drift apart by up to a pixel; same text, same font, web typography.' },
+  { match: /^content\/icon-remote$/, text: 'D2 compiles offline in the worker, so a remote icon URL paints the builder\'s placeholder. Fetching is the consumer\'s decision (ADR 0007 read-only runtime): supply the icon as a data URI, which matches native exactly (the 35 inlined icon cases).' },
 ];
