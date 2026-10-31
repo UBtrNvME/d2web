@@ -33,13 +33,17 @@ export async function open(page, { body = '', css = '' } = {}) {
 }
 
 // Fraction of pixels whose channel differs by more than 25 (alpha composited on white) between two base64 PNGs.
-export const diff = (page, a, b) => page.evaluate(async ({ a, b }) => {
+export const diff = (page, a, b, exclude) => page.evaluate(async ({ a, b, exclude }) => {
   const read = async b64 => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); const c = document.createElement('canvas'); c.width = i.width; c.height = i.height; const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, i.width, i.height); x.drawImage(i, 0, 0); return { w: i.width, h: i.height, d: x.getImageData(0, 0, i.width, i.height).data }; };
   const [x, y] = [await read(a), await read(b)];
   if (x.w !== y.w || x.h !== y.h) return { sizeMismatch: [x.w, x.h, y.w, y.h] };
   let n = 0;
-  for (let i = 0; i < x.d.length; i += 4) if ([0, 1, 2].some(k => Math.abs(x.d[i + k] - y.d[i + k]) > 25)) n++;
+  for (let i = 0; i < x.d.length; i += 4) {
+    const [px, py] = [(i / 4) % x.w, Math.floor(i / 4 / x.w)];
+    if (exclude && px >= exclude.x && px < exclude.x + exclude.w && py >= exclude.y && py < exclude.y + exclude.h) continue;
+    if ([0, 1, 2].some(k => Math.abs(x.d[i + k] - y.d[i + k]) > 25)) n++;
+  }
   return { ratio: n / (x.w * x.h) };
-}, { a, b });
+}, { a, b, exclude });
 
 export const shot = async (page, selector) => (await page.locator(selector).screenshot({ animations: 'disabled' })).toString('base64');
