@@ -12,7 +12,7 @@ Only what is still to do. Evidence and results are in [research findings](../doc
 - [x] First contract drafted: [spec 0001](../docs/specs/0001-compile-protocol.md) (proposed; its three open questions were answered 31 October 2026, see its section 8). Render options test: `test:research:options`.
 - [x] Spec 0001 accepted by the user, 31 October 2026.
 - [x] Slice 1 complete (31 October 2026), see below.
-- [x] Slice 2 chosen: mount API (user, 31 October 2026), plan below. Spec 0002 is drafted and waits for acceptance.
+- [x] Slice 2 chosen: mount API (user, 31 October 2026), plan below. Spec 0002 accepted.
 
 ## Slice 1: compile protocol, render only (spec 0001)
 
@@ -27,9 +27,9 @@ Product code, not research. Each step ends with a passing test in `check` (or `c
 
 ## Slice 2: mount API (spec 0002, approved plan 31 October 2026)
 
-Spec 0002 is a draft until the user accepts it; no code before that. Each step ends with a passing test and its own commit; browser steps run in `check:browser`, everything else in `check`.
+Each step ends with a passing test and its own commit; browser steps run in `check:browser`, everything else in `check`.
 
-- [ ] 1. Spec 0002 accepted by the user (draft: [spec 0002](../docs/specs/0002-mount-api.md); three open questions at its end).
+- [x] 1. Spec 0002 accepted by the user, 31 October 2026 ([spec 0002](../docs/specs/0002-mount-api.md)); its three questions answered as recommended.
 - [ ] 2. Mount and dispose: `packages/d2web/src/mount.ts` with shadow root, `all:initial` wrapper, per-mount ID prefix, no traces after dispose, remount reproduces markup, same scene mounted twice. Acceptance: lifecycle assertions from `research/browser/lifecycle.spec.mjs` pass against the product mount, fed by the real client.
 - [ ] 3. Update: paint then swap, failures leave the previous DOM, errored result or unknown board throws `MountError`, `nodeBox`.
 - [ ] 4. Events: delegated click, dblclick, contextmenu, hover, focus with board and object ID; links and focus under the shadow root (currently unknown), accessibility groups.

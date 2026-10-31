@@ -1,6 +1,6 @@
 # Spec 0002: mount API (painted board in a host element)
 
-Status: **proposed**, not accepted. Builds on [spec 0001](0001-compile-protocol.md) (compile protocol) and [ADR 0003](../adr/0003-runtime-shape.md) (shadow-root host, consumer-owned content). Scope per [product.md](../product.md): v1, read-only render. Nothing here exists as an API; the research it rests on is named in section 8.
+Status: **accepted** (user, 31 October 2026, with the three recommendations of section 8). Builds on [spec 0001](0001-compile-protocol.md) (compile protocol) and [ADR 0003](../adr/0003-runtime-shape.md) (shadow-root host, consumer-owned content). Scope per [product.md](../product.md): v1, read-only render. Nothing here exists as an API; the research it rests on is named in section 8.
 
 ## 1. Purpose and non-goals
 
@@ -66,8 +66,10 @@ Compile results carry the font bytes D2 used (spec 0001 section 3.3). With `font
 | Font registration across mounts | unknown | |
 | Other browsers, screen readers, find-in-page | unknown | |
 
-## 8. Open questions for the user
+## 8. Decisions taken in review (user, 31 October 2026)
 
-1. **Fonts:** register result fonts in `document.fonts` by default (a shared global with reference counting), or leave registration to the consumer? Recommendation: register by default, opt out with `'consumer'`.
-2. **Accessibility default:** named focusable groups on by default? Recommendation: on; it was pixel-identical in research.
-3. **Shadow root mode:** `open` (inspectable, easier for assistive tooling and tests) or `closed`? Recommendation: open.
+1. Fonts: the mount registers result fonts in `document.fonts` by default (shared, reference-counted, released on dispose); `fonts: 'consumer'` opts out.
+2. Accessibility: named focusable groups are on by default.
+3. Shadow root mode: open.
+
+The user accepted the spec as written on 31 October 2026.
