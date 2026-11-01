@@ -4,13 +4,16 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from '../../packages/d2web/tests/browser/harness.mjs';
-import { root } from '../examples.mjs';
+import { goEnv, goRun, root } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
 import { boardTarget } from './compile.mjs';
 import { writeReport } from './report.mjs';
 
 // Feature map step 3: every catalog entry compiled in the browser worker, mounted with the shipping mount API, and compared with D2's own
 // native SVG for the same options. Records a status per entry; it does not fail on a difference (baseline.json guards regressions in step 5).
+// Consumer fonts for the Unicode family, read from the pinned go-text/typesetting-utils test data (not copied: their licences are not shipped with them).
+const utils = goRun('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/go-text/typesetting-utils'], { cwd: join(root, 'packages/d2web-wasm'), env: { ...goEnv, GOFLAGS: '-mod=readonly' } }).trim();
+const fontFiles = { dejavu: ['DejaVu Sans', 'DejaVuSans.ttf'], mplus: ['M+ 1p', 'mplus-1p-regular.ttf'] };
 const output = join(root, 'artifacts/feature-map');
 const shots = join(output, 'shots');
 mkdirSync(shots, { recursive: true });
@@ -54,6 +57,8 @@ function native(entry, board) {
 test('paint every catalog entry and compare with native D2', async ({ page }) => {
   test.setTimeout(30 * 60_000);
   await open(page, { body: '<div id="scene" style="position:absolute;left:0;top:0"></div><div id="native" style="position:absolute;left:0;top:0;visibility:hidden"></div>' });
+  await page.route('https://host.test/fonts/**', route => route.fulfill({ body: readFileSync(join(utils, 'opentype/common', new URL(route.request().url()).pathname.split('/').pop())), contentType: 'font/ttf' }));
+  await page.evaluate(list => { window.fontClient = d2web.createClient({ spawn: () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm'), fonts: list.map(([name, file]) => ({ name, url: `/fonts/${file}` })) }); }, Object.values(fontFiles));
   const only = process.env.FEATURES_ONLY;
   const results = [];
   for (const entry of catalog.filter(e => !only || e.id.includes(only))) {
@@ -61,15 +66,15 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
     results.push(entryRow);
     try {
       const request = { revision: 1, files: { 'main.d2': entry.source, ...entry.files }, entry: 'main.d2', render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false, ...entry.render }, boards: entry.boards ?? [''], ...(entry.layout ? { layout: entry.layout } : {}) };
-      const mounted = await page.evaluate(async request => {
-        const result = await client.compile(request);
+      const mounted = await page.evaluate(async ({ request, withFonts }) => {
+        const result = await (withFonts ? fontClient : client).compile(request);
         if (result.error) return { error: `${result.error.code}: ${result.error.message}` };
         const host = document.getElementById('scene');
         host.replaceChildren();
         window.currentMount = d2web.mount(host);
         window.currentResult = result;
         return { boards: result.boards.map(b => b.path) };
-      }, request);
+      }, { request, withFonts: Boolean(entry.fonts) });
       entryRow.boards = mounted.boards;
       if (mounted.error) { entryRow.status = 'compile-error'; entryRow.detail = mounted.error.slice(0, 200); continue; }
       for (const board of entry.family === 'board' ? mounted.boards : ['']) {
@@ -81,6 +86,30 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
             catch (error) { return error.message; }
           }, board);
           if (error) { row.status = 'mount-error'; row.detail = error.slice(0, 200); continue; }
+          if (entry.fonts) { // native chooses host fonts: check D2's own advances instead (no warning, no .notdef, browser width equals the scene advance sum)
+            const out = await page.evaluate(async () => {
+              await document.fonts.ready;
+              const runs = [];
+              const walk = n => { if (n.Primitive?.$ === 'TextRun') runs.push(n.Primitive); (n.Children ?? []).forEach(walk); };
+              walk(currentResult.boards[0].scene.Root);
+              const els = [...document.getElementById('scene').shadowRoot.querySelectorAll('[data-k="text"]')];
+              // D2's advances carry no pair kerning; the browser applies it (natural on the web, ADR 0009). Measure both: the check is on D2's advances
+              // (kerning off) and the kerning the browser adds is recorded.
+              const rows = runs.map(r => {
+                const el = els.find(e => e.textContent.replace(/\s+/g, ' ').trim() === r.Text.replace(/\s+/g, ' ').trim());
+                const kerned = el?.getBoundingClientRect().width;
+                if (el) { el.style.fontKerning = 'none'; el.style.fontVariantLigatures = 'none'; }
+                return { text: r.Text, scene: r.Glyphs.reduce((w, g) => w + g.Advance, 0), notdef: r.Glyphs.filter(g => g.ID === 0).length,
+                  browser: el?.getBoundingClientRect().width, kerning: el ? kerned - el.getBoundingClientRect().width : 0 };
+              });
+              return { warnings: currentResult.diagnostics.map(d => d.message), rows };
+            });
+            const worst = Math.max(0, ...out.rows.map(r => Math.abs((r.browser ?? Infinity) - r.scene)));
+            const bad = out.warnings.length || out.rows.some(r => r.notdef) || worst >= 0.5;
+            row.status = bad ? 'differs' : 'scene-checked'; row.worstWidthError = Number(worst.toFixed(3)); row.kerning = Number(Math.min(0, ...out.rows.map(r => r.kerning)).toFixed(2));
+            if (bad) row.detail = JSON.stringify(out).slice(0, 300);
+            continue;
+          }
           const ref = native(entry, board);
           if (ref.skip || ref.error) { row.status = 'no-native'; row.detail = ref.skip ?? ref.error.slice(0, 200); continue; }
           await page.evaluate(svg => { document.getElementById('native').innerHTML = svg; document.querySelector('#native > svg').style.display = 'block'; }, ref.svg);
@@ -123,7 +152,7 @@ test('paint every catalog entry and compare with native D2', async ({ page }) =>
   if (process.env.UPDATE_BASELINE || !existsSync(baselinePath)) writeFileSync(baselinePath, JSON.stringify(status, null, 1) + '\n');
   const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   if (!suffix) writeReport(); // docs/feature-map.md describes Chromium; other browsers keep their own artifact and baseline
-  const holds = (was, now) => was === 'ok' ? now === 'ok' : was === 'equivalent' ? now === 'ok' || now === 'equivalent' : true;
+  const holds = (was, now) => was === 'ok' ? now === 'ok' : was === 'equivalent' ? now === 'ok' || now === 'equivalent' : was === 'scene-checked' ? now === 'scene-checked' : true;
   const regressed = Object.keys(baseline).filter(id => !holds(baseline[id], status[id]));
   const improved = Object.keys(status).filter(id => status[id] !== baseline[id] && (status[id] === 'ok' || status[id] === 'equivalent' && baseline[id] === 'differs'));
   if (improved.length) console.log('improved since baseline (rerun with UPDATE_BASELINE=1):', improved.join(', '));

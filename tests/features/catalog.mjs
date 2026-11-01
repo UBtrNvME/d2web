@@ -176,4 +176,17 @@ fx('stroke-dash-edges', 'a -> b {style.stroke-dash: 3}\nb -> c {style.stroke-das
 fx('near-object-container', 'g: {a; b}\nnote: Note {near: g}');
 fx('combined-style', 'x: Hi {style: {fill: "linear-gradient(#fff, #fcb)"; stroke: "#c33"; stroke-width: 5; stroke-dash: 4; shadow: true; border-radius: 16; opacity: 0.8; italic: true}}');
 
+// ---- Unicode families: native D2 picks host fonts, so these are checked against D2's own advances and the consumer's fonts (spec 0007), not native pixels ------------------
+const uni = (name, source) => add('unicode', name, ['extra:unicode'], source, { fonts: ['dejavu', 'mplus'] });
+uni('hebrew', 'x: שלום עולם');
+uni('arabic', 'x: مرحبا بالعالم');
+uni('mixed-direction', 'x: abc שלום def 123 عربي end');
+uni('japanese', 'x: あいう 漢字 かな');
+uni('cyrillic-greek', 'x: Привет мир αβγ δ');
+uni('accents', 'x: éñüçøåß ąęł ăîșț');
+uni('emoji-outline', 'x: 😀 smile');
+uni('rtl-in-container', 'g: מכולה {a: שלום; b: עולם; a -> b: חץ}');
+uni('cjk-edge-label', 'a: 日本 -> b: 中文: ラベル');
+uni('bold-italic-hebrew', 'x: שלום {style.bold: true; style.italic: true}');
+
 export const catalog = entries;

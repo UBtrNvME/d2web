@@ -24,5 +24,6 @@ export const families = {
   color: ['Colour forms', 'Named, short hex and transparent colours, and linear and radial gradients on fills, strokes, containers and edges. D2 resolves them into the scene.'],
   table: ['Tables and classes', '`sql_table` columns and constraints, `class` members and visibility, with edges between columns.'],
   effects: ['Style combinations', 'Effects on containers and shapes (3d, multiple, shadow, double border, radius, opacity, dash) and combined style blocks.'],
+  unicode: ['Unicode families', 'Hebrew, Arabic, mixed direction, Japanese, Cyrillic, Greek, accents and outline emoji. Native D2 chooses host fonts, so these are checked against the advances D2 computed, with the consumer fonts (spec 0007): no warning, no .notdef glyph, and the browser width with kerning off equals the scene advance sum (the pair kerning the browser adds is recorded, not required to match). Thai and Devanagari have no fixture font yet.'],
   animation: ['Animation', 'Animated edges. The scene carries typed tracks; the mount runs each as a Web Animation (spec 0005) and the case is compared with native at a shared moment (500 ms).'],
 };

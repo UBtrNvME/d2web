@@ -286,5 +286,15 @@
  "effects/opacity-container": "ok",
  "effects/stroke-dash-edges": "ok",
  "effects/near-object-container": "ok",
- "effects/combined-style": "ok"
+ "effects/combined-style": "ok",
+ "unicode/hebrew": "scene-checked",
+ "unicode/arabic": "scene-checked",
+ "unicode/mixed-direction": "scene-checked",
+ "unicode/japanese": "scene-checked",
+ "unicode/cyrillic-greek": "scene-checked",
+ "unicode/accents": "scene-checked",
+ "unicode/emoji-outline": "scene-checked",
+ "unicode/rtl-in-container": "scene-checked",
+ "unicode/cjk-edge-label": "scene-checked",
+ "unicode/bold-italic-hebrew": "scene-checked"
 }

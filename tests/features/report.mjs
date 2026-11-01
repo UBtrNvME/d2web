@@ -13,7 +13,7 @@ const read = name => JSON.parse(readFileSync(join(root, 'artifacts/feature-map',
 const note = id => notes.find(n => n.match.test(id))?.text ?? '';
 const design = id => byDesign.find(d => d.match.test(id));
 const statusOf = (id, paint) => (design(id) ? 'web-native' : paint[id]?.status ?? 'missing');
-const closed = s => s === 'ok' || s === 'web-native' || s === 'equivalent';
+const closed = s => s === 'ok' || s === 'web-native' || s === 'equivalent' || s === 'scene-checked';
 const esc = s => String(s).replaceAll('|', '\\|').replaceAll('\n', ' ');
 const difference = p => p.ratio === undefined ? esc(p.detail ?? '') : `${(100 * p.ratio).toFixed(1)} % of image, ${(100 * p.inkRatio).toFixed(0)} % of ink`;
 
@@ -29,7 +29,7 @@ export function writeReport() {
     '- **ok**: at most 5 % of all pixels differ (ADR 0002/0007 bar) and at most 25 % of the inked pixels differ (a stricter, proposed second bar, because a missing label hides inside a small board\'s whole-image ratio).',
     '- **web-native**: native paints a static artefact (a badge, a footnote) where the web has its own natural behaviour; the difference is intended and not counted as a gap. The rule: D2 should be natural on the web, not look like native SVG (see [the web forms](#natural-web-forms) and ADR 0009).',
     '- **equivalent**: the strict bars fail, but every differing pixel has a matching pixel within one pixel in the other image (and the same bars hold on that tolerant count): the same drawing with glyph or curve edges rasterised slightly apart. Closed, not a gap; the screenshots are kept in `artifacts/feature-map/shots`.',
-    '- **differs**, **size-mismatch**: measured gaps. **no-native**: native D2 cannot render the same options. Link and tooltip behaviour (hover, click) is browser interaction and is not covered by the pixel comparison.',
+    '- **scene-checked**: native D2 uses host fonts for this text, so the case is checked against the advances D2 computed, with the consumer fonts (no warning, no .notdef, browser width equals the scene advance sum), not native pixels. **differs**, **size-mismatch**: measured gaps. **no-native**: native D2 cannot render the same options. Link and tooltip behaviour (hover, click) is browser interaction and is not covered by the pixel comparison.',
     '- Mechanism: `scene-paint` arrives as scene primitives the painter draws; `compile-only` is resolved by D2 while compiling; `interaction` also needs browser behaviour.',
     '- Chromium only, one machine, offline worker (remote images become placeholders), TALA seed 1 unless the case names an engine. Every case compares root; the Boards family also compares every non-root board with the same thresholds. Extra board rows are listed separately and do not change catalog coverage or rollup counts. **missing** means not yet measured.', '');
   const rows = [];
@@ -37,10 +37,11 @@ export function writeReport() {
   for (const [family, entries] of byFamily) {
     const c = {};
     for (const e of entries) { const s = statusOf(e.id, paint); c[s] = (c[s] ?? 0) + 1; counts[s] = (counts[s] ?? 0) + 1; }
-    rows.push(`| ${families[family]?.[0] ?? family} | ${entries.length} | ${(c.ok ?? 0) + (c['web-native'] ?? 0) + (c.equivalent ?? 0)} | ${entries.length - (c.ok ?? 0) - (c['web-native'] ?? 0) - (c.equivalent ?? 0)} |`);
+    const n = Object.entries(c).filter(([k]) => closed(k)).reduce((a, [, v]) => a + v, 0);
+    rows.push(`| ${families[family]?.[0] ?? family} | ${entries.length} | ${n} | ${entries.length - n} |`);
   }
   const total = catalog.length;
-  out.push(`## Rollup: ${(counts.ok ?? 0) + (counts['web-native'] ?? 0) + (counts.equivalent ?? 0)} of ${total} cases ok, equivalent or web-native`, '', '| Family | Cases | closed | open |', '| --- | --- | --- | --- |', ...rows, '',
+  out.push(`## Rollup: ${Object.entries(counts).filter(([k]) => closed(k)).reduce((a, [, v]) => a + v, 0)} of ${total} cases ok, equivalent, scene-checked or web-native`, '', '| Family | Cases | closed | open |', '| --- | --- | --- | --- |', ...rows, '',
     `Statuses: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(', ')}.`, '');
   out.push(...forms);
   for (const [family, entries] of byFamily) {
