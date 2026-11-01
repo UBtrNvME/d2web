@@ -17,6 +17,8 @@ const beforeBundle = (await build({
 const host = '<div id="a" style="position:absolute;left:0;top:0"></div>';
 const code = 'const n = 1;\n  // two';
 const codeSource = text => 'c: |`ts\n' + text + '\n`|';
+const markdown = '# Title\n\n## Sub\n\nSome **bold** and *it* and `code` and [link](https://x.test)\n\n- one\n- two\n\n1. first\n2. second\n\n> quote\n\n---\n\n```\nline one\nline two\n```';
+const markdownSource = text => 'md: |md\n' + text + '\n|';
 
 async function ready(page, source, options = {}) {
   await open(page, { body: host });
@@ -88,12 +90,83 @@ test('multiline class header stays one columnheader; accessibility opt-out keeps
   await expect(page.locator('#a [data-id="t:class-field:0:name"] [data-k="text"]')).toHaveText('field');
 });
 
+test('markdown: semantic blocks and inline runs retain D2 text, IDs, names and link focus', async ({ page, browserName }) => {
+  const association = await ready(page, markdownSource(markdown));
+  const group = page.locator('#a [data-id="md"][role="group"]');
+  await expect(group).toHaveAttribute('aria-label', markdown);
+  for (const [selector, text] of [['h1', 'Title'], ['h2', 'Sub'], ['strong', 'bold'], ['em', 'it'], ['code:not(pre code)', 'code'], ['blockquote', 'quote']]) {
+    expect(await group.locator(selector).evaluate(el => el.innerText.trim())).toBe(text);
+  }
+  expect((await group.locator('ul > li').allInnerTexts()).map(s => s.trim())).toEqual(['one', 'two']);
+  // Keep D2's painted ordered markers as text; display:contents adds no browser markers.
+  expect((await group.locator('ol > li').allInnerTexts()).map(s => s.trim().split(/\n+/))).toEqual([['1.', 'first'], ['2.', 'second']]);
+  await expect(group.locator('hr')).toHaveCount(1);
+  expect(await group.locator('pre > code').evaluate(el => el.innerText.trim().split(/\n+/))).toEqual(['line one', 'line two']);
+  const link = group.locator('a[href="https://x.test"]');
+  await expect(link).toHaveCount(1);
+  expect(await link.evaluate(el => el.innerText.trim())).toBe('link');
+  await expect(page.locator('#a a[href="https://x.test"]')).toHaveCount(1);
+  await expect(link).toHaveAttribute('aria-label', markdown);
+  await expect(link.locator(':scope > span')).toHaveCount(1);
+  await page.route('https://x.test/**', route => route.abort());
+  await link.evaluate(el => el.addEventListener('click', e => e.preventDefault()));
+  await link.locator(':scope > span').click();
+  expect(await page.evaluate(() => clicked)).toEqual(['md']);
+  await page.evaluate(() => { clicked.length = 0; });
+  // Safari leaves links out of the Tab order unless the user enables it (links.spec.mjs).
+  if (browserName !== 'webkit') { await group.focus(); await page.keyboard.press('Tab'); await expect(link).toBeFocused(); }
+  const out = await group.evaluate(el => ({
+    ids: [...el.querySelectorAll('[data-id]')].map(e => e.dataset.id),
+    copy: el.innerText.trim().split(/\n+/),
+  }));
+  expect(out.ids).toEqual(association.objects.find(o => o.id === 'md').nodes.slice(1));
+  expect(out.copy).toEqual(['Title', 'Sub', 'Some ', 'bold', ' and ', 'it', ' and ', 'code', ' and ', 'link', 'one', 'two', '1.', 'first', '2.', 'second', 'quote', 'line one', 'line two']);
+  await group.locator('strong [data-k="text"]').click({ force: true });
+  expect(await page.evaluate(() => clicked)).toEqual(['md']);
+});
+
+test('markdown: h3 is 20px; small headings and ambiguous structures stay unwrapped', async ({ page }) => {
+  await ready(page, markdownSource('### Third\n\n#### Fourth\n\n##### Fifth\n\n###### Sixth\n\n- outer\n  - nested\n\n- first\n  continuation\n\n~~unknown~~'));
+  await expect(page.locator('#a h3')).toHaveText('Third');
+  await expect(page.locator('#a h4, #a h5, #a h6, #a ul, #a ol, #a strong, #a em, #a pre')).toHaveCount(0);
+  expect(await page.locator('#a [data-id="md:markdown"] [data-k="text"]').allTextContents()).toContain('Fourth\n');
+});
+
+test('markdown: missing or contradictory source leaves painted runs unwrapped', async ({ page }) => {
+  await ready(page, markdownSource(markdown));
+  for (const label of [undefined, 'unrecognised markdown']) {
+    await page.evaluate(async label => {
+      m.dispose(); result.boards[0].association.objects.find(o => o.id === 'md').label = label;
+      m = d2web.mount(document.getElementById('a')); await m.update(result);
+    }, label);
+    await expect(page.locator('#a h1, #a h2, #a ul, #a ol, #a blockquote, #a hr, #a pre, #a strong, #a em, #a code')).toHaveCount(0);
+    await expect(page.locator('#a [data-id="md:markdown"] [data-k="text"]')).toHaveCount(19);
+    await expect(page.locator('#a a[href="https://x.test"]')).toHaveCount(1);
+  }
+});
+
+test('markdown: fenced literals are not headings or emphasis; inline links reuse href safety', async ({ page }) => {
+  await ready(page, markdownSource('```\n# literal\n\n**literal**\n```\n\n[link](https://x.test)'));
+  await expect(page.locator('#a h1, #a strong')).toHaveCount(0);
+  await page.evaluate(async () => {
+    m.dispose();
+    const board = result.boards[0];
+    board.scene.Links[0].URL = 'javascript:alert(1)';
+    board.association.objects.find(o => o.id === 'md').label = board.association.objects.find(o => o.id === 'md').label.replace('https://x.test', 'javascript:alert(1)');
+    m = d2web.mount(document.getElementById('a')); await m.update(result);
+  });
+  await expect(page.locator('#a a')).toHaveCount(1);
+  await expect(page.locator('#a a')).not.toHaveAttribute('href');
+  // An unsafe URL is never wrapped around the text; the region anchor stays, without href, named after its object (links.spec.mjs).
+  await expect(page.locator('#a a')).toHaveAttribute('aria-label', /\[link\]\(javascript:alert\(1\)\)/);
+});
+
 test('C1: every content, table and shape case matches the checkpoint painter', async ({ page }, testInfo) => {
   test.setTimeout(10 * 60_000);
   await open(page, { body: host });
   await page.addScriptTag({ content: beforeBundle });
   const deltas = [];
-  for (const entry of catalog.filter(e => ['content', 'table', 'shape'].includes(e.family))) {
+  for (const entry of [...catalog.filter(e => ['content', 'table', 'shape'].includes(e.family)), { id: 'markdown-semantic-sample', source: markdownSource(markdown) }]) {
     await page.evaluate(async entry => {
       window.result = await compile(entry.source, { ...entry.render, request: { ...(entry.layout ? { layout: entry.layout } : {}), files: { 'main.d2': entry.source, ...entry.files } } });
       if (result.error) throw new Error(JSON.stringify(result.error));

@@ -249,9 +249,131 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const linkName = l => { const n = objectFor(l); return n ? nameOf(n) : ''; };
   if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
+  const usedLinks = new Set();
+  const contents = (tag, body) => `<${tag} style="display:contents;font:inherit;color:inherit;text-decoration:none">${body}</${tag}>`;
+
+  function markdownHtml(n, children) {
+    const owner = (scene.Root.Children ?? []).find(o => o.Children?.includes(n));
+    const source = info.get(owner?.ID)?.label;
+    if (!source || info.get(owner.ID)?.content !== 'markdown') return null;
+    // Pinned to D2 v0.9.0: github-markdown.css:31,70-75,233-265 (16px base; h1..h6 = 32,24,20,16,14,13.6).
+    // shortcut: only unambiguous single-line blocks and literal fences; nested/continued blocks need D2 block provenance.
+    if (children.some((c, i) => c.ID !== `${n.ID}:primitive:${i}` || !isIdentity(c.Transform) || c.Children?.length || c.Filters?.length || c.Clip || c.Mask || c.Blend || c.Animations?.length || !['TextRun', 'Rect'].includes(c.Primitive?.$))) return null;
+    const headings = new Set(), paragraphs = new Set(), quotes = new Set(), lists = new Set(), fences = new Set();
+    const lines = source.replace(/\r\n?/g, '\n').split('\n'), prose = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^ {0,3}(?:`{3,}|~{3,})/.test(lines[i])) { prose.push(lines[i]); continue; }
+      if (!/^```[\w-]*$/.test(lines[i])) return null;
+      const start = ++i;
+      while (i < lines.length && lines[i] !== '```') i++;
+      if (i === lines.length) return null;
+      fences.add(lines.slice(start, i).join('\n')); prose.push('', '');
+    }
+    let rule = false;
+    for (const block of prose.join('\n').split(/\n[ \t]*\n/)) {
+      const lines = block.split('\n');
+      if (lines.every(s => /^[-+*] \S/.test(s)) || lines.every(s => /^\d+\. \S/.test(s))) { lists.add(block); continue; }
+      while (/^#{1,6} \S/.test(lines[0] ?? '')) headings.add(lines.shift());
+      if (lines.length !== 1) continue;
+      if (/^> \S/.test(lines[0])) quotes.add(lines[0]);
+      else if (/^(---+|\*\*\*+|___+)$/.test(lines[0])) rule = true;
+      else if (!/^[\s#>*_`~|+-]/.test(lines[0])) paragraphs.add(lines[0]);
+    }
+    const width = primBounds(n.Clip?.Path)?.[2];
+    const translation = [scene.Root, owner, n].every(o => o.Transform.A === 1 && o.Transform.D === 1 && o.Transform.B === 0 && o.Transform.C === 0);
+    const dx = translation ? scene.Root.Transform.E + owner.Transform.E + n.Transform.E : 0;
+    const dy = translation ? scene.Root.Transform.F + owner.Transform.F + n.Transform.F : 0;
+    const mono = p => p?.Font?.Asset === 'font:SourceCodePro:regular' && p.Font.Size === 13.6;
+    const rowEnd = start => { let end = start; const y = children[start]?.Primitive?.Origin?.Y; while (children[end]?.Primitive?.$ === 'TextRun' && children[end].Primitive.Origin.Y === y) end++; return end; };
+    const textOf = nodes => nodes.filter(c => c.Primitive.$ === 'TextRun').map(c => c.Primitive.Text).join('');
+    // Reconstruct only a candidate spelling from painted fonts/regions, then require an exact source block match.
+    const inline = nodes => {
+      const marks = new Map(); let spelling = '';
+      for (const c of nodes) {
+        const p = c.Primitive;
+        if (p.$ !== 'TextRun') continue;
+        let tag = '', text = p.Text, link;
+        if (p.Font.Asset === 'font:SourceSansPro:bold' && p.Font.Size === 16) { tag = 'strong'; text = `**${text}**`; }
+        else if (p.Font.Asset === 'font:SourceSansPro:italic' && p.Font.Size === 16) { tag = 'em'; text = `*${text}*`; }
+        else if (mono(p) && nodes.some(c => c.Primitive.$ === 'Rect' && c.Primitive.Box.X <= p.Origin.X && c.Primitive.Box.X + c.Primitive.Box.Width > p.Origin.X && c.Primitive.Box.Y < p.Origin.Y && c.Primitive.Box.Y + c.Primitive.Box.Height > p.Origin.Y)) { tag = 'code'; text = '`' + text + '`'; }
+        else if (p.Font.Asset !== 'font:SourceSansPro:regular' || p.Font.Size !== 16) return null;
+        if (!tag && translation) {
+          const ink = p.Ink;
+          const matches = (scene.Links ?? []).filter(l => l.URL && ink?.Valid && Math.abs(l.Box.X - dx - ink.Min.X) < .001 && Math.abs(l.Box.Y - dy - ink.Min.Y) < .001 && Math.abs(l.Box.Width - (ink.Max.X - ink.Min.X)) < .001 && Math.abs(l.Box.Height - (ink.Max.Y - ink.Min.Y)) < .001);
+          if (matches.length === 1) { link = matches[0]; tag = 'a'; text = `[${text}](${link.URL})`; }
+        }
+        spelling += text;
+        if (tag) marks.set(c, { tag, link });
+      }
+      return { spelling, marks };
+    };
+    const render = (nodes, marks = new Map()) => nodes.map(c => {
+      let body = nodeHtml(c);
+      const mark = marks.get(c);
+      if (!mark) return body;
+      const l = mark.link;
+      if (!l) return contents(mark.tag, body);
+      usedLinks.add(l);
+      // Move the existing hit region into the text anchor; no second anchor or keyboard stop.
+      // No data-k=link here: mount resolves these nested hits through their object, rather than treating local coordinates as scene coordinates.
+      body += `<span style="position:absolute;left:${px(l.Box.X - dx)};top:${px(l.Box.Y - dy)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></span>`;
+      // A positioned anchor at the same origin stays focusable even in browsers that cannot focus display:contents.
+      return `<a${hrefOf(l.URL) ? ` href="${esc(l.URL)}"` : ''}${linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:0;top:0;font:inherit;color:inherit;text-decoration:none">${body}</a>`;
+    }).join('');
+    let body = '';
+    for (let i = 0; i < children.length;) {
+      const p = children[i].Primitive, next = children[i + 1]?.Primitive;
+      const level = p.$ === 'TextRun' && p.Font.Asset === 'font:SourceSansPro:semibold' ? ({ 32: 1, 24: 2, 20: 3 })[p.Font.Size] : 0;
+      if (level && p.Origin.X === 0 && headings.has(`${'#'.repeat(level)} ${p.Text}`)) {
+        const end = i + (level < 3 && next?.$ === 'Rect' && next.Box.X === 0 && next.Box.Width === width && next.Box.Height === 1 ? 2 : 1);
+        body += contents(`h${level}`, render(children.slice(i, end))); i = end; continue;
+      }
+      const bullet = q => q?.$ === 'Rect' && q.Box.X === 15 && q.Box.Width === 5 && q.Box.Height === 5;
+      const ordered = q => q?.$ === 'TextRun' && /^\d+\.$/.test(q.Text) && q.Origin.X > 0 && q.Origin.X < 32 && q.Font.Size === 16;
+      if (bullet(p) || ordered(p)) {
+        const tag = bullet(p) ? 'ul' : 'ol', items = []; let end = i;
+        while ((tag === 'ul' ? bullet : ordered)(children[end]?.Primitive)) {
+          const marker = children[end].Primitive, first = children[end + 1]?.Primitive;
+          if (first?.$ !== 'TextRun' || first.Origin.X !== 32 || (tag === 'ol' && first.Origin.Y !== marker.Origin.Y)) break;
+          const stop = rowEnd(end + 1), nodes = children.slice(end, stop), line = inline(nodes.slice(1));
+          if (!line) break;
+          items.push({ nodes, line, prefix: tag === 'ul' ? '- ' : marker.Text + ' ' }); end = stop;
+        }
+        if (items.length && lists.has(items.map(item => item.prefix + item.line.spelling).join('\n'))) {
+          body += contents(tag, items.map(item => contents('li', render(item.nodes, item.line.marks))).join('')); i = end; continue;
+        }
+      }
+      if (p.$ === 'Rect' && p.Box.X === 0 && p.Box.Width === width && p.Box.Height === 4 && rule) {
+        body += '<hr style="display:contents">' + nodeHtml(children[i++]); continue;
+      }
+      if (p.$ === 'Rect' && p.Box.X === 0 && p.Box.Width === width && p.Box.Height > 32 && p.RadiusX === 6) {
+        let end = i + 1;
+        while (mono(children[end]?.Primitive) && children[end].Primitive.Origin.X === 16 && children[end].Primitive.Origin.Y > p.Box.Y && children[end].Primitive.Origin.Y < p.Box.Y + p.Box.Height) end++;
+        if (end > i + 1 && fences.has(children.slice(i + 1, end).map(c => c.Primitive.Text).join('\n'))) {
+          body += contents('pre', contents('code', render(children.slice(i, end)))); i = end; continue;
+        }
+      }
+      if (p.$ === 'TextRun' && p.Origin.X === 20) {
+        const end = rowEnd(i), border = children[end]?.Primitive, nodes = children.slice(i, end);
+        if (border?.$ === 'Rect' && border.Box.X === 0 && border.Box.Width === 4 && border.Box.Y < p.Origin.Y && border.Box.Y + border.Box.Height > p.Origin.Y && quotes.has('> ' + textOf(nodes))) {
+          body += contents('blockquote', render(children.slice(i, end + 1))); i = end + 1; continue;
+        }
+      }
+      let start = i;
+      while (children[start]?.Primitive.$ === 'Rect' && children[start].Primitive.Box.X > 0) start++;
+      if (children[start]?.Primitive.$ === 'TextRun' && children[start].Primitive.Origin.X === 0) {
+        const end = rowEnd(start), nodes = children.slice(i, end), line = inline(nodes);
+        if (line && paragraphs.has(line.spelling)) { body += render(nodes, line.marks); i = end; continue; }
+      }
+      body += nodeHtml(children[i++]);
+    }
+    return body;
+  }
+
   // Table/line wrappers do not shift coordinates; the code pre shares the object's origin.
   function childrenHtml(n) {
     const children = kids(n);
+    if (n.ID?.endsWith(':markdown')) { const body = markdownHtml(n, children); if (body !== null) return body; }
     if (children.some(c => c.ID === `${n.ID}:code-background`)) {
       const lines = new Map();
       const other = [];
@@ -350,8 +472,8 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   }
 
   if (html) {
-    const links = (scene.Links ?? []).map(l => `<a data-k="link" ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     const body = nodeHtml(scene.Root);
+    const links = (scene.Links ?? []).filter(l => !usedLinks.has(l)).map(l => `<a data-k="link" ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     let sx = scene.LogicalWidth / v.Width, sy = scene.LogicalHeight / v.Height;
     if (scene.ViewportFit) sx = sy = Math.min(sx, sy);
     const centered = scene.ViewportFit && scene.ViewportAlign;
