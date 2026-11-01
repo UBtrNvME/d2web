@@ -7,6 +7,10 @@ const BLEND = ['normal', 'multiply', 'darken', 'color-burn', 'overlay', 'lighten
 const CAP = ['butt', 'round', 'square'];
 const JOIN = ['miter', 'round', 'bevel'];
 const SPREAD = ['pad', 'reflect', 'repeat'];
+// A D2 link is author text. A scheme that runs script in the page (javascript:, vbscript:) or loads a document (data:) is never put in `href`; the anchor keeps its
+// name and tooltip. The URL parser strips the whitespace and control characters browsers ignore, so `java\tscript:` is caught as well.
+// shortcut: a denylist of three schemes, not an allowlist, so mailto:, tel: and relative links keep working; tighten if consumers need an allowlist.
+const hrefOf = url => { try { return ['javascript:', 'vbscript:', 'data:'].includes(new URL(url, 'https://base.invalid/').protocol) ? '' : url; } catch { return url; } };
 const esc = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const num = n => +n.toFixed(5);
 const matrix = m => `matrix(${[m.A, m.B, m.C, m.D, m.E, m.F].map(num).join(' ')})`;
@@ -297,7 +301,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   }
 
   if (html) {
-    const links = (scene.Links ?? []).map(l => `<a data-k="link" ${l.URL ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
+    const links = (scene.Links ?? []).map(l => `<a data-k="link" ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     const body = nodeHtml(scene.Root);
     let sx = scene.LogicalWidth / v.Width, sy = scene.LogicalHeight / v.Height;
     if (scene.ViewportFit) sx = sy = Math.min(sx, sy);
