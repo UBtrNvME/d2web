@@ -306,3 +306,18 @@ test('a multi-line label is one paragraph whose text is D2\'s lines, and nothing
   expect((await paragraphs.first().evaluate(el => el.textContent)).replace(/\n$/, '')).toBe('line one\nline two\nline three');
   expect(await paragraphs.first().evaluate(el => getComputedStyle(el).display)).toBe('contents');
 });
+
+test('copying a multi-line label gives D2\'s lines', async ({ page }) => {
+  await ready(page, 'x: "line one\\nline two\\nline three"');
+  const runs = page.locator('#a [data-label] [data-k="text"]');
+  const first = await runs.first().boundingBox(), last = await runs.last().boundingBox();
+  await page.mouse.move(first.x + 1, first.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(last.x + last.width - 1, last.y + last.height - 2, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.press('ControlOrMeta+c');
+  // The browser's own copy, read back by pasting into a textarea (the copy event itself carries nothing until the default action runs).
+  await page.evaluate(() => { const t = document.createElement('textarea'); t.id = 'paste'; t.style.cssText = 'position:fixed;right:0;bottom:0'; document.body.append(t); t.focus(); });
+  await page.keyboard.press('ControlOrMeta+v');
+  expect((await page.locator('#paste').inputValue()).replace(/\n+$/, '')).toBe('line one\nline two\nline three');
+});

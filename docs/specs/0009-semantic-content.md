@@ -116,4 +116,4 @@ Limits (second pass): a tooltip now flips toward the board's middle (right-align
 
 ## Stage C: multi-line labels (2 November 2026)
 
-D2 emits a multi-line label as one text run per line (`label:0`, `label:1`, ...). Consecutive runs of one label are now wrapped in `<div role="paragraph" data-label style="display:contents">`, so the label is one element whose text is D2's lines in order. `display:contents` moves nothing (C1 pixel delta 0); one-line labels get no wrapper.
+D2 emits a multi-line label as one text run per line (`label:0`, `label:1`, ...). Consecutive runs of one label are now wrapped in `<div role="paragraph" data-label style="display:contents">`, so the label is one element whose text is D2's lines in order. `display:contents` moves nothing (C1 pixel delta 0); one-line labels get no wrapper. A real drag-select, copy and paste of a three-line label returns D2's lines in Chromium, Firefox and WebKit (tested).
