@@ -1,0 +1,41 @@
+name: Demo
+
+# Publishes the demo page and the built package (wasm worker included) to GitHub Pages. The page and everything it loads are served from the same origin.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      - run: mise run setup
+      - run: mise run build
+      - run: |
+          mkdir _site
+          cp packages/d2web/dist/{index.js,worker.js,wasm_exec.js,d2web.wasm,NOTICE.txt} _site/
+          cp packages/d2web/demo/index.html _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
