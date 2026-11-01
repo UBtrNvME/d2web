@@ -20,6 +20,9 @@ export interface ClientOptions {
   // Spec 0007: fallback fonts the consumer approves (ADR 0006). Fetched once, on the first compile, checked against `sha256` when given, then handed to
   // every worker before its first compile. Nothing outside this list is ever fetched.
   fonts?: FontSpec[];
+  // D2's own Noto Color Emoji file, for colour emoji (docs/upstream/d2fonts-wasm-supply-bundled-emoji.patch; only a patched build accepts it). Same fetch and
+  // checksum rules as `fonts`; D2 also checks the bytes against its pinned hash, so any other file is refused.
+  emoji?: FontSpec;
   // The fetch used for `fonts` (default: the page's); a hook for tests and consumers that cache elsewhere.
   fetch?: (url: string) => Promise<Response>;
 }
@@ -37,11 +40,12 @@ export class FontError extends Error {}
 interface Job { request: CompileRequest; resolve: (r: CompileResult) => void; reject: (e: unknown) => void; started: number; timer?: ReturnType<typeof setTimeout> }
 
 // Spec 0001 section 3.4: one compile at a time, latest request wins, no cooperative cancel (abort = terminate and respawn).
-export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, fetch: fetchFont = u => fetch(u) }: ClientOptions) {
+export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, emoji, fetch: fetchFont = u => fetch(u) }: ClientOptions) {
   const listed = fonts === undefined ? undefined : normalizeFonts(fonts);
+  const emojiSpec = emoji === undefined ? undefined : normalizeFonts([emoji])[0];
   let fontBytes: Promise<FontsMessage> | undefined;
   const sent = new WeakSet<object>();
-  const loadFonts = () => (fontBytes ??= Promise.all(listed!.map(async f => {
+  const fetchBytes = async (f: FontSpec) => {
     const response = await fetchFont(f.url).catch(e => { throw new FontError(`font ${f.name}: ${(e as Error).message}`); });
     if (!response.ok) throw new FontError(`font ${f.name}: ${f.url} answered ${response.status}`);
     const data = new Uint8Array(await response.arrayBuffer());
@@ -49,8 +53,12 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].map(b => b.toString(16).padStart(2, '0')).join('');
       if (hex !== f.sha256) throw new FontError(`font ${f.name}: checksum mismatch (got ${hex})`);
     }
-    return { name: f.name, data };
-  })).then(list => ({ type: 'fonts' as const, fonts: list })));
+    return data;
+  };
+  const loadFonts = () => (fontBytes ??= Promise.all([
+    Promise.all((listed ?? []).map(async f => ({ name: f.name, data: await fetchBytes(f) }))),
+    emojiSpec ? fetchBytes(emojiSpec) : undefined,
+  ]).then(([list, emojiData]) => ({ type: 'fonts' as const, fonts: list, ...(emojiData ? { emoji: emojiData } : {}) })));
   let worker: WorkerLike;
   let ready: Promise<WorkerReady>;
   let running: Job | null = null;
@@ -107,7 +115,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         return pump();
       }
       const budget = job.request.budgets!.maxLayoutMillis!;
-      if (listed?.length && !sent.has(mine)) {
+      if ((listed?.length || emojiSpec) && !sent.has(mine)) {
         job.timer = timeout(silentTimeoutMs, 'fonts not loaded');
         try { mine.postMessage(await loadFonts()); sent.add(mine); clearTimeout(job.timer); } catch (error) { if (running === job) { settle(job); job.reject(error); pump(); } return; }
         if (running !== job || mine !== worker) return;

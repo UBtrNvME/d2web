@@ -42,6 +42,15 @@ func init() {
 			}
 			return ""
 		}))
+		// d2webSetEmoji(buffer: Uint8Array) -> "" or an error message: D2's own Noto Color Emoji file, for its trusted emoji path.
+		js.Global().Set("d2webSetEmoji", js.FuncOf(func(this js.Value, args []js.Value) any {
+			data := make([]byte, args[0].Get("length").Int())
+			js.CopyBytesToGo(data, args[0])
+			if err := compile.SetEmoji(data); err != nil {
+				return err.Error()
+			}
+			return ""
+		}))
 		select {}
 	}
 }

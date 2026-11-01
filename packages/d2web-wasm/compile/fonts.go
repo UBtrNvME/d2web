@@ -67,6 +67,27 @@ func SetFonts(list []FontInput) error {
 	return nil
 }
 
+var emojiSet bool
+
+func emojiSupplied() bool {
+	fontsMu.Lock()
+	defer fontsMu.Unlock()
+	return emojiSet
+}
+
+// SetEmoji hands D2 its own Noto Color Emoji file (the consumer fetched it; D2 authenticates the bytes against its pinned hash). Empty clears it.
+func SetEmoji(data []byte) error {
+	if len(data) > 0 {
+		if err := supplyEmoji(data); err != nil {
+			return err
+		}
+	}
+	fontsMu.Lock()
+	emojiSet = len(data) > 0
+	fontsMu.Unlock()
+	return nil
+}
+
 func (f fontFace) covers(r rune) bool {
 	var buf sfnt.Buffer
 	index, err := f.face.GlyphIndex(&buf, r)

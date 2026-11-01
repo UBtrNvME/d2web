@@ -82,7 +82,7 @@ export interface CompileResult {
 
 // Spec 0007: a fallback font the consumer approved (ADR 0006); the client fetches it, checks `sha256` when given and posts the bytes to the worker once.
 export interface FontSpec { name: string; url: string; sha256?: string }
-export interface FontsMessage { type: 'fonts'; fonts: { name: string; data: Uint8Array }[] }
+export interface FontsMessage { type: 'fonts'; fonts: { name: string; data: Uint8Array }[]; emoji?: Uint8Array }
 // The worker's answer to a fonts message: `error` is the reason the wasm refused them (a file that is not a font).
 export interface FontsAck { type: 'fonts'; error: string }
 

@@ -1,0 +1,85 @@
+diff --git a/d2renderers/d2fonts/noto_color_emoji_wasm.go b/d2renderers/d2fonts/noto_color_emoji_wasm.go
+index fd945c9..1b70915 100644
+--- a/d2renderers/d2fonts/noto_color_emoji_wasm.go
++++ b/d2renderers/d2fonts/noto_color_emoji_wasm.go
+@@ -2,8 +2,36 @@
+ 
+ package d2fonts
+ 
+-// The wasm host supplies resolved font data, so this build omits the bundled
+-// Noto Color Emoji payload.
++import (
++	"sync"
++
++	"github.com/d2lang/d2/d2renderers/internal/fontface"
++)
++
++var suppliedEmoji struct {
++	sync.Mutex
++	data []byte
++}
++
++// SetBundledNotoColorEmoji lets the wasm host supply D2's pinned Noto Color
++// Emoji file, which this build does not embed. The bytes are authenticated
++// against D2's registered size and SHA-256 exactly as the native loader does,
++// so any other font is refused.
++func SetBundledNotoColorEmoji(data []byte) error {
++	canonical, err := fontface.RegisterOwnedBundledNotoColorEmoji(data)
++	if err != nil {
++		return err
++	}
++	suppliedEmoji.Lock()
++	suppliedEmoji.data = canonical
++	suppliedEmoji.Unlock()
++	return nil
++}
++
++// The wasm host supplies the payload through SetBundledNotoColorEmoji; until
++// it does, this build has none.
+ func bundledNotoColorEmoji() ([]byte, error) {
+-	return nil, nil
++	suppliedEmoji.Lock()
++	defer suppliedEmoji.Unlock()
++	return suppliedEmoji.data, nil
+ }
+diff --git a/d2renderers/internal/fontface/noto_color_emoji_native.go b/d2renderers/internal/fontface/noto_color_emoji_native.go
+index 48bd1e8..81f8998 100644
+--- a/d2renderers/internal/fontface/noto_color_emoji_native.go
++++ b/d2renderers/internal/fontface/noto_color_emoji_native.go
+@@ -1,5 +1,3 @@
+-//go:build !js || !wasm
+-
+ package fontface
+ 
+ import (
+diff --git a/d2renderers/internal/fontface/noto_color_emoji_wasm.go b/d2renderers/internal/fontface/noto_color_emoji_wasm.go
+deleted file mode 100644
+index 3bbd905..0000000
+--- a/d2renderers/internal/fontface/noto_color_emoji_wasm.go
++++ /dev/null
+@@ -1,25 +0,0 @@
+-//go:build js && wasm
+-
+-package fontface
+-
+-import "crypto/sha256"
+-
+-// The wasm host supplies resolved font data, so this build omits the private
+-// bundled Noto Color Emoji validation face.
+-func registerAuthenticatedBundledNotoColorEmoji(data []byte, _ [sha256.Size]byte) ([]byte, error) {
+-	return data, nil
+-}
+-
+-func RegisterOwnedBundledNotoColorEmoji(data []byte) ([]byte, error) { return data, nil }
+-
+-func RegisteredBundledNotoColorEmoji(_ []byte, _ uint16) (*BundledNotoColorEmojiSource, bool, error) {
+-	return nil, false, nil
+-}
+-
+-func RegisteredBundledNotoColorEmojiBackingDigest(_ []byte) ([sha256.Size]byte, bool) {
+-	return [sha256.Size]byte{}, false
+-}
+-
+-func compilePrivateBundledNotoColorEmojiCOLRv1Plan(_ uint32, _ trustedCOLRv1Limits) (*COLRv1Plan, bool, error) {
+-	return nil, false, nil
+-}

@@ -12,7 +12,10 @@ importScripts(params.get('exec') ?? new URL('wasm_exec.js', self.location.href).
   while (!self.d2webReady) await new Promise(resolve => setTimeout(resolve, 2));
   onmessage = async event => {
     // Spec 0007: the client posts the consumer's fallback fonts once per worker, before the first compile.
-    if (event.data.type === 'fonts') return postMessage({ type: 'fonts', error: self.d2webSetFonts(event.data.fonts.map(f => f.name), event.data.fonts.map(f => f.data)) });
+    if (event.data.type === 'fonts') {
+      const error = self.d2webSetFonts(event.data.fonts.map(f => f.name), event.data.fonts.map(f => f.data)) || (event.data.emoji ? self.d2webSetEmoji(event.data.emoji) : '');
+      return postMessage({ type: 'fonts', error });
+    }
     postMessage(JSON.parse(await self.d2webCompile(JSON.stringify(event.data))));
   };
   postMessage(JSON.parse(self.d2webReady));

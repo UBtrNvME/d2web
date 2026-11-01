@@ -2,13 +2,15 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 import { goEnv, goRun, root } from '../../../../tests/examples.mjs';
+import { patches } from '../../../../tests/upstream-patches.mjs';
 
 // Shared by the Chromium specs of packages/d2web: builds the wasm and the package bundle once, routes them onto https://host.test, and
 // exposes `compile(source, render)` in the page (real client, real worker, real wasm).
 const module = join(root, 'packages/d2web-wasm');
 export const output = join(root, 'artifacts/d2web-browser');
 mkdirSync(output, { recursive: true });
-goRun('go', ['build', '-mod=readonly', '-o', join(output, 'd2web.wasm'), './cmd/d2web'], { cwd: module, env: { ...goEnv, GOOS: 'js', GOARCH: 'wasm' } });
+const emojiPatch = patches().some(p => p.file.endsWith('d2fonts-wasm-supply-bundled-emoji.patch') && p.state === 'applied');
+goRun('go', ['build', '-mod=readonly', ...(emojiPatch ? ['-tags', 'd2webpatched'] : []), '-o', join(output, 'd2web.wasm'), './cmd/d2web'], { cwd: module, env: { ...goEnv, GOOS: 'js', GOARCH: 'wasm' } });
 const goRoot = goRun('go', ['env', 'GOROOT'], { cwd: module, env: goEnv }).trim();
 const bundle = (await build({ entryPoints: [join(root, 'packages/d2web/src/index.ts')], bundle: true, format: 'iife', globalName: 'd2web', write: false })).outputFiles[0].text;
 

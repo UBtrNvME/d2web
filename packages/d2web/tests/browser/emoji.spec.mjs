@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { brotliDecompressSync } from 'node:zlib';
 import { goEnv, goRun, root } from '../../../../tests/examples.mjs';
+import { patches } from '../../../../tests/upstream-patches.mjs';
 import { open } from './harness.mjs';
 
 // Spec 0007, colour emoji: what pristine D2 does with consumer-listed emoji fonts, pinned as measured behaviour (not a promise that it is good).
@@ -14,12 +15,13 @@ import { open } from './harness.mjs';
 const d2Emoji = join(root, 'imports/d2/d2renderers/d2fonts/encoded/NotoColorEmoji-COLRv1-v2.051.ttf.br');
 const utils = goRun('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/go-text/typesetting-utils'], { cwd: join(root, 'packages/d2web-wasm'), env: { ...goEnv, GOFLAGS: '-mod=readonly' } }).trim();
 const cbdt = join(utils, 'opentype/bitmap/NotoColorEmoji.ttf');
+const emojiPatched = patches().some(p => p.file.endsWith('d2fonts-wasm-supply-bundled-emoji.patch') && p.state === 'applied');
 const source = 'x: \u{1F600}\u{1F680} launch';
 
-async function compileWith(page, bytes) {
+async function compileWith(page, bytes, asEmoji = false) {
   await page.route('https://host.test/fonts/**', route => route.fulfill({ body: bytes ?? Buffer.alloc(0), contentType: 'font/ttf' }));
-  return page.evaluate(async ({ source, listed }) => {
-    const client2 = d2web.createClient({ spawn: () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm'), fonts: listed ? [{ name: 'Emoji', url: '/fonts/emoji.ttf' }] : undefined });
+  return page.evaluate(async ({ source, listed, asEmoji }) => {
+    const client2 = d2web.createClient({ spawn: () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm'), ...(listed && asEmoji ? { emoji: { name: 'Emoji', url: '/fonts/emoji.ttf' } } : listed ? { fonts: [{ name: 'Emoji', url: '/fonts/emoji.ttf' }] } : {}) });
     const r = await client2.compile({ revision: 1, files: { 'main.d2': source }, entry: 'main.d2', layout: 'dagre', render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false } });
     client2.dispose();
     if (r.error) return { error: r.error.message };
@@ -28,7 +30,7 @@ async function compileWith(page, bytes) {
     walk(r.boards[0].scene.Root);
     const run = runs.find(p => p.Text.includes('\u{1F600}'));
     return { warnings: r.diagnostics.map(d => d.message), emojiAdvance: run.Glyphs[0].Advance, emojiAsset: run.Glyphs[0].Asset, fallbacks: run.Fallbacks.length };
-  }, { source, listed: bytes !== undefined });
+  }, { source, listed: bytes !== undefined, asEmoji });
 }
 
 test('no emoji font: emoji use the primary font placeholder advance', async ({ page }) => {
@@ -49,9 +51,22 @@ test('a bitmap emoji font is accepted but D2 still uses the placeholder glyph', 
 });
 
 test("D2's own COLRv1 emoji font fails the compile with D2's message", async ({ page }) => {
-  test.skip(!existsSync(d2Emoji), 'the D2 checkout is missing its bundled emoji font');
+  test.skip(!existsSync(d2Emoji) || emojiPatched, 'pristine-D2 behaviour: needs the checkout\'s emoji font and no bundled-emoji patch');
   test.setTimeout(120_000);
   await open(page, { body: '' });
   const out = await compileWith(page, brotliDecompressSync(readFileSync(d2Emoji)));
   expect(out.error).toMatch(/COLRv1 paint without an outline fallback/);
+});
+
+// With docs/upstream/d2fonts-wasm-supply-bundled-emoji.patch applied (and the wasm built with it) the consumer's `emoji` option reaches D2's trusted path.
+// Fails on a pristine D2 build, so it only runs when the patch is applied.
+test("patched D2: the emoji option gives colour emoji their own glyphs and advance", async ({ page }) => {
+  test.skip(!emojiPatched, 'the bundled-emoji patch is not applied to imports/d2');
+  test.skip(!existsSync(d2Emoji), 'the D2 checkout is missing its bundled emoji font');
+  test.setTimeout(120_000);
+  await open(page, { body: '' });
+  const out = await compileWith(page, brotliDecompressSync(readFileSync(d2Emoji)), true);
+  expect(out.error).toBeUndefined();
+  expect(out.emojiAsset).not.toContain('SourceSansPro');
+  expect(out.emojiAdvance).not.toBeCloseTo(12.91, 1);
 });

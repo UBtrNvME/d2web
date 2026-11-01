@@ -18,6 +18,7 @@ import (
 	"github.com/d2lang/d2/d2layouts/d2talalayout"
 	"github.com/d2lang/d2/d2lib"
 	"github.com/d2lang/d2/d2parser"
+	"github.com/d2lang/d2/d2renderers/d2fonts"
 	"github.com/d2lang/d2/d2renderers/d2scene"
 	"github.com/d2lang/d2/d2renderers/d2scenebuild"
 	"github.com/d2lang/d2/d2renderers/d2svg"
@@ -288,13 +289,21 @@ func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2ta
 	fontsMu.Lock()
 	listed := len(faces) > 0
 	fontsMu.Unlock()
-	if listed { // no consumer fonts: the builder's default (no fallback resolution) is unchanged
+	if listed || emojiSupplied() { // no consumer fonts and no emoji: the builder's default (no fallback resolution) is unchanged
 		// shortcut: fixed ceilings (64 faces, 256 MiB); expose in Budgets when a consumer needs more.
-		fonts = &d2scenebuild.FontFallbackOptions{Resolver: fallback, MaxAssets: 64, MaxBytes: 256 << 20}
+		var resolver d2fonts.FallbackResolver = fallback
+		if emojiSupplied() { // D2's trusted emoji path answers first; the consumer's faces take what it does not cover
+			bundled, err := d2fonts.NewBundledFallbackResolver(fallback, d2fonts.BundledFallbackLimits{MaxRequestedRunes: 1 << 20, MaxBundledBytes: 64 << 20, MaxResolvedBytes: 256 << 20})
+			if err != nil {
+				return nil, err
+			}
+			resolver = bundled
+		}
+		fonts = &d2scenebuild.FontFallbackOptions{Resolver: resolver, MaxAssets: 64, MaxBytes: 256 << 20}
 	}
 	return d2scenebuild.Build(ctx, leaf, d2scenebuild.Options{
 		Fonts: fonts,
-		Pad: opts.Pad, Scale: opts.Scale, Center: opts.Center, ThemeID: opts.ThemeID, ThemeOverrides: opts.ThemeOverrides, Sketch: req.Render.Sketch,
+		Pad:   opts.Pad, Scale: opts.Scale, Center: opts.Center, ThemeID: opts.ThemeID, ThemeOverrides: opts.ThemeOverrides, Sketch: req.Render.Sketch,
 		MaxNodes: b.MaxNodes, MaxPathCommands: b.MaxPathCommands,
 		SketchBudget: d2scenebuild.SketchBudget{MaxOperationSets: b.Sketch.MaxOperationSets, MaxOperations: b.Sketch.MaxOperations, MaxPathCommands: b.Sketch.MaxPathCommands},
 		LinkBudget:   d2scenebuild.LinkBudget{MaxRegions: b.Links.MaxRegions, MaxStringBytes: b.Links.MaxStringBytes},

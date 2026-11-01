@@ -16,8 +16,9 @@ rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
 const module = join(root, 'packages/d2web-wasm');
+const emojiPatch = patches().some(p => p.file.endsWith('d2fonts-wasm-supply-bundled-emoji.patch') && p.state === 'applied');
 const flags = `-s -w${patched ? ' -X d2web.local/wasm/compile.Patched=true' : ''}`;
-goRun('go', ['build', '-mod=readonly', '-trimpath', '-ldflags', flags, '-o', join(dist, 'd2web.wasm'), './cmd/d2web'], { cwd: module, env: { ...goEnv, GOOS: 'js', GOARCH: 'wasm' } });
+goRun('go', ['build', '-mod=readonly', '-trimpath', ...(emojiPatch ? ['-tags', 'd2webpatched'] : []), '-ldflags', flags, '-o', join(dist, 'd2web.wasm'), './cmd/d2web'], { cwd: module, env: { ...goEnv, GOOS: 'js', GOARCH: 'wasm' } });
 const goRoot = goRun('go', ['env', 'GOROOT'], { cwd: module, env: goEnv }).trim();
 copyFileSync(join(goRoot, 'lib/wasm/wasm_exec.js'), join(dist, 'wasm_exec.js'));
 copyFileSync(join(root, 'packages/d2web/src/worker.js'), join(dist, 'worker.js'));
