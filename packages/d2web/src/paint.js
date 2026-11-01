@@ -1,6 +1,7 @@
 // Painter: turns the scene JSON of spec 0001 (packages/d2web-wasm/scenejson) into SVG or HTML-first markup. It covers every primitive,
 // paint, clip, mask, filter and blend kind in the corpus; animations are not painted. Moved from the research tree; behaviour unchanged.
 import { animationSpecs } from './animation.js';
+import { renderMarkdown, markdownCSS } from './markdown.js';
 
 const ALIGN = ['none', 'xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
 const BLEND = ['normal', 'multiply', 'darken', 'color-burn', 'overlay', 'lighten'];
@@ -22,7 +23,7 @@ export const fontFamily = id => 'scene-' + id.replace(/\W/g, '-');
 // Spec 0007: a run's primary font, then the consumer fallbacks D2 chose for glyphs the primary lacks, as one CSS font stack.
 const fontStack = p => [p.Font.Asset, ...(p.Fallbacks ?? [])].map(fontFamily).join(',');
 
-export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '', a11y = false, association = [] } = {}) {
+export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '', a11y = false, association = [], flow = false } = {}) {
   if (!scene?.Root || !scene.ViewBox) throw new Error('scene needs Root and ViewBox');
   // Mask and filter regions cover the document with a margin; huge regions make Chromium drop content on large boards.
   const region = (({ X, Y, Width, Height }) => `x="${X - 1000}" y="${Y - 1000}" width="${Width + 2000}" height="${Height + 2000}"`)(scene.ViewBox);
@@ -250,7 +251,56 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
   const usedLinks = new Set();
+  let flowed = false;
   const contents = (tag, body) => `<${tag} style="display:contents;font:inherit;color:inherit;text-decoration:none">${body}</${tag}>`;
+
+  function flowMarkdown(n) {
+    const owner = (scene.Root.Children ?? []).find(o => o.Children?.includes(n));
+    const object = info.get(owner?.ID);
+    if (object?.content !== 'markdown' || !object.label) return null;
+    const children = kids(n), runs = children.map(c => c.Primitive).filter(p => p?.$ === 'TextRun');
+    // Only the characterized flat, translated markdown subtree can release its D2 clip.
+    if (![scene.Root, owner, n].every(o => o.Transform.A === 1 && o.Transform.D === 1 && o.Transform.B === 0 && o.Transform.C === 0)
+      || [scene.Root, owner].some(o => o.Clip || o.Mask || o.Filters?.length || o.Blend || o.Animations?.length)
+      || !n.Clip || !isIdentity(n.Clip.Transform) || n.Mask || n.Filters?.length || n.Blend || n.Animations?.length || n.Primitive
+      || children.some(c => !isIdentity(c.Transform) || c.Opacity !== 1 || c.Children?.length || c.Clip || c.Mask || c.Filters?.length || c.Blend || c.Animations?.length || !['TextRun', 'Rect'].includes(c.Primitive?.$))
+      || !runs.length || runs.some(p => !p.Ink?.Valid || !solid(p.Fill) || p.Stroke?.Paint || p.Strike || p.Underline || !/^font:(SourceSansPro|SourceCodePro):/.test(p.Font.Asset))) return null;
+    const parsed = renderMarkdown(object.label, hrefOf), clip = primBounds(n.Clip.Path);
+    if (!parsed || !clip || clip[2] <= clip[0]) return null;
+    const headingSizes = [...parsed.html.matchAll(/<h([1-6])>/g)].map(m => [32, 24, 20, 16, 14, 13.6][+m[1] - 1]);
+    if (runs.some(p => ![p.Font.Asset.startsWith('font:SourceCodePro:') ? 13.6 : 16, ...headingSizes].includes(p.Font.Size))) return null;
+    const fonts = { regular: 'SourceSansPro:regular', semibold: 'SourceSansPro:semibold', bold: 'SourceSansPro:bold', italic: 'SourceSansPro:italic', mono: 'SourceCodePro:regular' };
+    if (/<(?:p|li)>/.test(parsed.html) && !scene.Assets?.['font:SourceSansPro:regular']) return null;
+    const stacks = new Map();
+    for (const p of runs) {
+      const stack = fontStack(p);
+      if (stacks.has(p.Font.Asset) && stacks.get(p.Font.Asset) !== stack) return null;
+      stacks.set(p.Font.Asset, stack);
+    }
+    const needed = [...(headingSizes.length ? ['semibold'] : []), ...(/<strong>/.test(parsed.html) ? ['bold'] : []), ...(/<em>/.test(parsed.html) ? ['italic'] : []), ...(/<code>/.test(parsed.html) ? ['mono'] : [])];
+    if (needed.some(role => !runs.some(p => p.Font.Asset === `font:${fonts[role]}`))) return null;
+    const variables = Object.entries(fonts).map(([role, id]) => `--md-${role}:${stacks.get(`font:${id}`) ?? fontFamily(`font:${id}`)}`);
+    const dx = scene.Root.Transform.E + owner.Transform.E + n.Transform.E, dy = scene.Root.Transform.F + owner.Transform.F + n.Transform.F;
+    const links = (scene.Links ?? []).filter(l => parsed.links.includes(l.URL) && l.Box.X >= dx + clip[0] && l.Box.Y >= dy + clip[1] && l.Box.X + l.Box.Width <= dx + clip[2] + .001 && l.Box.Y + l.Box.Height <= dy + clip[3] + .001);
+    // Preserve D2's decision to disable inline links when the whole object is linked.
+    if (parsed.links.some(url => hrefOf(url) && !links.some(l => l.URL === url))) return null;
+    const linked = p => links.some(l => l.Box.X < dx + p.Ink.Max.X && l.Box.X + l.Box.Width > dx + p.Ink.Min.X && l.Box.Y < dy + p.Ink.Max.Y && l.Box.Y + l.Box.Height > dy + p.Ink.Min.Y);
+    const rects = children.map(c => c.Primitive).filter(p => p.$ === 'Rect' && solid(p.Fill));
+    const quote = rects.find(p => p.Box.X === 0 && p.Box.Width === 4);
+    const muted = runs.find(p => quote && p.Origin.X >= 20 && p.Origin.Y > quote.Box.Y && p.Origin.Y < quote.Box.Y + quote.Box.Height) ?? runs.find(p => p.Font.Asset === 'font:SourceSansPro:semibold' && p.Font.Size === 13.6);
+    const foreground = runs.find(p => !linked(p) && p !== muted && p.Font.Asset.startsWith('font:SourceSansPro:')) ?? runs[0];
+    for (const [role, paint] of Object.entries({ accent: runs.find(linked)?.Fill, muted: muted?.Fill, border: quote?.Fill ?? rects.find(p => p.Box.Height === 4)?.Fill, 'border-muted': rects.find(p => p.Box.Height === 1)?.Fill, code: rects.find(p => p.RadiusX === 6)?.Fill })) {
+      if (paint) variables.push(`--md-${role}:${rgba(paint.Color)}`);
+    }
+    // D2's box for this markdown is the clip it applied to it, not the ink of its runs (which leaves out padding and rules).
+    const bounds = clip;
+    links.forEach(l => usedLinks.add(l));
+    flowed = true; count('html:markdown-flow');
+    // Keep the markdown node's origin and opacity; deliberately do not install its clip or a fixed height.
+    const style = `position:absolute;left:0;top:0;transform-origin:0 0;transform:${matrix(n.Transform).replaceAll(' ', ',')};opacity:${num(n.Opacity)}`;
+    const background = children.find(c => c.ID === `${n.ID}:background`);
+    return `<div data-id="${esc(n.ID)}" style="${style}">${background ? nodeHtml(background) : ''}<div data-flow-markdown data-flow-d2="${esc(JSON.stringify({ x: bounds[0], y: bounds[1], width: bounds[2] - bounds[0], height: bounds[3] - bounds[1] }))}" style="position:absolute;left:${px(clip[0])};top:${px(clip[1])};width:${px(clip[2] - clip[0])};color:${rgba(foreground.Fill.Color)};${variables.join(';')}">${parsed.html}</div></div>`;
+  }
 
   function markdownHtml(n, children) {
     const owner = (scene.Root.Children ?? []).find(o => o.Children?.includes(n));
@@ -422,6 +472,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
 
   function nodeHtml(n, codeToken = false) {
     if (!n) return '';
+    if (flow && n.ID?.endsWith(':markdown')) { const body = flowMarkdown(n); if (body !== null) return body; }
     const heavy = n.Filters?.length || n.Blend || n.Animations?.length;
     const effect = heavy || ((n.Clip || n.Mask) && !cssMasks);
     if (effect) {
@@ -480,7 +531,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     const dx = centered ? (scene.LogicalWidth - v.Width * sx) / 2 : 0;
     const dy = centered ? (scene.LogicalHeight - v.Height * sy) / 2 : 0;
     return {
-      html: `<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:hidden;width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
+      html: `${flowed ? `<style>${markdownCSS}</style>` : ''}<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:${flowed ? 'visible' : 'hidden'};width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
       stats: { ...stats, links: scene.Links?.length ?? 0 },
       animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
       animations,

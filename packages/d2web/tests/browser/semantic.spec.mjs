@@ -193,3 +193,107 @@ test('C1: every content, table and shape case matches the checkpoint painter', a
   }
   await testInfo.attach('stage-a-pixel-deltas.json', { body: JSON.stringify(deltas, null, 2), contentType: 'application/json' });
 });
+
+test('flow markdown: one block with real elements, D2 identity, safe links and one link tab stop', async ({ page, browserName }) => {
+  const source = markdown + '\n\n### Third\n\n#### Fourth\n\n##### Fifth\n\n###### Sixth';
+  await ready(page, markdownSource(source), { markdown: 'flow' });
+  const group = page.locator('#a [data-id="md"][role="group"]');
+  await expect(group).toHaveAttribute('aria-label', source);
+  const block = group.locator('[data-flow-markdown]');
+  await expect(block).toHaveCount(1);
+  await expect(group.locator('[data-k="text"]')).toHaveCount(0);
+  expect(await block.evaluate(el => [...el.children].map(c => c.tagName.toLowerCase()))).toEqual(['h1', 'h2', 'p', 'ul', 'ol', 'blockquote', 'hr', 'pre', 'h3', 'h4', 'h5', 'h6']);
+  for (const [selector, text] of [['h1', 'Title'], ['h2', 'Sub'], ['h3', 'Third'], ['h4', 'Fourth'], ['h5', 'Fifth'], ['h6', 'Sixth'], ['strong', 'bold'], ['em', 'it'], ['p > code', 'code'], ['blockquote > p', 'quote'], ['pre > code', 'line one\nline two\n']]) {
+    expect(await block.locator(selector).textContent()).toBe(text);
+  }
+  expect(await block.locator('ul > li').allTextContents()).toEqual(['one', 'two']);
+  expect(await block.locator('ol > li').allTextContents()).toEqual(['first', 'second']);
+  expect(await block.locator('p').first().textContent()).toBe('Some bold and it and code and link');
+  const link = group.getByRole('link', { name: 'link', exact: true });
+  await expect(page.locator('#a a')).toHaveCount(1);
+  await expect(link).toHaveAttribute('href', 'https://x.test');
+  if (browserName !== 'webkit') { await group.focus(); await page.keyboard.press('Tab'); await expect(link).toBeFocused(); }
+  await block.locator('strong').click();
+  await link.evaluate(el => el.addEventListener('click', e => e.preventDefault()));
+  await link.click();
+  expect(await page.evaluate(() => clicked)).toEqual(['md', 'md']);
+  const metrics = await block.evaluate(el => ({ fit: JSON.parse(el.dataset.flowFit), width: el.style.width, overflow: getComputedStyle(el).overflow, clip: getComputedStyle(el.parentElement).clipPath }));
+  expect(metrics.fit.width).toBeGreaterThan(0);
+  expect(metrics.fit.height).toBeGreaterThan(0);
+  expect(metrics.overflow).toBe('visible');
+  expect(metrics.clip).toBe('none');
+  const expected = await page.evaluate(() => {
+    const runs = result.boards[0].scene.Root.Children.find(n => n.ID === 'md').Children.find(n => n.ID === 'md:markdown');
+    const x = runs.Clip.Path.Commands.filter(c => c.Kind !== 5).map(c => c.P1.X);
+    const y = runs.Clip.Path.Commands.filter(c => c.Kind !== 5).map(c => c.P1.Y);
+    // D2's box for a markdown object is the clip it applied to it.
+    return { width: Math.max(...x) - Math.min(...x), d2: { x: Math.min(...x), y: Math.min(...y), width: Math.max(...x) - Math.min(...x), height: Math.max(...y) - Math.min(...y) } };
+  });
+  expect(parseFloat(metrics.width)).toBe(expected.width);
+  expect(metrics.fit.d2).toEqual(expected.d2);
+
+  await ready(page, markdownSource('[bad](javascript:evil)'), { markdown: 'flow' });
+  await expect(group.locator('[data-flow-markdown] a')).toHaveText('bad');
+  await expect(page.locator('#a a[href^="javascript:"]')).toHaveCount(0);
+});
+
+test('flow markdown: unsupported sources fall back byte for byte; positioned remains the default', async ({ page }) => {
+  for (const text of [markdown, '- outer\n  - nested', '- first\n  continuation', '| a | b |\n|---|---|\n| 1 | 2 |', 'plain ~~strike~~', '```\nunfinished', '_underscore_', '<b>raw HTML</b>']) {
+    await ready(page, text.includes('|') ? 'md: ||md\n' + text + '\n||' : markdownSource(text), { idPrefix: 'same-' });
+    const original = await page.locator('#a').evaluate(el => el.shadowRoot.innerHTML);
+    const positioned = await page.evaluate(async () => {
+      m.dispose(); m = d2web.mount(document.getElementById('a'), { idPrefix: 'same-', markdown: 'positioned' }); await m.update(result);
+      return document.getElementById('a').shadowRoot.innerHTML;
+    });
+    expect(positioned).toBe(original);
+    if (text === markdown) continue;
+    const fallback = await page.evaluate(async () => {
+      m.dispose(); m = d2web.mount(document.getElementById('a'), { idPrefix: 'same-', markdown: 'flow' }); await m.update(result);
+      return document.getElementById('a').shadowRoot.innerHTML;
+    });
+    expect(fallback, text).toBe(original);
+    await expect(page.locator('#a [data-flow-markdown]')).toHaveCount(0);
+    await expect(page.locator('#a [data-k="text"]').first()).toBeAttached();
+  }
+});
+
+test('C2: report flow fit for every catalog markdown object and the semantic sample', async ({ page }, testInfo) => {
+  test.setTimeout(10 * 60_000);
+  await open(page, { body: host });
+  const measurements = [];
+  try {
+    for (const entry of [...catalog, { id: 'markdown-semantic-sample', source: markdownSource(markdown) }]) {
+      const rows = await page.evaluate(async entry => {
+        const result = await compile(entry.source, { ...entry.render, request: { ...(entry.layout ? { layout: entry.layout } : {}), files: { 'main.d2': entry.source, ...entry.files }, boards: entry.boards ?? [''] } });
+        if (result.error) return [{ case: entry.id, error: result.error }];
+        const rows = [], host = document.getElementById('a');
+        for (const board of result.boards) {
+          const objects = board.association.objects.filter(o => o.content === 'markdown');
+          if (!objects.length) continue;
+          const m = d2web.mount(host, { markdown: 'flow' });
+          await m.update(result, board.path);
+          for (const object of objects) {
+            const group = [...host.shadowRoot.querySelectorAll('[data-id]')].find(el => el.dataset.id === object.id);
+            const el = group?.querySelector('[data-flow-markdown]');
+            rows.push({ case: entry.id, board: board.path, object: object.id, status: el ? 'flow' : 'positioned-fallback', ...(el ? JSON.parse(el.dataset.flowFit) : {}) });
+          }
+          m.dispose();
+        }
+        return rows;
+      }, entry);
+      measurements.push(...rows);
+      for (const row of rows) {
+        console.log('markdown flow fit', JSON.stringify(row));
+        expect.soft(row.error, `${entry.id}: compiles`).toBeUndefined();
+        if (row.status !== 'flow') continue;
+        expect.soft(Number.isFinite(row.deltaWidth) && Number.isFinite(row.deltaHeight), `${entry.id}/${row.object}: finite metrics`).toBe(true);
+        // C2's literal fit check is diagnostic until measurements establish the first accepted tolerance.
+        expect.soft(row.deltaWidth, `${entry.id}/${row.object}: width delta (CSS px)`).toBeLessThanOrEqual(0);
+        expect.soft(row.deltaHeight, `${entry.id}/${row.object}: height delta (CSS px)`).toBeLessThanOrEqual(0);
+      }
+    }
+    expect(measurements.some(row => row.status === 'flow')).toBe(true);
+  } finally {
+    await testInfo.attach('stage-b-flow-fit.json', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
+  }
+});

@@ -6,6 +6,7 @@ export interface MountOptions {
   idPrefix?: string;
   a11y?: boolean;
   fonts?: 'register' | 'consumer';
+  markdown?: 'positioned' | 'flow';
 }
 export interface Box { X: number; Y: number; Width: number; Height: number }
 // `rejectedFonts` appears only when the engine refused a font in the result (spec 0007): the board is still painted, the browser falls back for those glyphs.
@@ -189,7 +190,7 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       if (options.fonts !== 'consumer') await acquireFonts(result.fonts);
       alive();
       let html: string, specs: AnimationSpec[][];
-      try { ({ html, animations: specs } = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true, association: found.association?.objects })); } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
+      try { ({ html, animations: specs } = paintScene(found.scene, { html: true, cssMasks: 'subtree', idPrefix: prefix, a11y: options.a11y ?? true, association: found.association?.objects, flow: options.markdown === 'flow' })); } catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
       // Everything that can throw has happened; from here the swap cannot fail halfway.
       const template = document.createElement('template');
       template.innerHTML = html;
@@ -204,6 +205,12 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       board = path;
       scene = found.scene as { Root?: Node_ };
       calibrate();
+      for (const el of wrapper.querySelectorAll<HTMLElement>('[data-flow-markdown]')) {
+        const d2 = JSON.parse(el.dataset.flowD2!);
+        // offset/scroll sizes are local CSS pixels, independent of the board's viewport scale.
+        const width = Math.max(el.offsetWidth, el.scrollWidth), height = Math.max(el.offsetHeight, el.scrollHeight);
+        el.dataset.flowFit = JSON.stringify({ d2, width, height, deltaWidth: width - d2.width, deltaHeight: height - d2.height });
+      }
       const orphaned: string[] = [];
       for (const id of content.keys()) if (!applyContent(id)) orphaned.push(id);
       const rejectedFonts = [...rejected].filter(([id]) => id in (result.fonts ?? {})).map(([id, message]) => ({ id, message }));
