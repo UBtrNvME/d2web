@@ -21,5 +21,8 @@ export const families = {
   sketch: ['Sketch mode', 'Hand-drawn rendering done by D2 at scene build; the painter draws the resulting paths.'],
   render: ['Render options', '`pad`, `scale`, `center` passed with the request.'],
   config: ['`d2-config` variables', 'Per-file configuration inside D2 source.'],
+  color: ['Colour forms', 'Named, short hex and transparent colours, and linear and radial gradients on fills, strokes, containers and edges. D2 resolves them into the scene.'],
+  table: ['Tables and classes', '`sql_table` columns and constraints, `class` members and visibility, with edges between columns.'],
+  effects: ['Style combinations', 'Effects on containers and shapes (3d, multiple, shadow, double border, radius, opacity, dash) and combined style blocks.'],
   animation: ['Animation', 'Animated edges. The scene carries typed tracks; the mount runs each as a Web Animation (spec 0005) and the case is compared with native at a shared moment (500 ms).'],
 };

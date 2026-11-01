@@ -137,4 +137,43 @@ config('theme-overrides', 'theme-overrides: {B1: "#ff6600"}'); config('dark-them
 add('animation', 'animated-shape', ['style:animated'], 'x: Lift {style.animated: true}');
 add('animation', 'animated-edges', ['style:animated'], 'a -> b {style.animated: true}\nb -> c {style.animated: true; style.stroke-dash: 5}');
 
+// ---- depth: the catalog above has one case per source-derived construct; these combine and stretch them (colour forms, tables, content, effects) ------------------------
+const col = (name, source, extra = {}) => add('color', name, ['extra:color'], source, extra);
+col('named', 'x: Hi {style.fill: red; style.stroke: navy; style.stroke-width: 4}');
+col('hex3', 'x: Hi {style.fill: "#fa0"; style.stroke: "#036"}');
+col('transparent-fill', 'x: Hi {style.fill: transparent; style.stroke-width: 3}');
+col('linear-gradient-fill', 'x: Hi {style.fill: "linear-gradient(#ff8800, #0088ff)"}');
+col('linear-gradient-angle', 'x: Hi {style.fill: "linear-gradient(45deg, #ff8800 0%, #ffffff 50%, #0088ff 100%)"}');
+col('radial-gradient-fill', 'x: Hi {style.fill: "radial-gradient(#ffffff, #2b6cb0)"}');
+col('gradient-stroke', 'x: Hi {style.stroke: "linear-gradient(#cc0000, #0000cc)"; style.stroke-width: 8; style.fill: "#ffffff"}');
+col('gradient-container', 'g: Group {style.fill: "linear-gradient(#e0f0ff, #ffe0f0)"; a; b}');
+col('gradient-edge', 'a -> b {style.stroke: "linear-gradient(#cc0000, #0000cc)"; style.stroke-width: 5}');
+col('gradient-on-shapes', 'a: A {shape: cylinder; style.fill: "linear-gradient(#ffd, #fa0)"}\nb: B {shape: cloud; style.fill: "radial-gradient(#fff, #6a6)"}\nc: C {shape: person; style.fill: "linear-gradient(#cdf, #46a)"}');
+const table = (name, source, extra = {}) => add('table', name, ['extra:table'], source, extra);
+table('sql-constraints', 'users: {shape: sql_table; id: int {constraint: primary_key}; email: varchar(255) {constraint: [unique; not_null]}; org: int {constraint: foreign_key}; bio: text}');
+table('sql-columns-edges', 'a: {shape: sql_table; id: int {constraint: primary_key}; b_id: int {constraint: foreign_key}}\nb: {shape: sql_table; id: int {constraint: primary_key}; name: text}\na.b_id -> b.id');
+table('sql-in-container', 'db: Database {users: {shape: sql_table; id: int {constraint: primary_key}; name: text}; orders: {shape: sql_table; id: int; user_id: int}}\ndb.orders.user_id -> db.users.id');
+table('sql-styled', 'x: {shape: sql_table; style.fill: "#fdf"; style.stroke: "#606"; style.font-size: 18; id: int; v: text}');
+table('class-members', 'x: Shape {shape: class; +name: string; -size: int; "#id": uuid; +area(): float; -render(ctx: Canvas): void}');
+table('class-edges', 'a: Base {shape: class; +id: int}\nb: Derived {shape: class; +extra: string}\nb -> a: extends {target-arrowhead.shape: triangle}');
+const rich = (name, source, extra = {}) => add('content', name, ['extra:content-depth'], source, extra);
+rich('code-python', 'x: |`python\ndef add(a, b):\n    return a + b  # sum\n`|');
+rich('code-json', 'x: |`json\n{"a": [1, 2, {"b": null}], "c": "text"}\n`|');
+rich('code-long-lines', 'x: |`go\nfunc veryLongFunctionName(argumentOne int, argumentTwo string) (result string, err error) { return }\n`|');
+rich('markdown-rich', 'x: |md\n  ## Heading\n  1. first\n  2. second\n\n  > quoted `code`\n\n  plain **bold** *italic* ~~gone~~\n|');
+rich('markdown-table', 'x: ||md\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n||');
+rich('latex-aligned', 'x: |`latex\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n`|', { network: false });
+rich('long-label-wrap', 'x: "A rather long label that should wrap inside a fixed width box when D2 measures it" {width: 160}');
+rich('label-on-container-and-children', 'g: Group label {a: first; b: second; a -> b: link label}');
+const fx = (name, source, extra = {}) => add('effects', name, ['extra:effects'], source, extra);
+fx('3d-container', 'g: Group {style.3d: true; a; b}');
+fx('multiple-cylinder', 'x: DB {shape: cylinder; style.multiple: true}');
+fx('shadow-container', 'g: Group {style.shadow: true; a; b}');
+fx('double-border-circle', 'x: Hi {shape: circle; style.double-border: true}');
+fx('border-radius-shapes', 'a: A {style.border-radius: 20}\nb: B {shape: square; style.border-radius: 40}\nc: C {shape: page; style.border-radius: 10}');
+fx('opacity-container', 'g: Group {style.opacity: 0.3; a; b; a -> b}');
+fx('stroke-dash-edges', 'a -> b {style.stroke-dash: 3}\nb -> c {style.stroke-dash: 9; style.stroke-width: 4}');
+fx('near-object-container', 'g: {a; b}\nnote: Note {near: g}');
+fx('combined-style', 'x: Hi {style: {fill: "linear-gradient(#fff, #fcb)"; stroke: "#c33"; stroke-width: 5; stroke-dash: 4; shadow: true; border-radius: 16; opacity: 0.8; italic: true}}');
+
 export const catalog = entries;
