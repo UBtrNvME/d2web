@@ -36,7 +36,7 @@ const WASM_ENV = ['PATH', 'HOME', 'TMPDIR', 'GOROOT', 'LANG'];
 const wasmEnv = env => Object.fromEntries(WASM_ENV.filter(k => env[k] !== undefined).map(k => [k, env[k]]));
 
 export function goRun(command, args, options = {}) {
-  const merged = { cwd: join(root, 'imports/d2'), env: goEnv, encoding: 'utf8', timeout: 180_000, maxBuffer: 16 * 1024 * 1024, ...options };
+  const merged = { cwd: join(root, 'imports/d2'), env: goEnv, encoding: 'utf8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024, ...options };
   const result = spawnSync(command, args, command.endsWith('go_js_wasm_exec') ? { ...merged, env: wasmEnv(merged.env) } : merged);
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);

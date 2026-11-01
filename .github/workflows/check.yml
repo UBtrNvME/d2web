@@ -28,8 +28,12 @@ jobs:
           path: .cache
           key: go-${{ runner.os }}-${{ hashFiles('mise.toml', 'packages/d2web-wasm/go.sum') }}
           restore-keys: go-${{ runner.os }}-
-      # A cold Go build of D2 takes minutes; the parallel check tasks each have a 180 s limit, so compile once up front.
+      # A cold Go build of D2 takes minutes; the parallel check tasks each wait on it, so compile once up front.
       - run: mise run build
+      - run: mise exec -- go build -C imports/d2 ./... && mise exec -- go build -C packages/d2web-wasm ./...
+        env:
+          GOCACHE: ${{ github.workspace }}/.cache/go-build
+          GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
       - run: mise run browser:install
       - run: mise run check:full
       - if: ${{ inputs.full_corpus == true }}
