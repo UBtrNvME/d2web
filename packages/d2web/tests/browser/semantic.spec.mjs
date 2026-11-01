@@ -297,3 +297,12 @@ test('C2: report flow fit for every catalog markdown object and the semantic sam
     await testInfo.attach('stage-b-flow-fit.json', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
   }
 });
+
+test('a multi-line label is one paragraph whose text is D2\'s lines, and nothing moves', async ({ page }) => {
+  await ready(page, 'x: "line one\\nline two\\nline three"\ny: single\nx -> y: "edge\\nlabel"');
+  const paragraphs = page.locator('#a [data-label]');
+  await expect(paragraphs).toHaveCount(2); // the node's label and the connection's; the one-line label gets none
+  await expect(paragraphs.first()).toHaveAttribute('role', 'paragraph');
+  expect((await paragraphs.first().evaluate(el => el.textContent)).replace(/\n$/, '')).toBe('line one\nline two\nline three');
+  expect(await paragraphs.first().evaluate(el => getComputedStyle(el).display)).toBe('contents');
+});

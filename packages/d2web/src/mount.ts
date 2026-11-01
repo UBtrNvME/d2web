@@ -62,6 +62,11 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   };
   // On the host, not the wrapper: WebKit retargets a copy from inside a shadow root to the host.
   host.addEventListener('copy', onCopy);
+  // A focus tooltip is dismissed with Escape and stays dismissed until focus moves (WCAG 1.4.13).
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') for (const t of shadow.querySelectorAll<HTMLElement>('[role=tooltip]')) if (t.offsetParent) t.dataset.dismissed = ''; };
+  const onFocusOut = () => { for (const t of shadow.querySelectorAll<HTMLElement>('[role=tooltip][data-dismissed]')) delete t.dataset.dismissed; };
+  host.addEventListener('keydown', onKey);
+  host.addEventListener('focusout', onFocusOut);
 
   let disposed = false;
   let running: Animation[] = [];
@@ -235,6 +240,8 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       disposed = true;
       for (const a of running) a.cancel();
       host.removeEventListener('copy', onCopy);
+      host.removeEventListener('keydown', onKey);
+      host.removeEventListener('focusout', onFocusOut);
       wrapper.remove();
       listeners.clear();
       content.clear();

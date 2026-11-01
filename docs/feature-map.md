@@ -56,7 +56,7 @@ The web element or behaviour that is natural for each family (the target; the pa
 | Label positions | Positioned text, computed by D2 layout |
 | Icon positions | Element `img` (or inline SVG) positioned by D2 layout |
 | Near constants | Positioned text |
-| Tooltips | Hover and focus popover (`title` today; any other element is still only the D2 tooltip text, with no behaviour of our own), never an always-visible badge |
+| Tooltips | Hover shows the browser's `title`; keyboard focus on the object (or its link) shows a `role=tooltip` element holding the D2 tooltip text (spec 0009 stage C). Never an always-visible badge |
 | Direction | Layout only |
 | Layout engines | Layout only |
 | Grid diagrams | Geometry from D2 layout |

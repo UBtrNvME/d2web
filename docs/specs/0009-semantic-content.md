@@ -20,7 +20,7 @@ Check: pixel bars unchanged for every `content/*`, `table/*` and `shape/*` case,
 
 **Stage B, browser flow inside D2's box (C2).** Markdown rendered from its source as real `h1..h6`, `p`, `ul/ol`, `strong`, `em`, `a`, `code`, positioned in D2's box with D2's font and size. Check: fit test (scrollWidth/scrollHeight within the box, per case) and the existing bars; any misalignment is recorded as a case with its delta, which is what the checkpoint is for.
 
-**Stage C (not started)**: multi-line labels as one paragraph, and a focus-visible tooltip. Each needs its own contract before work.
+**Stage C (done)**: focus-visible tooltip, and multi-line labels as one paragraph.
 
 ## Out of scope
 
@@ -112,4 +112,8 @@ Hover keeps the browser's `title` (the most natural tooltip there is). Keyboard 
 
 Checks: `links.spec.mjs` (9 tests) passes in Chromium, Firefox and WebKit; `test:client` 67 passed; `test:features:paint` passes.
 
-Limits: the scene container clips (`overflow:hidden`), so a tooltip near the board edge is cut off; the tooltip is not dismissable with Escape; `:has()` needs Safari 15.4 / Firefox 121 or newer. Not done: multi-line labels as one paragraph.
+Limits (second pass): a tooltip now flips toward the board's middle (right-aligned in the right half, above the object in the lower half), so it stays inside the clip whenever the board has room; a board with no room around the object (a one-row board) still clips it. Escape dismisses it and it stays hidden until focus moves (`mount()` sets `data-dismissed`; a painter output used without `mount()` has no Escape). A focusable link also shows its tooltip through a plain sibling rule, so it works without `:has()`; the object-group trigger still needs `:has()` (Safari 15.4, Firefox 121). Markdown tooltips show their source text, as `title` does.
+
+## Stage C: multi-line labels (2 November 2026)
+
+D2 emits a multi-line label as one text run per line (`label:0`, `label:1`, ...). Consecutive runs of one label are now wrapped in `<div role="paragraph" data-label style="display:contents">`, so the label is one element whose text is D2's lines in order. `display:contents` moves nothing (C1 pixel delta 0); one-line labels get no wrapper.

@@ -122,3 +122,24 @@ test('a tooltip does not move or add anything to the page until it is focused', 
   expect(await diff(page, baseline, await shot(page, '#a'))).toEqual({ ratio: 0 });
   expect(await page.locator('#a').evaluate(el => el.shadowRoot.querySelector('[role="tooltip"]').offsetParent)).toBeNull();
 });
+
+test('a focus tooltip flips inside the board near its edges and Escape dismisses it until focus moves', async ({ page }) => {
+  await ready(page, 'direction: down\na: Top {tooltip: Tip A}\nb: Bottom {tooltip: Tip B}\na -> b');
+  const scene = await page.locator('#a [data-d2-scene]').boundingBox();
+  for (const id of ['a', 'b']) {
+    const group = page.locator(`#a [data-id="${id}"][role="group"]`), tip = page.locator('#a [role="tooltip"]', { hasText: `Tip ${id.toUpperCase()}` });
+    await group.focus();
+    await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+    await expect(tip).toBeVisible();
+    const box = await tip.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(scene.x - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(scene.x + scene.width + 1);
+    expect(box.y).toBeGreaterThanOrEqual(scene.y - 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(scene.y + scene.height + 1);
+    await page.keyboard.press('Escape');
+    await expect(tip).toBeHidden();
+    await group.blur();
+  }
+  await page.locator('#a [data-id="a"][role="group"]').focus();
+  await expect(page.locator('#a [role="tooltip"]', { hasText: 'Tip A' })).toBeVisible(); // refocus after blur shows it again
+});

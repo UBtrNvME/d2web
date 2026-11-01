@@ -451,7 +451,17 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       return other.join('') + `<pre style="position:absolute;left:0;top:0;margin:0;padding:0;border:0;font:inherit;white-space:pre"><code style="font:inherit">${blocks.join('')}</code></pre>`;
     }
     const table = children.some(c => c.ID === `${n.ID}:table-header` || c.ID === `${n.ID}:class-header`);
-    if (!table) return children.map(c => nodeHtml(c)).join('');
+    if (!table) {
+      // A multi-line label is several runs in D2's scene (`label:0`, `label:1`, ...); group them as one paragraph. display:contents moves nothing.
+      let out = '', lines = [];
+      const paragraph = () => { out += lines.length > 1 ? `<div role="paragraph" data-label style="display:contents">${lines.join('')}</div>` : lines.join(''); lines = []; };
+      for (const c of children) {
+        if (c.ID && /^:label:\d+$/.test(c.ID.slice(n.ID.length))) lines.push(nodeHtml(c));
+        else { paragraph(); out += nodeHtml(c); }
+      }
+      paragraph();
+      return out;
+    }
     const wrap = (role, body) => `<div${a11y ? ` role="${role}"` : ''} style="display:contents">${body}</div>`;
     let body = '', row = '', key = null;
     const flush = () => { if (key !== null) body += wrap('row', key === 'header' ? wrap('columnheader', row) : row); row = ''; };
@@ -536,12 +546,15 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       const anchor = `<a data-k="link"${l.Tooltip ? ` id="${idPrefix}lk${i}"` : ''} ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`;
       if (!l.Tooltip) return anchor;
       const group = objectFor(l), focus = [`#${idPrefix}lk${i}:focus-visible`, group && domId.has(group) ? `#${domId.get(group)}:focus-visible` : ''].filter(Boolean).join(',');
-      tipRules.push(`[data-d2-scene]:has(${focus}) #${idPrefix}tip${i}{display:block}`);
+      tipRules.push(`[data-d2-scene]:has(${focus}) #${idPrefix}tip${i}{display:block}`, `#${idPrefix}lk${i}:focus-visible+#${idPrefix}tip${i}{display:block}`); // second rule: no :has() needed for a focusable link
       const k = 1 / sx;
-      return anchor + `<span id="${idPrefix}tip${i}" role="tooltip" part="tooltip" style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y + l.Box.Height + 4 * k)};z-index:1;white-space:pre;font:${num(12 * k)}px system-ui,sans-serif;padding:${px(2 * k)} ${px(6 * k)};color:CanvasText;background:Canvas;border:${px(k)} solid currentColor;border-radius:${px(3 * k)}">${esc(l.Tooltip)}</span>`;
+      // Flip toward the board's middle so the scene's clip does not cut it: right-aligned in the right half, above in the lower half.
+      const left = l.Box.X + l.Box.Width / 2 > v.X + v.Width / 2, above = l.Box.Y + l.Box.Height / 2 > v.Y + v.Height / 2;
+      const flip = `${left ? 'translateX(-100%)' : ''}${above ? 'translateY(-100%)' : ''}`;
+      return anchor + `<span id="${idPrefix}tip${i}" role="tooltip" part="tooltip" style="position:absolute;left:${px(left ? l.Box.X + l.Box.Width : l.Box.X)};top:${px(above ? l.Box.Y - 4 * k : l.Box.Y + l.Box.Height + 4 * k)};${flip ? `transform:${flip};` : ''}z-index:1;white-space:pre;font:${num(12 * k)}px system-ui,sans-serif;padding:${px(2 * k)} ${px(6 * k)};color:CanvasText;background:Canvas;border:${px(k)} solid currentColor;border-radius:${px(3 * k)}">${esc(l.Tooltip)}</span>`;
     }).join('');
     return {
-      html: `${flowed || tipRules.length ? `<style>${flowed ? markdownCSS : ''}${tipRules.length ? '[data-d2-scene] [role=tooltip]{display:none}' : ''}${tipRules.join('')}</style>` : ''}<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:${flowed ? 'visible' : 'hidden'};width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
+      html: `${flowed || tipRules.length ? `<style>${flowed ? markdownCSS : ''}${tipRules.length ? '[data-d2-scene] [role=tooltip]{display:none}' : ''}${tipRules.join('')}[data-d2-scene] [role=tooltip][data-dismissed]{display:none!important}</style>` : ''}<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:${flowed ? 'visible' : 'hidden'};width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
       stats: { ...stats, links: scene.Links?.length ?? 0 },
       animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
       animations,
