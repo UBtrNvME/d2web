@@ -27,7 +27,7 @@ Paths (connection lines, non-rectangular shape outlines, arrowheads), gradient a
 ## Gaps against the named forms
 
 1. **Rich content is not semantic HTML.** Markdown, code blocks and SQL/class tables arrive from D2 as laid-out text runs and rectangles, so they are positioned text, with no `p`, `pre`, `code`, `table` or heading elements and no text reflow. Making them real elements means taking D2's markdown source (the association data carries it) and laying it out in HTML while keeping D2's box size. That conflicts with "faithful default" unless it is made an explicit, tested layout contract.
-2. **Tooltips** show through `title` only, not on keyboard focus (ADR 0009 says hover and focus).
+2. ~~Tooltips show through `title` only, not on keyboard focus~~ Fixed 2 November 2026 (spec 0009 stage C): focus shows a `role=tooltip` element.
 3. **Text is one `div` per run**, not a paragraph per label, so selection across lines works but copy returns line fragments.
 4. **Safari** and **Thai/Devanagari** shaping are unchecked.
 

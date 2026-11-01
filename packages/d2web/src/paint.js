@@ -524,14 +524,24 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
 
   if (html) {
     const body = nodeHtml(scene.Root);
-    const links = (scene.Links ?? []).filter(l => !usedLinks.has(l)).map(l => `<a data-k="link" ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`).join('');
     let sx = scene.LogicalWidth / v.Width, sy = scene.LogicalHeight / v.Height;
     if (scene.ViewportFit) sx = sy = Math.min(sx, sy);
     const centered = scene.ViewportFit && scene.ViewportAlign;
     const dx = centered ? (scene.LogicalWidth - v.Width * sx) / 2 : 0;
     const dy = centered ? (scene.LogicalHeight - v.Height * sy) / 2 : 0;
+    // Tooltips (ADR 0009: shown on hover and on keyboard focus). `title` stays for hover; the element below shows when the object's group or the link has focus-visible.
+    // It is d2web's one piece of behaviour for a tooltip: system colours, 12 CSS px whatever the zoom, and a `part` for the consumer to restyle.
+    const tipRules = [];
+    const links = (scene.Links ?? []).filter(l => !usedLinks.has(l)).map((l, i) => {
+      const anchor = `<a data-k="link"${l.Tooltip ? ` id="${idPrefix}lk${i}"` : ''} ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`;
+      if (!l.Tooltip) return anchor;
+      const group = objectFor(l), focus = [`#${idPrefix}lk${i}:focus-visible`, group && domId.has(group) ? `#${domId.get(group)}:focus-visible` : ''].filter(Boolean).join(',');
+      tipRules.push(`[data-d2-scene]:has(${focus}) #${idPrefix}tip${i}{display:block}`);
+      const k = 1 / sx;
+      return anchor + `<span id="${idPrefix}tip${i}" role="tooltip" part="tooltip" style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y + l.Box.Height + 4 * k)};z-index:1;white-space:pre;font:${num(12 * k)}px system-ui,sans-serif;padding:${px(2 * k)} ${px(6 * k)};color:CanvasText;background:Canvas;border:${px(k)} solid currentColor;border-radius:${px(3 * k)}">${esc(l.Tooltip)}</span>`;
+    }).join('');
     return {
-      html: `${flowed ? `<style>${markdownCSS}</style>` : ''}<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:${flowed ? 'visible' : 'hidden'};width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
+      html: `${flowed || tipRules.length ? `<style>${flowed ? markdownCSS : ''}${tipRules.length ? '[data-d2-scene] [role=tooltip]{display:none}' : ''}${tipRules.join('')}</style>` : ''}<svg width="0" height="0" style="position:absolute"><defs>${defs.join('')}</defs></svg><div data-d2-scene style="position:relative;overflow:${flowed ? 'visible' : 'hidden'};width:${px(scene.LogicalWidth)};height:${px(scene.LogicalHeight)}"><div style="position:absolute;left:0;top:0;transform-origin:0 0;transform:translate(${px(dx)},${px(dy)}) scale(${num(sx)},${num(sy)}) translate(${px(-v.X)},${px(-v.Y)})">${body}${links}</div></div>`,
       stats: { ...stats, links: scene.Links?.length ?? 0 },
       animated: JSON.stringify(scene.Root).includes('"Animations":[{'),
       animations,

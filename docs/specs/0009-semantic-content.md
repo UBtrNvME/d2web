@@ -105,3 +105,11 @@ Measured over the 298 catalog boards plus the sample (Chromium; the same asserti
 Fallbacks, all deliberate: `content/markdown` (underscore emphasis and a lazy list continuation), `content/markdown-rich` (strikethrough), `content/markdown-table` (GFM table), and the one-line notes in the sketch and terminal themes (hand-drawn and monospace fonts differ, so the parser refuses). Nested lists and wrapped list items are still positioned. Positioned stays the default; flow is for consumers who want browser reflow.
 
 Open: the 18 px of slack under the full sample (where D2's trailing space comes from), and the five fallbacks above if they should be flowed.
+
+## Stage C: tooltips on focus (2 November 2026)
+
+Hover keeps the browser's `title` (the most natural tooltip there is). Keyboard focus had nothing: a tooltip-only anchor has no `href`, so it is not focusable, and `title` does not show on focus. Now every D2 tooltip also paints a `<span role="tooltip" part="tooltip">` after its link anchor, hidden by a stylesheet rule and shown by `:has(<link or object group>:focus-visible)`. The object's `role=group` (`tabindex=0`, spec 0006) is what a keyboard user reaches, so that is the trigger, plus the link anchor when it has an `href`. It sits 4 px below the link box, keeps 12 CSS px whatever the zoom, uses system colours (`Canvas`/`CanvasText`) and exposes `part="tooltip"` so a consumer restyles it. Nothing is visible, and no pixel moves, until focus (checked: pixel delta 0). Tooltip text is D2's text as written (markdown tooltips show their source, as in `title`).
+
+Checks: `links.spec.mjs` (9 tests) passes in Chromium, Firefox and WebKit; `test:client` 67 passed; `test:features:paint` passes.
+
+Limits: the scene container clips (`overflow:hidden`), so a tooltip near the board edge is cut off; the tooltip is not dismissable with Escape; `:has()` needs Safari 15.4 / Firefox 121 or newer. Not done: multi-line labels as one paragraph.

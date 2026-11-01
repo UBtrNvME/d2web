@@ -97,3 +97,28 @@ test('a link on a connection is an anchor named by the connection label', async 
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAccessibleName('Edge');
 });
+
+// ADR 0009: a tooltip is shown on hover (the browser's `title`) and on keyboard focus (this element); nothing is painted otherwise.
+test('a D2 tooltip appears when its object has keyboard focus, and only then', async ({ page }) => {
+  await ready(page, 'x: Hover {tooltip: Some tip}');
+  const tip = page.locator('#a [role="tooltip"]');
+  await expect(tip).toHaveCount(1);
+  await expect(tip).toBeHidden();
+  await expect(tip).toHaveText('Some tip');
+  await expect(tip).toHaveAttribute('part', 'tooltip');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#a [data-id="x"][role="group"]')).toBeFocused();
+  await expect(tip).toBeVisible();
+  const [tipBox, node] = await Promise.all([tip.boundingBox(), page.evaluate(() => m.nodeBox('x'))]);
+  expect(tipBox.y).toBeGreaterThanOrEqual(node.Y + node.Height); // below the object, not over it
+  await page.locator('#a [data-id="x"][role="group"]').blur();
+  await expect(tip).toBeHidden();
+});
+
+test('a tooltip does not move or add anything to the page until it is focused', async ({ page }) => {
+  await ready(page, 'x: Hover');
+  const baseline = await shot(page, '#a');
+  await page.evaluate(async () => m.update(await compile('x: Hover {tooltip: Some tip}')));
+  expect(await diff(page, baseline, await shot(page, '#a'))).toEqual({ ratio: 0 });
+  expect(await page.locator('#a').evaluate(el => el.shadowRoot.querySelector('[role="tooltip"]').offsetParent)).toBeNull();
+});

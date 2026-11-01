@@ -10,7 +10,7 @@ export const webForms = {
   'label-position': 'Positioned text, computed by D2 layout',
   'icon-position': 'Element `img` (or inline SVG) positioned by D2 layout',
   near: 'Positioned text',
-  tooltip: 'Hover and focus popover (`title` today; any other element is still only the D2 tooltip text, with no behaviour of our own), never an always-visible badge',
+  tooltip: 'Hover shows the browser\'s `title`; keyboard focus on the object (or its link) shows a `role=tooltip` element holding the D2 tooltip text (spec 0009 stage C). Never an always-visible badge',
   direction: 'Layout only',
   'layout-engine': 'Layout only',
   grid: 'Geometry from D2 layout',
