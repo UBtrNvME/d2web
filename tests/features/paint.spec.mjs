@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from '../../packages/d2web/tests/browser/harness.mjs';
-import { goEnv, goRun, root } from '../examples.mjs';
+import { goEnv, goRun, root, typesettingUtilsDir } from '../examples.mjs';
 import { catalog } from './catalog.mjs';
 import { boardTarget } from './compile.mjs';
 import { writeReport } from './report.mjs';
@@ -12,7 +12,7 @@ import { writeReport } from './report.mjs';
 // Feature map step 3: every catalog entry compiled in the browser worker, mounted with the shipping mount API, and compared with D2's own
 // native SVG for the same options. Records a status per entry; it does not fail on a difference (baseline.json guards regressions in step 5).
 // Consumer fonts for the Unicode family, read from the pinned go-text/typesetting-utils test data (not copied: their licences are not shipped with them).
-const utils = goRun('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/go-text/typesetting-utils'], { cwd: join(root, 'packages/d2web-wasm'), env: { ...goEnv, GOFLAGS: '-mod=readonly' } }).trim();
+const utils = typesettingUtilsDir();
 const fontFiles = { dejavu: ['DejaVu Sans', 'DejaVuSans.ttf'], mplus: ['M+ 1p', 'mplus-1p-regular.ttf'] };
 const output = join(root, 'artifacts/feature-map');
 const shots = join(output, 'shots');

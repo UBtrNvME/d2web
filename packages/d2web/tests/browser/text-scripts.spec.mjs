@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { goEnv, goRun, root } from '../../../../tests/examples.mjs';
+import { goEnv, goRun, root, typesettingUtilsDir } from '../../../../tests/examples.mjs';
 import { open } from './harness.mjs';
 
 // Spec 0007 section 3: Hebrew, CJK, emoji, long right-to-left and mixed-direction text through consumer-listed fonts. The font bytes are not copied into
 // this repository (their licences are not shipped with them); they are read from the pinned go-text/typesetting-utils test data (go.sum), which
 // holds DejaVu Sans (Hebrew, Arabic, emoji outlines) and M+ 1p (kana and kanji).
-const utils = goRun('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/go-text/typesetting-utils'], { cwd: join(root, 'packages/d2web-wasm'), env: { ...goEnv, GOFLAGS: '-mod=readonly' } }).trim();
+const utils = typesettingUtilsDir();
 const fonts = { 'DejaVuSans.ttf': readFileSync(join(utils, 'opentype/common/DejaVuSans.ttf')), 'mplus-1p-regular.ttf': readFileSync(join(utils, 'opentype/common/mplus-1p-regular.ttf')) };
 const host = '<div id="a" style="position:absolute;left:0;top:0"></div>';
 

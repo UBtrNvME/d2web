@@ -43,6 +43,13 @@ export function goRun(command, args, options = {}) {
   return result.stdout;
 }
 
+// Directory of go-text/typesetting-utils (test fonts such as DejaVu Sans and M+ 1p), downloaded on demand: only the build list is in a fresh module cache.
+export function typesettingUtilsDir() {
+  const opts = { cwd: join(root, 'packages/d2web-wasm'), env: { ...goEnv, GOFLAGS: '-mod=readonly' } };
+  goRun('go', ['mod', 'download', 'github.com/go-text/typesetting-utils'], opts);
+  return goRun('go', ['list', '-m', '-f', '{{.Dir}}', 'github.com/go-text/typesetting-utils'], opts).trim();
+}
+
 // Builds a Go probe to `binary` and, unless disabled, `${binary}.wasm`; returns runners for each.
 export function goProbe(source, binary, wasm = true) {
   goRun('go', ['build', '-mod=readonly', '-o', binary, source]);
