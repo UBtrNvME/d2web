@@ -23,6 +23,13 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@v5
       - run: mise run setup
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: go-${{ runner.os }}-${{ hashFiles('mise.toml', 'packages/d2web-wasm/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      # A cold Go build of D2 takes minutes; the parallel check tasks each have a 180 s limit, so compile once up front.
+      - run: mise run build
       - run: mise run browser:install
       - run: mise run check:full
       - if: ${{ inputs.full_corpus == true }}
