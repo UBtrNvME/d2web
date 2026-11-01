@@ -146,7 +146,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const px = n => `${num(n)}px`;
 
   // Returns [markup, reason]: reason is set when the primitive must be SVG.
-  function primitiveHtml(p) {
+  function primitiveHtml(p, codeToken = false) {
     if (!p) return ['', null];
     const stroke = p.Stroke && p.Stroke.Paint && p.Stroke.Width > 0 ? p.Stroke : null;
     const strokeOk = !stroke || (solid(stroke.Paint) && !stroke.Dashes?.length && split(stroke.Paint.Color)[1] === 1);
@@ -166,7 +166,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       const decoration = [p.Underline && 'underline', p.Strike && 'line-through'].filter(Boolean).join(' ');
       const shift = ['0', '-50%', '-100%'][p.Anchor];
       // top is set after layout from the measured baseline (placeText in the spec); the empty inline-block marks it.
-      return [`<div data-k="text" data-y="${num(p.Origin.Y)}" style="position:absolute;left:${px(p.Origin.X)};top:0;white-space:pre;line-height:normal;font-synthesis:none;font-family:${fontStack(p)};font-size:${px(p.Font.Size)};color:${rgba(p.Fill.Color)};transform:translateX(${shift})${decoration ? `;text-decoration:${decoration}` : ''}"><span data-baseline style="display:inline-block;width:0;height:0"></span>${esc(p.Text)}\n</div>`, null];
+      return [`<div data-k="text" data-y="${num(p.Origin.Y)}" style="position:absolute;left:${px(p.Origin.X)};top:0;white-space:pre;line-height:normal;font-synthesis:none;font-family:${fontStack(p)};font-size:${px(p.Font.Size)};color:${rgba(p.Fill.Color)};transform:translateX(${shift})${decoration ? `;text-decoration:${decoration}` : ''}"><span data-baseline style="display:inline-block;width:0;height:0"></span>${esc(p.Text)}${codeToken ? '' : '\n'}</div>`, null];
     }
     if (p.$ === 'Image') {
       const asset = scene.Assets[p.Asset];
@@ -249,7 +249,56 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const linkName = l => { const n = objectFor(l); return n ? nameOf(n) : ''; };
   if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
-  function nodeHtml(n) {
+  // Table/line wrappers do not shift coordinates; the code pre shares the object's origin.
+  function childrenHtml(n) {
+    const children = kids(n);
+    if (children.some(c => c.ID === `${n.ID}:code-background`)) {
+      const lines = new Map();
+      const other = [];
+      for (const c of children) {
+        const match = c.ID?.slice(n.ID.length).match(/^:code-line:(\d+):token:\d+$/);
+        if (match) { const line = +match[1]; if (!lines.has(line)) lines.set(line, []); lines.get(line).push(c); }
+        else other.push(nodeHtml(c));
+      }
+      // D2 advances over whitespace-only tokens without emitting runs; its label supplies those gaps and empty lines.
+      const source = info.get(n.ID)?.label?.replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
+      const count = [...lines.keys()].reduce((max, i) => Math.max(max, i + 1), source?.length ?? 0);
+      const blocks = [];
+      for (let i = 0; i < count; i++) {
+        let cursor = 0, body = '';
+        for (const token of lines.get(i) ?? []) {
+          const text = token.Primitive.Text;
+          const start = source ? source[i].indexOf(text, cursor) : cursor;
+          if (start < 0) throw new Error(`code run ${token.ID} is absent from D2's label`);
+          body += esc(source?.[i].slice(cursor, start) ?? '') + nodeHtml(token, true);
+          cursor = start + text.length;
+        }
+        body += esc(source?.[i].slice(cursor) ?? '');
+        blocks.push(`<span style="display:block">${body}${i + 1 < count ? '\n' : ''}</span>`);
+      }
+      return other.join('') + `<pre style="position:absolute;left:0;top:0;margin:0;padding:0;border:0;font:inherit;white-space:pre"><code style="font:inherit">${blocks.join('')}</code></pre>`;
+    }
+    const table = children.some(c => c.ID === `${n.ID}:table-header` || c.ID === `${n.ID}:class-header`);
+    if (!table) return children.map(c => nodeHtml(c)).join('');
+    const wrap = (role, body) => `<div${a11y ? ` role="${role}"` : ''} style="display:contents">${body}</div>`;
+    let body = '', row = '', key = null;
+    const flush = () => { if (key !== null) body += wrap('row', key === 'header' ? wrap('columnheader', row) : row); row = ''; };
+    for (const c of children) {
+      const part = c.ID?.slice(n.ID.length);
+      const header = /^:(?:table|class)-header(?:-label(?::\d+)?)?$/.test(part);
+      const match = part?.match(/^:(table-row|class-field|class-method):(\d+):(name|type|constraint|prefix|separator)$/);
+      const next = header ? 'header' : match ? `${match[1]}:${match[2]}` : null;
+      if (next !== key) { flush(); key = next; }
+      let markup = nodeHtml(c);
+      if (match && match[3] !== 'separator') markup = wrap('cell', markup);
+      if (key === null) body += markup;
+      else row += markup;
+    }
+    flush();
+    return `<div${a11y ? ` role="table" aria-label="${esc(nameOf(n))}"` : ''} style="display:contents">${body}</div>`;
+  }
+
+  function nodeHtml(n, codeToken = false) {
     if (!n) return '';
     const heavy = n.Filters?.length || n.Blend || n.Animations?.length;
     const effect = heavy || ((n.Clip || n.Mask) && !cssMasks);
@@ -280,10 +329,10 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       if (mask) { outer.push(`mask:url(#${mask})`); count('html:masked-group'); }
       let own = '';
       if (n.Primitive) {
-        const [markup, reason] = primitiveHtml(n.Primitive);
+        const [markup, reason] = primitiveHtml(n.Primitive, codeToken);
         if (markup === null) { own = svgBox(primitive(n.Primitive)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
       }
-      return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${outer.join(';')}"><div style="position:absolute;left:${px(-bx)};top:${px(-by)}">${own}${kids(n).map(nodeHtml).join('')}</div></div>`;
+      return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${outer.join(';')}"><div style="position:absolute;left:${px(-bx)};top:${px(-by)}">${own}${childrenHtml(n)}</div></div>`;
     }
     if (n.Clip || n.Mask) {
       // CSS clip-path/mask by url() refer to the element's border box, so the group gets the document extent at the local origin.
@@ -294,10 +343,10 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     }
     let own = '';
     if (n.Primitive) {
-      const [markup, reason] = primitiveHtml(n.Primitive);
+      const [markup, reason] = primitiveHtml(n.Primitive, codeToken);
       if (markup === null) { own = svgBox(primitive(n.Primitive)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
     }
-    return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${style.join(';')}">${own}${kids(n).map(nodeHtml).join('')}</div>`;
+    return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${style.join(';')}">${own}${childrenHtml(n)}</div>`;
   }
 
   if (html) {

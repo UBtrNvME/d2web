@@ -269,16 +269,16 @@ Hebrew, Arabic, mixed direction, Japanese, Cyrillic, Greek, accents and outline 
 
 | Case | D2 | Mechanism | Primitives | Status | Difference | Note |
 | --- | --- | --- | --- | --- | --- | --- |
-| `hebrew` | `x: שלום עולם` | scene-paint |  | scene-checked |  |  |
-| `arabic` | `x: مرحبا بالعالم` | scene-paint |  | scene-checked |  |  |
-| `mixed-direction` | `x: abc שלום def 123 عربي end` | scene-paint |  | scene-checked |  |  |
-| `japanese` | `x: あいう 漢字 かな` | scene-paint |  | scene-checked |  |  |
-| `cyrillic-greek` | `x: Привет мир αβγ δ` | scene-paint |  | scene-checked |  |  |
-| `accents` | `x: éñüçøåß ąęł ăîșț` | scene-paint |  | scene-checked |  |  |
-| `emoji-outline` | `x: 😀 smile` | scene-paint |  | scene-checked |  |  |
-| `rtl-in-container` | `g: מכולה {a: שלום; b: עולם; a -> b: חץ}` | scene-paint |  | scene-checked |  |  |
-| `cjk-edge-label` | `a: 日本 -> b: 中文: ラベル` | scene-paint |  | scene-checked |  |  |
-| `bold-italic-hebrew` | `x: שלום {style.bold: true; style.italic: true}` | scene-paint |  | scene-checked |  |  |
+| `hebrew` | `x: שלום עולם` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `arabic` | `x: مرحبا بالعالم` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `mixed-direction` | `x: abc שלום def 123 عربي end` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `japanese` | `x: あいう 漢字 かな` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `cyrillic-greek` | `x: Привет мир αβγ δ` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `accents` | `x: éñüçøåß ąęł ăîșț` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `emoji-outline` | `x: 😀 smile` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `rtl-in-container` | `g: מכולה {a: שלום; b: עולם; a -> b: חץ}` | scene-paint | Path, Rect, TextRun | scene-checked |  |  |
+| `cjk-edge-label` | `a: 日本 -> b: 中文: ラベル` | scene-paint | Rect, TextRun | scene-checked |  |  |
+| `bold-italic-hebrew` | `x: שלום {style.bold: true; style.italic: true}` | scene-paint | Rect, TextRun | scene-checked |  |  |
 
 ## Beyond painting
 
