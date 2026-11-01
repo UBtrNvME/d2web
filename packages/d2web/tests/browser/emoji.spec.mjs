@@ -70,3 +70,43 @@ test("patched D2: the emoji option gives colour emoji their own glyphs and advan
   expect(out.emojiAsset).not.toContain('SourceSansPro');
   expect(out.emojiAdvance).not.toBeCloseTo(12.91, 1);
 });
+
+// Paint check: the browser draws the emoji run in colour with the width D2 laid out (scene advance sum), so layout and paint agree.
+test("patched D2: painted colour emoji are coloured and as wide as D2 laid them out", async ({ page, browserName }) => {
+  test.skip(!emojiPatched, 'the bundled-emoji patch is not applied to imports/d2');
+  test.skip(!existsSync(d2Emoji), 'the D2 checkout is missing its bundled emoji font');
+  test.setTimeout(120_000);
+  await open(page, { body: '<div id="a" style="position:absolute;left:0;top:0"></div>' });
+  await page.route('https://host.test/fonts/**', route => route.fulfill({ body: brotliDecompressSync(readFileSync(d2Emoji)), contentType: 'font/ttf' }));
+  const out = await page.evaluate(async source => {
+    const c = d2web.createClient({ spawn: () => new Worker('/worker.js?exec=/wasm_exec.js&wasm=/d2web.wasm'), emoji: { name: 'Emoji', url: '/fonts/emoji.ttf' } });
+    const view = d2web.mount(document.getElementById('a'));
+    const r = await c.compile({ revision: 1, files: { 'main.d2': source }, entry: 'main.d2', layout: 'dagre', render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false } });
+    c.dispose();
+    if (r.error) return { error: r.error.message };
+    await view.update(r);
+    await document.fonts.ready;
+    const runs = [];
+    const walk = n => { if (n.Primitive?.$ === 'TextRun') runs.push(n.Primitive); (n.Children ?? []).forEach(walk); };
+    walk(r.boards[0].scene.Root);
+    const run = runs.find(p => p.Text.includes('\u{1F600}'));
+    const el = [...document.getElementById('a').shadowRoot.querySelectorAll('[data-k="text"]')].find(e => e.textContent.includes('\u{1F600}'));
+    const box = el.getBoundingClientRect();
+    return { sceneWidth: run.Glyphs.reduce((w, g) => w + g.Advance, 0), browserWidth: box.width, box: { x: box.x, y: box.y, width: box.width, height: box.height } };
+  }, source);
+  expect(out.error).toBeUndefined();
+  expect(Math.abs(out.browserWidth - out.sceneWidth), `scene ${out.sceneWidth}, browser ${out.browserWidth}`).toBeLessThan(0.5);
+  const png = await page.screenshot({ clip: out.box, animations: 'disabled' });
+  const colourful = await page.evaluate(async b64 => {
+    const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode();
+    const cv = document.createElement('canvas'); cv.width = i.width; cv.height = i.height;
+    const g = cv.getContext('2d'); g.drawImage(i, 0, 0);
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let n = 0;
+    for (let k = 0; k < d.length; k += 4) if (Math.max(d[k], d[k + 1], d[k + 2]) - Math.min(d[k], d[k + 1], d[k + 2]) > 60) n++;
+    return n;
+  }, png.toString('base64'));
+  // WebKit does not paint COLRv1 web fonts (measured: the run keeps D2's width but draws no colour), so there it is pinned as a limitation.
+  if (browserName === 'webkit') expect(colourful, 'WebKit: no colour from a COLRv1 font').toBe(0);
+  else expect(colourful, 'pixels with real colour in the emoji run').toBeGreaterThan(20);
+});
