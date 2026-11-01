@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      browser:
+        description: Also run every Chromium suite (check:browser; its baselines are macOS-calibrated, see AGENTS.md)
+        type: boolean
+        default: false
       full_corpus:
         description: Also render all upstream D2 files and archived examples
         type: boolean
@@ -35,7 +39,9 @@ jobs:
           GOCACHE: ${{ github.workspace }}/.cache/go-build
           GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
       - run: mise run browser:install
-      - run: mise run check:full
+      - run: mise run check
+      - if: ${{ inputs.browser == true }}
+        run: mise run check:browser
       - if: ${{ inputs.full_corpus == true }}
         run: mise run test:native:corpus
       - uses: actions/upload-artifact@v7

@@ -74,7 +74,7 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run test:dist` | Build, then check dist contents and the size budget |
 | `mise run test:consumer` | Build, pack, and load the tarball in a bundler-free Chromium page, including under a strict CSP |
 | `mise run check:browser` | Every Chromium/Playwright suite (about 3 min) |
-| `mise run check:full` | `check` plus `check:browser`; what CI runs |
+| `mise run check:full` | `check` plus `check:browser`; run locally before handoff (CI runs `check`, and `check:browser` only when started by hand) |
 | `mise run check` | Fast gate (about 10 s, no browser): validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
 | `mise run test:scene` | Build the native/WASM geometry scene probe and check Node/WASM equivalence |
 | `mise run test:research:identity` | Compare selected source/identity projections in native and Node/WASM |

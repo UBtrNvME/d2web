@@ -47,7 +47,7 @@
 | `mise run browser:install` | Install the automated Chromium test browser |
 | `mise run doctor` | Print the resolved Node.js, Corepack, pnpm, Go, and D2 versions |
 | `mise run check:browser` | Every Chromium/Playwright suite (about 3 min); run before handoff |
-| `mise run check:full` | `check` plus `check:browser`; what CI runs |
+| `mise run check:full` | `check` plus `check:browser`; run locally before handoff. CI runs `check` on every push and `check:browser` only when started by hand (the browser baselines are macOS-calibrated and fail on Linux fonts; Linux baselines are not made yet) |
 | `mise run check` | Fast gate (about 10 s, no browser): verify tooling, the D2 v0.9.0 reference checkout, native examples, output sets, screenshot comparison machinery and five research probes |
 | `mise run test:native:corpus` | Render all upstream file/archive cases with TALA |
 | `mise run test:parity` | Compare native SVGs to web scenes from `D2_WEB_OUTPUT` |
