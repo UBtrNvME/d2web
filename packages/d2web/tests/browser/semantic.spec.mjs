@@ -39,18 +39,22 @@ for (const [name, text] of [['two source lines', code], ['blank lines and indent
     const group = page.locator('#a [data-id="c"][role="group"]');
     await expect(group).toHaveAttribute('aria-label', text);
     await expect(group.locator('pre > code > span')).toHaveCount(text.split('\n').length);
-    const out = await group.locator('pre > code').evaluate(el => {
-      const range = document.createRange(); range.selectNodeContents(el);
-      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-      const copy = selection.toString(); selection.removeAllRanges();
-      return { text: el.textContent, copy, lines: [...el.children].map(line => line.textContent),
-        ids: [...el.querySelectorAll('[data-id]')].map(e => e.dataset.id) };
-    });
+    // A real selection and copy: drag across the block, then the copy shortcut. d2web rebuilds the text (Firefox and WebKit would copy one token per line).
+    await page.evaluate(() => { window.copied = null; document.addEventListener('copy', e => { window.copied = e.clipboardData.getData('text/plain'); }); });
+    const tokens = group.locator('pre [data-k="text"]');
+    const first = await tokens.first().boundingBox(), last = await tokens.last().boundingBox();
+    await page.mouse.move(first.x + 1, first.y + 2);
+    await page.mouse.down();
+    await page.mouse.move(last.x + last.width - 1, last.y + last.height - 2, { steps: 8 });
+    await page.mouse.up();
+    await page.keyboard.press('ControlOrMeta+c');
+    const out = await group.locator('pre > code').evaluate(el => ({ text: el.textContent, copy: window.copied, lines: [...el.children].map(line => line.textContent),
+      ids: [...el.querySelectorAll('[data-id]')].map(e => e.dataset.id) }));
     expect(out.text).toBe(text);
-    // Known gap (spec 0009): Firefox and WebKit serialise each absolutely positioned token as its own block, so a selection copies one token per line.
-    if (browserName === 'chromium') expect(out.copy, 'the rendered selection that copy reads').toBe(text);
+    expect(out.copy, 'the text a copy event carries').toBe(text);
     expect(out.lines).toEqual(text.split('\n').map((line, i, lines) => line + (i + 1 < lines.length ? '\n' : '')));
     expect(out.ids).toEqual(association.objects.find(o => o.id === 'c').nodes.filter(id => id.includes(':code-line:')));
+    await page.evaluate(() => { clicked.length = 0; }); // the selecting drag ends in a click as well
     await group.locator('[data-k="text"]').first().click({ force: true });
     expect(await page.evaluate(() => clicked)).toEqual(['c']);
   });

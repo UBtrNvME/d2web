@@ -42,6 +42,25 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   // visibility:inherit keeps a consumer who hides the host in control (plain all:initial would reset it).
   wrapper.style.cssText = 'all:initial;display:block;visibility:inherit';
   shadow.append(wrapper);
+  // Firefox and WebKit serialise each absolutely positioned code token as its own block, so a selection inside a code block would copy one token per
+  // line. Rebuild that text from the selected fragment instead: the line spans carry D2's own newlines (spec 0009).
+  const onCopy = (e: ClipboardEvent) => {
+    const selection = (shadow as unknown as { getSelection?: () => Selection | null }).getSelection?.() ?? document.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    // WebKit hides a selection inside a shadow root from getRangeAt; getComposedRanges names it.
+    const composed = (selection as unknown as { getComposedRanges?: (o: { shadowRoots: ShadowRoot[] }) => StaticRange[] }).getComposedRanges?.({ shadowRoots: [shadow] })[0];
+    const range = composed ? document.createRange() : selection.getRangeAt(0);
+    if (composed) { range.setStart(composed.startContainer, composed.startOffset); range.setEnd(composed.endContainer, composed.endOffset); }
+    if (range.collapsed) return;
+    const anchor = range.commonAncestorContainer;
+    const pre = (anchor instanceof Element ? anchor : anchor.parentElement)?.closest('pre');
+    if (!pre || !wrapper.contains(pre)) return;
+    const textOf = (node: Node): string => (node.nodeType === Node.TEXT_NODE ? node.textContent ?? '' : [...node.childNodes].map(textOf).join(''));
+    e.clipboardData?.setData('text/plain', textOf(range.cloneContents()));
+    e.preventDefault();
+  };
+  // On the host, not the wrapper: WebKit retargets a copy from inside a shadow root to the host.
+  host.addEventListener('copy', onCopy);
 
   let disposed = false;
   let running: Animation[] = [];
@@ -208,6 +227,7 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
       if (disposed) return;
       disposed = true;
       for (const a of running) a.cancel();
+      host.removeEventListener('copy', onCopy);
       wrapper.remove();
       listeners.clear();
       content.clear();

@@ -53,7 +53,7 @@ Next: in a session that can launch the installed browsers and write the shared G
 
 ## Known gaps found while building
 
-- **Copy from code in Firefox and WebKit (stage A, open).** `pre > code > span` per line is correct and `textContent` is D2's text, but a rendered selection copies one token per line there, because each token is an absolutely positioned (block-level) box. Chromium copies the source lines. A fix needs the tokens of a line to flow inline (stage B territory: lay the line out in the browser inside D2's box and check it against D2's token positions) or a `copy` handler; neither is done. The test asserts the copy text in Chromium only and says so.
+- **Copy from code in Firefox and WebKit (stage A, fixed 2 November 2026).** Each token is an absolutely positioned (block-level) box, so those browsers serialised a selection as one token per line. `mount` now handles the `copy` event for a selection inside one `pre` and puts the text of the selected line spans on the clipboard (`getComposedRanges` where the selection is hidden in the shadow root). Checked with a real drag selection and the copy shortcut in Chromium, Firefox and WebKit. Limit: a selection that spans a code block and other text is left to the browser.
 
 ## Stage B1: markdown semantics without re-layout (1-2 November 2026)
 
@@ -61,4 +61,4 @@ Built by inference from D2's own output, pinned to D2 v0.9.0: heading levels fro
 
 Checks: `semantic.spec.mjs` (10 tests) passes in Chromium, Firefox and WebKit, including the C1 test: zero pixel delta against the checkpoint painter for every content, table and shape case plus the markdown sample. `test:client` 62 passed, `test:features:paint` and `mise run check` pass. Links are left out of the Tab order in Safari/WebKit, so that assertion is skipped there as in `links.spec.mjs`.
 
-Not done (stage B proper): browser reflow of markdown inside D2's box (C2), h4..h6, nested lists. Still open from stage A: copy from code in Firefox and WebKit.
+Not done (stage B proper): browser reflow of markdown inside D2's box (C2), h4..h6, nested lists.
