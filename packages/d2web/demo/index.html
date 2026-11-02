@@ -59,6 +59,96 @@ const examples = {
   'Nested containers': 'cloud: Cloud {\n  region: eu-west {\n    api: API\n    worker: Worker\n    api -> worker: jobs\n  }\n  store: Storage {shape: cylinder}\n  region.worker -> store\n}\nuser: User {shape: person}\nuser -> cloud.region.api: https\n',
   'Multi-line labels': 'a: "Line one\\nLine two\\nLine three"\nb: Single\na -> b: "edge label\\non two lines"\n',
   'Layers (boards)': 'a -> b\nlayers: {\n  detail: {\n    x -> y\n  }\n}\n',
+  'd2web in the D2 ecosystem': String.raw`direction: down
+
+classes: {
+  part: {style: {border-radius: 8; stroke-width: 2; font-size: 18}}
+  stage: {style: {border-radius: 8; font-size: 18}}
+  later: {style: {stroke-dash: 4; stroke-width: 2; border-radius: 8; opacity: 0.85; font-size: 18}}
+  call: {style: {stroke-width: 2; font-size: 16}}
+  feed: {style: {stroke-dash: 3; opacity: 0.85; font-size: 16}}
+  tier: {style: {font-size: 22; border-radius: 12}}
+}
+
+title: |md
+  # d2web in the D2 ecosystem
+  D2 text in, native DOM out. D2 decides; d2web paints.
+| {near: top-center}
+
+host: Host page {
+  class: tier
+  direction: right
+  author: Author {shape: person; style.font-size: 18}
+  demo: "Demo app\nGitHub Pages" {class: part}
+  editor: "d2editor\n(future)" {class: later}
+  react: "React binding\n(future)" {class: later}
+  author -> demo: writes D2 {class: call}
+}
+
+pkg: "@d2web package (TypeScript, framework independent)" {
+  class: tier
+  direction: right
+  client: "Client\ncreateClient\nlatest request wins" {class: part}
+  worker: "Worker\none compile at a time\nrevision echoed" {class: part}
+  mount: "Mount\nshadow root · typed events\nsetNodeContent" {class: part; tooltip: "hover, click and focus carry D2 identity: board path and object ID"}
+  painter: "Painter\npaintScene(scene)\nHTML first, SVG where needed" {class: part}
+  fonts: "Fonts\nconsumer-listed faces" {shape: document; style.font-size: 18}
+  client -> worker: postMessage {class: call}
+  client -> mount: "update(result, board)" {class: call}
+  mount -> painter: paintScene {class: call}
+  fonts -> mount: "@font-face" {class: feed}
+}
+
+wasm: "d2web.wasm (Go, pinned D2 v0.9.0)" {
+  class: tier
+  direction: down
+  front: Parse and compile {
+    direction: right
+    style.font-size: 18
+    parser: "d2parser\ntext → AST" {class: stage}
+    ir: "d2ir\nimports · classes\nglobs · vars" {class: stage}
+    compiler: "d2compiler\nAST → d2graph" {class: stage}
+    parser -> ir -> compiler: {class: call}
+  }
+  back: Layout and scene {
+    direction: right
+    style.font-size: 18
+    engines: "Layout engines" {
+      direction: right
+      style.font-size: 16
+      tala: TALA {shape: hexagon}
+      dagre: dagre {shape: hexagon}
+      elk: ELK {shape: hexagon}
+    }
+    target: "d2target.Diagram\npositions · routes · styles" {class: stage}
+    build: "d2scenebuild\nthemes · sketch\nfonts · assets" {class: stage}
+    scene: "Scene JSON\nassociation · diagnostics" {shape: page; style.font-size: 18}
+    engines -> target -> build -> scene: {class: call}
+  }
+  front.compiler -> back.engines: d2graph {class: call}
+}
+
+dom: "Native DOM\nHTML + SVG in a shadow root" {shape: cloud; style.font-size: 18}
+
+reference: Reference and quality {
+  class: tier
+  direction: right
+  cli: "d2 CLI (TALA)\nnative SVG" {shape: document; style.font-size: 18}
+  e2e: "Playwright conformance\nwithin 5% raster of native" {shape: diamond; style.font-size: 16}
+  ci: "mise run check\ncheck:browser · Actions" {shape: queue; style.font-size: 18}
+  cli -> e2e: SVG {class: call}
+  e2e -> ci: gates {class: call}
+}
+
+host.demo -> pkg.client: "compile({files, entry,\nlayout, render})" {class: call}
+host.editor -> pkg.client: {class: feed}
+host.react -> pkg.mount: {class: feed}
+pkg.worker -> wasm.front.parser: run {class: call}
+wasm.back.scene -> pkg.worker: "result: boards + fonts" {class: call}
+pkg.painter -> dom: markup {class: call}
+dom -> host.demo: "events · nodeBox" {class: feed}
+dom -> reference.e2e: screenshot {class: feed}
+`,
 };
 const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
 const $ = id => document.getElementById(id);
