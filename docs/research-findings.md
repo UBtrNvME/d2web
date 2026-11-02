@@ -418,3 +418,14 @@ Probe: [research/images.go](../research/images.go), test `mise run test:research
 - **Native and WASM agree** on the lists, the requested set and the asset ids (checked by hand: the Node/WASM test in this sandbox cannot start, because the Go toolchain here lives inside the repo's module cache where `package.json` makes Go's `wasm_exec_node.js` an ES module; the existing `options` test fails the same way here, so it is an environment quirk, not this probe). The probe binary was run through a CommonJS copy of the launcher and matched.
 
 Not established: arrowhead icons and icons inside `sql_table` and `class` shapes beyond what `shapeAssetIsEmitted` implies; the limits and timeout defaults; behaviour on the final worker protocol (this is the library layer under it); what a consumer does about local binary files.
+
+## Images: what the implementation showed (spec 0010, 2 November 2026)
+
+Measured while building spec 0010 in the authoring sandbox (Linux, headless Chromium, one run each).
+
+- **D2 refuses unsupported image schemes itself.** `javascript:`, `file:`, `ftp:`, `//host/x` and a `data:` URI whose bytes are not an image fail the scene build with D2's own message, in every mode (probed through the worker, native). Only `http(s)` and relative or absolute paths reach the placeholder.
+- **A relative image path failed every browser compile.** D2's resolver stats the file system; `wasm_exec.js` answers every file call with ENOSYS ("not implemented"), which D2 reports as an error, not "file missing" (`stat /relative/icon.png: not implemented on js`). With ENOENT instead, the resolver treats it as unavailable (placeholder). The resolver also accepts an optional `Cache`; one that answers the key `"file:" + absolute path` from consumer bytes makes a supplied relative path a real asset. A `Resource` can only be built by D2's code, so the cache builds each by resolving the bytes through a private resolver whose HTTP client serves only them.
+- **A `shape: image` node is `<id>:image`**, an icon on a shape or connection `<id>:icon` (dumped from the scene).
+- **Playwright's fulfilled cross-origin responses do not enforce CORS**; to model a CORS refusal for a page's `fetch` the test aborts requests of resource type `fetch` and lets image loads through.
+- **Preflight cost on the ecosystem example** (10 icons, 530 elements): 9.7 ms warm and 160 ms cold, against compiles of 1532 ms and 3073 ms (TALA, one board).
+- **Sandbox limits worth knowing:** no `d2` binary on the PATH (the native-comparison Playwright specs `e2e` and `fonts` fail with `spawnSync d2 ENOENT`, as they did before); `client.spec` "a newer request aborts a long compile…" fails with "no reply for 300 ms" before and after these changes; the Node/WASM runner cannot start (`require is not defined` under `"type": "module"`), so WASM output was compared with native by running the same request through a CommonJS copy of the runner with a minimal environment.

@@ -1,6 +1,6 @@
 # Spec 0010: images and icons
 
-Status: **accepted with the recommended answers to questions 1-6** (user, 2 November 2026: "Use the options which are provided"; section 4 records them). Drafted the same day after [ADR 0011](../adr/0011-images-like-native-d2.md) was accepted. Nothing in it is built yet. Implements ADR 0011's decision on top of [spec 0001](0001-compile-protocol.md) (protocol and scene), [spec 0004](0004-association.md) (association), [spec 0007](0007-fonts-and-text.md) (the page fetches, the worker stays offline) and the rules of [ADR 0009](../adr/0009-natural-web-forms.md) and [ADR 0010](../adr/0010-web-performance.md).
+Status: **accepted with the recommended answers to questions 1-6** (user, 2 November 2026: "Use the options which are provided"; section 4 records them). Drafted the same day after [ADR 0011](../adr/0011-images-like-native-d2.md) was accepted. **Built in five slices on 2 November 2026** (section 6 records what the build showed and where it differs from the design). Implements ADR 0011's decision on top of [spec 0001](0001-compile-protocol.md) (protocol and scene), [spec 0004](0004-association.md) (association), [spec 0007](0007-fonts-and-text.md) (the page fetches, the worker stays offline) and the rules of [ADR 0009](../adr/0009-natural-web-forms.md) and [ADR 0010](../adr/0010-web-performance.md).
 
 ## 1. What is known
 
@@ -117,9 +117,48 @@ Still unknown, to be settled by the tests below and recorded here: the associati
 | Supplied bytes reach the builder through the resolver's HTTP client with no patch | verified: same test |
 | The resolver requests the URL without its fragment | verified: probe run, `#frag` dropped from `…a%20b.svg?x=1&y=2#frag` |
 | The scene has no link-only asset; unavailable images share one placeholder | verified: `d2scene` source |
-| The icon node is `<id>:icon` for shapes and connections | read from `d2scenebuild/assets.go`; for `shape: image` to be confirmed by test 13 |
+| The icon node is `<id>:icon` for shapes and connections | verified (Go test and Chromium test 13); a `shape: image` is `<id>:image` |
 | Native PDF, PPTX and GIF match PNG | measured once, dagre |
-| The preflight in the worker protocol, the `images` field, the client modes, `fetchImages`, the fallback and the diagnostics | accepted design, not built |
-| The painter's `<img>` in `link` mode matches D2's icon box | proposed (test 11) |
-| TALA changes nothing about images; arrowhead and table icons | unknown |
-| Firefox and WebKit behaviour of any of it | unknown |
+| The preflight in the worker protocol, the `images` field, the client modes, `fetchImages`, the fallback and the diagnostics | verified: sections 3 and 6 |
+| The painter's `<img>` in `link` mode matches D2's icon box | verified in Chromium: the element is positioned from D2's `Image` primitive box and aspect; not compared pixel-for-pixel with native `--bundle=false` output |
+| TALA changes nothing about images; arrowhead and table icons | unknown (the Chromium tests use dagre-free default TALA for icon, image and edge icon; arrowhead and table icons not tried) |
+| Firefox and WebKit behaviour of any of it | unknown (not run) |
+
+## 6. As built (2 November 2026)
+
+Commits `21aa5cc` (worker), `aa58b71` (client), `b08982d` (link mode), `09d2427` (relative paths, Chromium tests), `187f007` (demo). What the build showed, including every place it differs from the design above:
+
+**Differences from the design**
+
+- **Board paths** in the preflight and in diagnostics are the compile result's paths (`""`, `/layers/x`, `/scenarios/y`), not `layers.x`, so a consumer can match them to `available`. The root board's empty `board` is omitted from a diagnostic, like every other diagnostic.
+- **A `shape: image` paints as the node `<id>:image`**, not `<id>:icon` (an icon on a shape or connection is `<id>:icon`). The association entry's `node` names whichever it is.
+- **D2 refuses unsafe schemes itself.** `javascript:`, `file:`, `ftp:`, `//host/...` and a malformed `data:` URI fail the compile with D2's message in every mode, as native does. The painter's allowlist (`http`, `https`, image `data:`) is therefore a second line of defence; the only links that reach the placeholder are `http(s)` and relative paths.
+- **Relative paths (decision 4) needed two things D2 does not do in a browser.** D2 reads a relative or absolute path from the file system, and the browser's `wasm_exec.js` answers every file call with "not implemented", which failed the whole compile (also before this spec). The worker now (1) answers the resolver's `Cache` for those paths from the supplied bytes, so a supplied relative path is a real asset, and (2) reports "no such file" instead of "not implemented", so an unsupplied one is the placeholder and a warning. This changes the default (no `images`) behaviour for a relative path from a failed compile to the placeholder, which is what native PNG does for a missing file. The cache key (`"file:" + absolute path`) is read from the pinned D2 v0.9.0 source; if it changed, the path would be unresolved, never wrong.
+- **The preflight is skipped** when no file contains the word `icon` (any image needs one), not when `supplied` covers every link, which cannot be known without the preflight. The worker still warns about any link it was not given.
+- **A failed link is remembered for 60 s** (a resolved one until evicted by the count or the 32 MiB cumulative limit), so a hanging link does not stall every keystroke by the 15 s timeout.
+- **The request carries `linkImages: true`** (set by the client for `link` mode and for `bundle` with `fallback: 'link'`) to ask the worker for the association entries; `echo.images` is `'bundle'` or `'link'` when the request chose a mode and absent otherwise.
+
+**Test plan state**
+
+| Test | State |
+| --- | --- |
+| 1 option validation | verified (`images.test.mjs`) |
+| 2 flow order, distinct links, fragment, keys, requested boards only | verified (`images.test.mjs`) |
+| 3 failures, concurrency, count | verified (`images.test.mjs`) |
+| 4 latest wins, abort without respawn | verified (`images.test.mjs`); relative path in Chromium |
+| 5 cache, bound, failed-link memory | verified (`images.test.mjs`) |
+| 6 worker transport and limits | verified (`compile/images_test.go`, `protocol.test.mjs`; the Node/WASM half cannot start in the authoring sandbox, run by hand: preflight and compile output equal native) |
+| 7 bundle paints real vectors and raster | verified in Chromium; **the comparison with native output within 5% was not run** (no `d2` binary in the authoring sandbox), and Firefox and WebKit were not run |
+| 8 unresolved warning | verified in Chromium |
+| 9 gradient rejection | verified in Chromium |
+| 10 default unchanged | verified (client unit test, Chromium: no preflight, no request, placeholder); a relative path now degrades to the placeholder instead of failing, as above |
+| 11 link mode | verified in Chromium: element at D2's box, `no-referrer`, only the browser's own image requests; unsafe schemes are D2 errors |
+| 12 hostile bytes | verified in Chromium: no script, `foreignObject`, handler or external reference reaches the DOM, nothing runs, no request |
+| 13 association | verified (Go and Chromium) |
+| 14 performance | preflight 9.7 ms against a 1532 ms compile on the ecosystem example once warm (0.6%), 160 ms against 3073 ms on the first run in a fresh worker (5.2%); one compile per update; the camera path is untouched. One machine, headless Chromium, no throttle |
+| 15 demo | verified in Chromium (`test:demo`): shim and its test removed; icons fetched by the page and painted as vectors; with the fetch refused they are `<img>` and the status line counts them |
+| 16 `fetchImages` | verified (`images.test.mjs`) |
+| 17 fallback | verified (Go, client, Chromium) |
+| 18 docs | done: feature map text, capability matrix row 5a, spec 0001 section 4, README, ADR 0011 status. The `icon-remote` case was not re-measured with `images` set |
+
+**Still unknown:** Firefox and WebKit, native comparison of a supplied-bytes board, TALA's effect on images, arrowhead and table icons, cold-preflight cost on a phone, and whether a `Blob` URL or `ImageBitmap` path would avoid copying large rasters (not needed so far).
