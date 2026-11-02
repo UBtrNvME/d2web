@@ -77,7 +77,6 @@ title: |md
 
 host: Host page {
   class: tier
-  direction: right
   author: Author {shape: person; style.font-size: 18}
   demo: "Demo app\nGitHub Pages" {class: part}
   editor: "d2editor\n(future)" {class: later}
@@ -87,7 +86,6 @@ host: Host page {
 
 pkg: "@d2web package (TypeScript, framework independent)" {
   class: tier
-  direction: right
   client: "Client\ncreateClient\nlatest request wins" {class: part}
   worker: "Worker\none compile at a time\nrevision echoed" {class: part}
   mount: "Mount\nshadow root · typed events\nsetNodeContent" {class: part; tooltip: "hover, click and focus carry D2 identity: board path and object ID"}
@@ -132,7 +130,6 @@ dom: "Native DOM\nHTML + SVG in a shadow root" {shape: cloud; style.font-size: 1
 
 reference: Reference and quality {
   class: tier
-  direction: right
   cli: "d2 CLI (TALA)\nnative SVG" {shape: document; style.font-size: 18}
   e2e: "Playwright conformance\nwithin 5% raster of native" {shape: diamond; style.font-size: 16}
   ci: "mise run check\ncheck:browser · Actions" {shape: queue; style.font-size: 18}
@@ -146,7 +143,6 @@ host.react -> pkg.mount: {class: feed}
 pkg.worker -> wasm.front.parser: run {class: call}
 wasm.back.scene -> pkg.worker: "result: boards + fonts" {class: call}
 pkg.painter -> dom: markup {class: call}
-dom -> host.demo: "events · nodeBox" {class: feed}
 dom -> reference.e2e: screenshot {class: feed}
 `,
 };
