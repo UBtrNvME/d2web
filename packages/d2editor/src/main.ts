@@ -1,5 +1,5 @@
 // d2editor (spec 0013): the D2 text is the only document; canvas actions become d2web edits (spec 0012) and land in it as checked patches.
-import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult } from '../../d2web/src/index.ts';
+import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type SceneDocument } from '../../d2web/src/index.ts';
 import { createHistory } from './history.ts';
 import { snap } from './snap.ts';
 import { canvas } from './canvas.ts';
@@ -25,7 +25,7 @@ try { initial = localStorage.getItem(STORAGE) ?? START; } catch { /* storage is 
 const client = createClient({ spawn: spawnWorker() });
 const view = mount($('host'));
 const history = createHistory(initial);
-const camera = canvas($('canvas'), $('host'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; });
+const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; });
 // Fit the next painted board: on load, an opened file or example, and a board switch.
 let fitNext = true;
 // `painted` is the revision the canvas shows.
@@ -79,9 +79,7 @@ async function compile(seeds?: number[]) {
   outline?.remove();
   try { await view.update(result, board); } catch (error) { status(String(error), true); return; }
   if (revision !== state.revision || run !== compileRun) return;
-  // The canvas takes the board's own background, so the diagram sits on it rather than on a pasted sheet.
-  const paper = $('host').shadowRoot!.querySelector('[data-id="root:background"] [data-k="rect"]');
-  $('canvas').style.backgroundColor = paper ? getComputedStyle(paper).backgroundColor : '';
+  paintCanvas(result.boards!.find(b => b.path === board)!.scene);
   if (fitNext) { fitNext = false; camera.fit(); }
   const after = result.boards!.find(b => b.path === board)!.association;
   const change = pending?.revision === revision ? pending : undefined;
@@ -92,6 +90,22 @@ async function compile(seeds?: number[]) {
   if (focused && focused === state.selected) $('host').shadowRoot?.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
   status(`compiled in ${Math.round(result.millis)} ms`);
   inspect();
+}
+
+// As the demo (packages/d2web/demo): D2 paints the board background as the scene's `root:background` rectangle, which would hide the dots and
+// make the board read as a picture on the canvas. The canvas takes that same solid colour and the rectangle is hidden; a gradient or pattern
+// background has no single colour, so there the rectangle stays. The dots are black or white ink, whichever contrasts with it.
+const sheet = new CSSStyleSheet();
+function paintCanvas(scene: SceneDocument) {
+  const fill = scene.Root.Children.find(c => c.ID === 'root:background')?.Primitive;
+  const paint = fill && 'Fill' in fill ? fill.Fill : null;
+  const color = paint?.$ === 'SolidPaint' && /^rgba\(\d+,\d+,\d+,[\d.]+\)$/.test(paint.Color) ? paint.Color : '';
+  $('canvas').style.backgroundColor = color;
+  const root = $('host').shadowRoot!;
+  if (!root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  sheet.replaceSync(color ? '[data-id="root:background"] { display: none; }' : '');
+  const [r, g, b] = color ? color.match(/\d+/g)!.map(Number) : [];
+  $('grid').style.setProperty('--dot-rgb', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? '0 0 0' : '255 255 255') : '');
 }
 
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.

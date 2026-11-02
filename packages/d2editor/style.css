@@ -48,7 +48,10 @@ aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; bor
 #status.error::before { background: var(--danger); }
 
 /* An unbounded canvas: the host moves under a fixed viewport (src/canvas.ts); the dot grid follows the same transform. */
-main { position: relative; overflow: clip; min-height: 0; touch-action: none; cursor: grab; background: var(--bg) radial-gradient(circle, var(--line) 1px, transparent 1.2px); }
+main { position: relative; overflow: clip; min-height: 0; touch-action: none; cursor: grab; background-color: var(--bg); }
+/* The dot grid (as the demo's): a sibling layer whose custom properties change every pan frame without restyling the board. */
+#grid { position: absolute; inset: 0; pointer-events: none; --dot-rgb: 128 128 128; --dot-a: .22; --dot-r: .5px;
+  background-image: radial-gradient(circle, rgb(var(--dot-rgb) / var(--dot-a)) var(--dot-r), transparent calc(var(--dot-r) + .4px)); background-size: var(--gap, 20px) var(--gap, 20px); background-position: var(--px, 0) var(--py, 0); }
 main.panning { cursor: grabbing; user-select: none; }
 #host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 

@@ -16,14 +16,18 @@ export function fit(w: number, h: number, W: number, H: number, pad = 32): View 
   return { x: (W - w * k) / 2, y: (H - h * k) / 2, k };
 }
 
-export function canvas(viewport: HTMLElement, content: HTMLElement, onChange: (v: View) => void) {
+export function canvas(viewport: HTMLElement, content: HTMLElement, grid: HTMLElement, onChange: (v: View) => void) {
   let v: View = { x: 0, y: 0, k: 1 };
   const set = (next: View) => {
     v = next;
     content.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.k})`;
-    const g = 24 * v.k;
-    viewport.style.backgroundSize = `${g}px ${g}px`;
-    viewport.style.backgroundPosition = `${v.x}px ${v.y}px`;
+    // As the demo: 1px dots every 20px that scale with zoom and fade out when zoomed far out, on a sibling layer so pan frames restyle nothing in the board.
+    const gap = 20 * v.k;
+    grid.style.setProperty('--dot-a', (0.22 * Math.min(1, Math.max(0, (v.k - 0.25) / 0.35))).toFixed(3));
+    grid.style.setProperty('--dot-r', `${Math.min(1.5, Math.max(0.5, 0.5 * v.k)).toFixed(2)}px`);
+    grid.style.setProperty('--gap', `${gap}px`);
+    grid.style.setProperty('--px', `${v.x % gap}px`);
+    grid.style.setProperty('--py', `${v.y % gap}px`);
     onChange(v);
   };
   const centre = () => ({ px: viewport.clientWidth / 2, py: viewport.clientHeight / 2 });
