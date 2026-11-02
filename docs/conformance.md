@@ -28,7 +28,7 @@ All conformance input files belong in the root `examples/` directory, including 
 }
 ```
 
-Keep all inputs together with their original paths. Helpers and imported files are not independent diagrams. The web compiler must receive the same workspace and entry path as the native compiler. Preserve source configuration; apply the same explicit run options on both paths. Native runs use TALA, seed `1`, theme `0`, zero padding and scale `1`, unless a run overrides an option. D2's own configuration precedence still applies.
+Keep all inputs together with their original paths. Helpers and imported files are not independent diagrams. The web compiler must receive the same workspace and entry path as the native compiler. Preserve source configuration; apply the same explicit run options on both paths. Native runs use TALA, seeds `1,2,3` (the d2 CLI default, as d2web uses), theme `0`, zero padding and scale `1`, unless a run overrides an option. D2's own configuration precedence still applies.
 
 Generated native output goes under `artifacts/native/<case>/<run>/`; each run records its inputs/options in `case.json` and keeps stdout/stderr. Upstream source and goldens are not overwritten. The comparison rejects missing or extra boards and refuses partial SVGs from failed native compilations.
 

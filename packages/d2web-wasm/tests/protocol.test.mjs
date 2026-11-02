@@ -37,7 +37,7 @@ test('success: one root board, echo, revision, fonts beside the scene', () => {
   assert.equal(r.boards[0].path, '');
   assert.equal(r.boards[0].scene.$, 'Document');
   assert.equal(r.error, undefined);
-  assert.equal(r.echo.layout, 'tala'); assert.deepEqual(r.echo.render, render);
+  assert.equal(r.echo.layout, 'tala'); assert.deepEqual(r.echo.seeds, [1, 2, 3]); assert.deepEqual(r.echo.render, render);
   assert(Object.keys(r.fonts).length > 0, 'font bytes are returned');
   assert(!JSON.stringify(r.boards[0].scene).includes('"Data":"'), 'font bytes are not inside the scene');
 });
@@ -110,4 +110,31 @@ test('images: preflight, supplied bytes and unresolved warnings; native and Node
 
   assert.deepEqual(stable(wasm(bundled)), stable(result));
   assert.deepEqual(JSON.parse(goRun(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [join(output, 'd2web.wasm'), preflight(withImages)], { ...opts, timeout: 60_000 })), found);
+});
+
+// A diagram whose TALA layout differs between seed 1 and the best of seeds 1, 2, 3 (checked against `d2 --tala-seeds=…`).
+const seedSensitive = `restaurants: Restaurants {
+  style.stroke-dash: 2
+  *.style.fill: "#66c4e3"
+  chip: Chipotle
+  cfa: Chick-Fil-A
+  bk: Burger King
+  chip -> bk: competes with
+}
+diners: Diners {daniel; zack}
+diners -> restaurants: eat at
+diners.daniel -> restaurants.chip: likes
+diners.daniel -> restaurants.cfa: dislikes
+diners.zack -> restaurants.bk: likes
+diners.zack -> restaurants.chip: likes
+`;
+const positions = r => JSON.stringify(r.boards[0].scene);
+
+test('seeds: the request chooses TALA attempts; the diagram\'s own tala-seeds wins, as natively', { timeout: 120_000 }, () => {
+  const best = native(request(seedSensitive));
+  const one = native(request(seedSensitive, { seeds: [1] }));
+  assert.deepEqual(one.echo.seeds, [1]);
+  assert.notEqual(positions(one), positions(best), 'seed 1 alone lays this diagram out differently');
+  const own = 'vars: {d2-config: {data: {tala-seeds: [1; 2; 3]}}}\n' + seedSensitive;
+  assert.equal(positions(native(request(own, { seeds: [1] }))), positions(native(request(own))), 'tala-seeds in the source overrides the request');
 });

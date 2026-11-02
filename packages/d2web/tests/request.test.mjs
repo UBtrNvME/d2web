@@ -73,3 +73,14 @@ test('images: absent by default; present even when empty; entries need a type an
   rejects({ images: { 'https://i.test/a.svg': { type: 'image/svg+xml', data: 'text' } } }, /must be \{ type: string, data: Uint8Array \}/);
   rejects({ images: { 'https://i.test/a.svg': { data: new Uint8Array([1]) } } }, /must be \{ type: string/);
 });
+
+test('seeds: default is the d2 CLI default, a request may choose its own (deduplicated)', () => {
+  assert.deepEqual(normalizeCompileRequest(request()).seeds, [1, 2, 3]);
+  assert.deepEqual(normalizeCompileRequest(request({ seeds: [1] })).seeds, [1]);
+  assert.deepEqual(normalizeCompileRequest(request({ seeds: [5, -2, 5] })).seeds, [5, -2]);
+  rejects({ seeds: [] }, /seeds/);
+  rejects({ seeds: [1.5] }, /seeds/);
+  rejects({ seeds: 1 }, /seeds/);
+  rejects({ seeds: [2 ** 53] }, /seeds/);
+  rejects({ seeds: Array.from({ length: 17 }, (_, i) => i) }, /at most 16/);
+});

@@ -41,6 +41,9 @@ export interface CompileRequest {
   files: Record<string, string>;
   entry: string;
   layout?: Engine;
+  // TALA attempts, as `d2 --tala-seeds`: every seed is laid out and the best result kept. Default [1, 2, 3] (the d2 CLI default); fewer is faster.
+  // A diagram's own `vars.d2-config.data.tala-seeds` takes precedence, as natively. Ignored by dagre and ELK.
+  seeds?: number[];
   render: RenderOptions;
   budgets?: Budgets;
   // Default is the root board only.
@@ -95,7 +98,7 @@ export interface CompileResult {
   diagnostics: Diagnostic[];
   // Kroki's encoding of the source (zlib level 9, URL-safe base64), for a request with exactly one file; absent otherwise.
   identity?: string;
-  echo: { layout: Engine; render: RenderOptions; images?: 'bundle' | 'link' };
+  echo: { layout: Engine; seeds: number[]; render: RenderOptions; images?: 'bundle' | 'link' };
 }
 
 // Spec 0007: a fallback font the consumer approved (ADR 0006); the client fetches it, checks `sha256` when given and posts the bytes to the worker once.

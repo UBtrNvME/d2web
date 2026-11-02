@@ -67,6 +67,7 @@ type Request struct {
 	Files    map[string]string `json:"files"`
 	Entry    string            `json:"entry"`
 	Layout   string            `json:"layout"`
+	Seeds    []int64           `json:"seeds"` // TALA attempts, resolved by the host (default 1, 2, 3)
 	Render   Render            `json:"render"`
 	Budgets  Budgets           `json:"budgets"`
 	Boards   json.RawMessage   `json:"boards"`
@@ -114,9 +115,10 @@ type Result struct {
 	// Identity names the diagram by its source, in Kroki's encoding: zlib at level 9, then URL-safe base64. Present when the request has one file.
 	Identity string `json:"identity,omitempty"`
 	Echo     struct {
-		Layout string `json:"layout"`
-		Render Render `json:"render"`
-		Images string `json:"images,omitempty"` // the image mode used, when the request chose one
+		Layout string  `json:"layout"`
+		Seeds  []int64 `json:"seeds"`
+		Render Render  `json:"render"`
+		Images string  `json:"images,omitempty"` // the image mode used, when the request chose one
 	} `json:"echo"`
 }
 
@@ -145,7 +147,7 @@ func Handle(ctx context.Context, raw []byte) []byte {
 		if len(req.Files) == 1 {
 			res.Identity = Identity(req.Files[req.Entry])
 		}
-		res.Echo.Layout, res.Echo.Render = req.Layout, req.Render
+		res.Echo.Layout, res.Echo.Seeds, res.Echo.Render = req.Layout, req.Seeds, req.Render
 		if req.Images != nil {
 			res.Echo.Images = "bundle"
 		} else if req.LinkImages {
@@ -190,6 +192,10 @@ func run(ctx context.Context, req *Request, res *Result) {
 		fail(res, "internal", "budgets are required", nil)
 		return
 	}
+	if req.Layout == "tala" && len(req.Seeds) == 0 {
+		fail(res, "internal", "seeds are required", nil)
+		return
+	}
 	fsys := fstest.MapFS{}
 	for name, text := range req.Files {
 		fsys[name] = &fstest.MapFile{Data: []byte(text)}
@@ -221,7 +227,8 @@ func run(ctx context.Context, req *Request, res *Result) {
 					case "elk":
 						return d2elklayout.Layout(ctx, g, nil)
 					}
-					return d2talalayout.Layout(ctx, g, &d2talalayout.Options{Seeds: []int64{1}, MaxConcurrency: 1})
+					// One attempt at a time: the wasm is single-threaded.
+					return d2talalayout.Layout(ctx, g, &d2talalayout.Options{Seeds: req.Seeds, MaxConcurrency: 1})
 				}, nil
 			},
 			RouterResolver: func(string) (d2graph.RouteEdges, error) { return d2talalayout.RouteEdges, nil },

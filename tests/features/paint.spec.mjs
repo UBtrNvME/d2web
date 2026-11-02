@@ -48,7 +48,7 @@ function native(entry, board) {
   const config = r.themeOverrides ? `vars: {d2-config: {theme-overrides: {${Object.entries(r.themeOverrides).map(([k, v]) => `${k}: "${v}"`).join('; ')}}}}\n` : '';
   writeFileSync(join(dir, 'main.d2'), config + entry.source);
   for (const [name, text] of Object.entries(entry.files ?? {})) writeFileSync(join(dir, name), text);
-  const args = [`--layout=${entry.layout ?? 'tala'}`, '--tala-seeds=1', `--theme=${r.themeId}`, '--dark-theme=-1', `--pad=${r.pad}`, `--scale=${r.scale}`, `--sketch=${r.sketch}`,
+  const args = [`--layout=${entry.layout ?? 'tala'}`, '--tala-seeds=1,2,3', `--theme=${r.themeId}`, '--dark-theme=-1', `--pad=${r.pad}`, `--scale=${r.scale}`, `--sketch=${r.sketch}`,
     `--center=${r.center}`, '--bundle=true', '--force-appendix=false', '--animate-interval=0', `--target=${boardTarget(board)}`, '--timeout=60', join(dir, 'main.d2'), join(dir, 'out.svg')];
   try { execFileSync('d2', args, { encoding: 'utf8', stdio: 'pipe', timeout: 90_000 }); } catch (error) { return { error: String(error.stderr || error.message).split('\n').find(l => l.includes('err') || l.includes('failed')) ?? 'native d2 failed' }; }
   return { svg: readFileSync(join(dir, 'out.svg'), 'utf8') };
