@@ -1,5 +1,7 @@
 # Capability matrix (R5 draft)
 
+Historical research matrix. Runtime shape, product scope and public contracts were subsequently selected in the [ADRs](adr/README.md) and [specifications](SPEC.md). Use the [browser audit](web-native-audit.md) for current verification and defects; a gap listed here may have a later implementation or a narrower remaining limit.
+
 The per-feature detail with measured statuses is the generated [D2 feature map](feature-map.md); this file keeps the decisions per family.
 
 Status of each pipeline family from [plan.md](../tasks/plan.md#coverage-required-for-the-eventual-technology-map). Decision column: **accepted** (user stated it), **proposed** (evidence points there, not agreed), **unresolved**. Evidence names a `mise run` task or a section of [research-findings.md](research-findings.md). Nothing here is a public API. Draft for user review; not yet reviewed.

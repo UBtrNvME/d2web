@@ -1,18 +1,18 @@
 # Goal and proposed approach
 
-Status: d2web library scope clarified by the user on 30 October 2026. The delivery sequence and unimplemented interfaces remain proposals; verified subsets are recorded in the handoffs.
+Status: product implementation, updated 2 November 2026. The user accepted the native web foundation and read-only v1 scope in ADRs 0001 and 0007. The [specifications](SPEC.md) describe the implemented worker/client, mount, association, packaging and later capabilities. The [browser review](web-native-audit.md) records current rendering defects and verification limits.
 
-## Current research direction
+## Accepted direction and historical research
 
 Latest clarification: build as close to native HTML/JavaScript/CSS (including browser SVG) as practical, suitable as a foundation for later React components. React Flow was requested as connection-rendering prior art, not as the intended foundation. Continue JointJS, native connection/hit-testing and text experiments with that priority. Prefer capable lower-cost research workers; model choice does not replace independent review or local evidence. Any earlier mandatory React rendering wording is superseded by this direction.
 
-Automatic research execution with independent workers is now authorized. See the [findings](research-findings.md) for the current evidence, counterexamples and limits. The initial R1 association probe is executed; follow the task ledger for remaining work rather than treating the initial next-step text below as current status. No production architecture has been accepted.
+The original research sequence below is historical. Architecture decisions have since been accepted; follow the [task ledger](../tasks/todo.md), [ADRs](adr/README.md) and specifications for current work. The [findings](research-findings.md) retain the experiments, counterexamples and limits that informed those decisions.
 
-Research also includes web diagramming framework patterns (initially React Flow and JointJS), future external library consumption, and opt-in consumer replacement of diagram representation with shadcn or similar components. Customization includes node/content presentation, not only surrounding editor UI. Keep the faithful D2 default available; test dimension changes and layout ownership explicitly. These additions supersede narrower appearance restrictions below. See R0 and R6 in the research plan; neither framework adoption nor a customization API has been selected.
+Research compared React Flow and JointJS patterns, external library consumption and opt-in consumer replacement of diagram representation with shadcn or similar components. The product now exposes consumer node content through the mount API; React and design-system dependencies remain outside the core. Keep the faithful D2 default available and test dimension changes and layout ownership explicitly. The R0/R6 experiments remain supporting evidence, not production framework dependencies.
 
-The user clarified that we are researching a complete D2 web surface, with local experiments to test competing hypotheses before accepting an architecture. Follow the [research plan](../tasks/plan.md) and [task list](../tasks/todo.md). React is an accepted binding and the current geometry experiment, not an accepted mandatory foundation. Scene-first, semantic-first and combined representations remain candidates; browser interaction, accessibility, source association, editing and embedding must inform the choice alongside visual fidelity. This clarification takes precedence over React-specific architectural wording and implementation-first next steps below.
+The combined scene-plus-association boundary and HTML-first painter were selected through the research checkpoints. React remains a future consumer binding and an existing geometry experiment. Browser interaction, accessibility, source association and embedding are part of the verification scope alongside visual fidelity; a passing pixel catalog does not establish them all.
 
-d2web introduces no independent appearance or application policy. Runtime effects need explicit consumer-controlled lifecycle and resource contracts; persistence, navigation, telemetry, global styling and integrations must not happen implicitly. Reskinning and application integrations build above the faithful D2/d2web baseline. Next execute the semantic/source-association experiment R1, rather than automatically expanding the geometry adapter. No new experiment results are claimed by this planning update.
+d2web introduces no independent appearance or application policy. Runtime effects need explicit consumer-controlled lifecycle and resource contracts; persistence, navigation, telemetry, global styling and integrations must not happen implicitly. Reskinning and application integrations build above the faithful D2/d2web baseline. R1 source association is implemented; the current text/clipping follow-up is in the browser review.
 
 ## Goal
 
@@ -51,7 +51,7 @@ The code includes a React canvas, source editor, classes, board navigation, an i
 
 Important limitations are visible in the source: the node model is reduced to service-oriented kinds, dragging persists `# @studio-position` comments, local edge curves can replace compiled routes, visual edits append Studio redeclarations, and visual mutation is restricted to the root board. React rich-content handling is separate from D2's native renderer. These require investigation before claiming faithful D2 behavior.
 
-## Proposed sequence
+## Historical proposed sequence (before product contracts)
 
 1. **Freeze a reproducible baseline.** Resolve the exact D2 source, JS wrapper, WASM, fonts and toolchain versions. Keep the older audit's upstream commit separate from the binary used by the prototype. Confirm the import runs locally before changing behavior.
 2. **Map the whole pipeline.** Trace source files and imports through parsing/AST, expansion/IR, semantic graph, configuration, text measurement, nested layout orchestration, TALA placement/routing, target model, rendering, editing and exports. Record code locations and the browser API boundary.
@@ -60,7 +60,7 @@ Important limitations are visible in the source: the node model is reduced to se
 5. **Agree the web mapping together.** Review which parts stay inside D2/WASM, what a bridge must expose, and how React represents each target type. Resolve any HTML/CSS rendering gaps explicitly before choosing a fallback. Keep document files separate from viewport, selection and temporary gesture state.
 6. **Implement and prove one capability at a time.** First establish a faithful compile-to-React vertical slice, then add rendering and mutation capabilities against the agreed fixtures. Preserve the full compiler output rather than regenerating source from a reduced canvas model.
 
-## Proposed architecture
+## Historical proposed architecture (superseded by accepted ADRs and specs)
 
 ```text
 D2 files + entry path + compile configuration

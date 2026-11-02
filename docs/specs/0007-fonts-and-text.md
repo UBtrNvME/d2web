@@ -2,7 +2,7 @@
 
 Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [ADR 0006](../adr/0006-font-delivery.md) (consumer-approved fonts, never fetched or substituted by the library), [spec 0001](0001-compile-protocol.md) (`result.fonts`, scenes carry glyph assets) and [ADR 0009](../adr/0009-natural-web-forms.md) (D2 owns semantics; d2web translates).
 
-## 1. What is known
+## 1. Research baseline (before consumer font support)
 
 - The worker's wasm resolves **no fallback fonts** (no host filesystem). Text outside the bundled Source Sans Pro (CJK, Arabic, emoji, many accents beyond Latin-1) is laid out and painted on the primary font; whether the primary font draws tofu for those glyphs was not confirmed (`docs/research-findings.md`).
 - Natively, D2's CLI resolves fallbacks from host fonts: on one Mac a 23.5 MB CJK face, a 0.75 MB Arabic face and a 5 MB colour-emoji face. A scene keeps a per-glyph asset (`Glyph.Asset`), so a scene built with fallbacks says which font each glyph needs.
@@ -53,4 +53,4 @@ Decision (1 November 2026, user: "for now let's have a patch"): carry `docs/upst
 | The painted run's browser width equals the scene's advance sum for Arabic | verified to 0.5 px in Chromium, Firefox and WebKit (one Amiri sample) |
 | Hebrew, long Hebrew and Arabic sentences, mixed-direction lines, Japanese and an emoji agree with D2's advances | verified to 0.1 px in Chromium, Firefox and WebKit (`text-scripts.spec.mjs`; DejaVu Sans and M+ 1p read from the pinned go-text/typesetting-utils test data, not copied into the repository because their licence files are not shipped with them) |
 | Bold and italic on fallback fonts | measured: D2's scene font for a label is bold; fallback glyphs are painted with the face the consumer listed (regular here), no synthetic bold or italic (`font-synthesis: none`), and the advances still match. `style.italic` did not change the scene font on the probe label (unexplained). The resolver now picks, per character, the covering face closest to D2's requested weight and slant (the consumer's order only breaks ties; a character only one listed face covers always gets it), so listing a regular and a bold face works whatever the order. Unit-tested with Roboto Regular and Go Mono Bold Italic (`TestResolverPrefersTheRequestedWeightAndSlant`); no browser fixture has a bold and a regular face for one non-Latin script, so that case is not painted in a browser |
-| Firefox and WebKit text metrics | unknown |
+| Firefox and Playwright WebKit text metrics | named script/advance fixtures covered by `text-scripts.spec.mjs`; this does not establish every font, every clip or real Safari |

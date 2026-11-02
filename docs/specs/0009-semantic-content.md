@@ -2,6 +2,8 @@
 
 Status: **proposed**, built stage by stage; the user said "proceed" on 1 November 2026 and asked to keep a way back. Checkpoint: git tag `checkpoint/before-web-native-contracts` (commit d81f1af, painter at 73 % HTML elements, rich content as positioned text). Return with `git checkout checkpoint/before-web-native-contracts`, or compare with `git diff checkpoint/before-web-native-contracts`. Builds on [ADR 0009](../adr/0009-natural-web-forms.md) and [the audit](../web-native-audit.md).
 
+Current review note (2 November 2026): the stages below are implemented, with positioned content as the default and flow opt-in. The [browser audit](../web-native-audit.md) reproduces text displacement and markdown clipping when `update()` runs under CSS scale. Focused Chromium and Firefox checks passed; WebKit's zero-delta C1 checkpoint check failed reproducibly on `shape/sequence_diagram` (ratio `0.0008539786415447126`). Older three-browser success counts below are historical run records, not current blanket acceptance. No tolerance has been relaxed.
+
 ## The contract
 
 D2 decides the box. For markdown, code and tables the scene gives every text run an absolute position, and the scene node IDs carry the structure (`code:code-line:L:token:T`, `t:table-row:R:name|type|constraint`, `md:markdown:primitive:N`; the markdown source is in the association `label`). A web-native form must satisfy, in this order of strictness:

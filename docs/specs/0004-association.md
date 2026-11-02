@@ -1,6 +1,6 @@
 # Spec 0004: association (D2 objects, source ranges and scene nodes)
 
-Status: **accepted** by the user on 31 October 2026 with the recommended answers to the four questions in section 7; built in slice 4. Builds on [spec 0001](0001-compile-protocol.md) (the `association` field of a board is `null` today), [spec 0002](0002-mount-api.md) (events carry a D2 object ID), [ADR 0002](../adr/0002-combined-boundary-and-painter.md) (scene plus a thin association layer keyed by revision, board path and ID) and [ADR 0007](../adr/0007-product-scope-v1.md) (read-only; editing is v2). Evidence: R1 in [research findings](../research-findings.md) (`test:research:identity`, `test:research:join`, `test:research:rich`).
+Status: **accepted** by the user on 31 October 2026 with the recommended answers to the four questions in section 7; built in slice 4. Builds on [spec 0001](0001-compile-protocol.md) (each successful board carries its association), [spec 0002](0002-mount-api.md) (events carry a D2 object ID), [ADR 0002](../adr/0002-combined-boundary-and-painter.md) (scene plus a thin association layer keyed by revision, board path and ID) and [ADR 0007](../adr/0007-product-scope-v1.md) (read-only; editing is v2). Evidence: R1 in [research findings](../research-findings.md) (`test:research:identity`, `test:research:join`, `test:research:rich`).
 
 ## 1. What it is for
 

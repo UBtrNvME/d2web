@@ -1,6 +1,8 @@
 # d2web
 
-**Current phase: architecture research with executable experiments.** The preferred foundation is native HTML, JavaScript and CSS, including browser-native SVG, with future React components building on framework-independent contracts. The [research plan](tasks/plan.md) and [task list](tasks/todo.md) compare boundaries and local evidence before selecting APIs. React Flow is prior art for how connections are drawn and interacted with, not the intended foundation. The real web surface includes semantics, source association, browser interaction and lifecycle as well as rendering.
+**Current phase: product implementation and browser verification.** The accepted v1 is a read-only D2 browser runtime ([product scope](docs/product.md), [specifications](docs/SPEC.md)). Production code uses native HTML, JavaScript, CSS and SVG; React is an optional future binding. The [research plan](tasks/plan.md) records how the architecture was investigated; the [task ledger](tasks/todo.md) records delivery and remaining work.
+
+**Known rendering defect (browser review, 2 November 2026):** updating a mounted board under a non-unit CSS scale miscalibrates positioned text. In the demo, recompiling after fit/zoom can shift labels and clip the markdown title. The catalog's passing statuses do not cover this sequence. See the [browser review and reproduction](docs/web-native-audit.md).
 
 Build a reusable browser library for D2: WASM runtime integration, semantic/source and native scene/paint data, and browser presentation, including TALA support. D2 remains the language, compiler, layout and default appearance authority. React is a future binding and an existing experimental renderer, not a required browser runtime dependency by design.
 
@@ -10,16 +12,17 @@ D2 Architecture Studio is a future consumer of d2web. Editor panels, toolbars, a
 
 Applications such as a future `d2editor` should integrate through documented runtime/data contracts, stable D2 identities and source references, React components/events and characterized native operations. These integration boundaries remain to be specified as capabilities are proved; no generic plugin framework is assumed.
 
-The current priority is a pinned pipeline map and executable feature/capability matrix, followed by a joint decision on the web mapping. The imported Studio is a prototype, not the specification or a certified renderer.
+The runtime, worker protocol, mount, association, packaging, fonts, animation and image paths exist. Rich content has semantic wrappers and opt-in markdown flow; full web-native semantics and presentation replacement remain incomplete. The imported Studio is a prototype, not the specification or a certified renderer.
 
 - [Goal, proposed approach and current handoff](docs/project-brief.md)
-- [D2 → React porting map](docs/porting-map.md)
+- [D2 pipeline and porting research](docs/porting-map.md)
 - [Research findings: frameworks, source identity, browser composition and native operations](docs/research-findings.md)
 - [Native TALA and web comparison guide](docs/conformance.md)
-- [Capability matrix (R5 draft)](docs/capability-matrix.md)
+- [Research capability matrix](docs/capability-matrix.md)
 - [Product definition (v1)](docs/product.md)
 - [D2 feature map](docs/feature-map.md): every D2 capability, how it reaches the web and whether it paints equal to native (generated)
 - [Writing D2 that lays out well](docs/d2-authoring-guide.md): authoring rules and features to avoid, from rendering the large examples on TALA, ELK and dagre
+- [Browser review: text, clipping and web-native gaps](docs/web-native-audit.md)
 - [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
@@ -33,8 +36,8 @@ The current priority is a pinned pipeline map and executable feature/capability 
 | `docs/` | Current requirements, mapping and validation guidance |
 | `examples/` | Repository-owned conformance inputs, imports, assets and upstream license |
 | `tests/` | Node assertions and Playwright comparisons; no second examples tree |
-| `packages/d2web/` | The product TypeScript package (protocol types now; host client and painter in slice 1) |
-| `packages/d2web-wasm/` | Product Go module (created in slice 1 step 2) |
+| `packages/d2web/` | Product client, protocol and association types, mount, painter and browser tests |
+| `packages/d2web-wasm/` | Product Go compiler/scene bridge and worker entry point |
 | `research/` | Research probes, Playwright specs (`research/browser/`) and the earlier React geometry adapter (`research/geometry/`) |
 | `scripts/` | Repository maintenance commands |
 | `imports/` | Historical evidence and local external source copies; D2 source is in `imports/d2/`, Studio in `imports/d2-architecture-studio/` |
@@ -76,7 +79,7 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run test:consumer` | Build, pack, and load the tarball in a bundler-free Chromium page, including under a strict CSP |
 | `mise run check:browser` | Every Chromium/Playwright suite (about 3 min) |
 | `mise run check:full` | `check` plus `check:browser`; run locally before handoff (CI runs `check`, and `check:browser` only when started by hand) |
-| `mise run check` | Fast gate (about 10 s, no browser): validate tooling, inventory, cleanup, output pairing, native cases, scene/WASM boundary, browser comparison machinery, the D2 v0.9.0 reference checkout (`reference:fetch`) and five research probes (identity, operations, text, connections, composition) |
+| `mise run check` | Fast gate (no browser): tooling, inventory, cleanup, output pairing, native cases, product unit/type/WASM checks, the D2 v0.9.0 checkout (`reference:fetch`) and native/Node research probes |
 | `mise run test:scene` | Build the native/WASM geometry scene probe and check Node/WASM equivalence |
 | `mise run test:research:identity` | Compare selected source/identity projections in native and Node/WASM |
 | `mise run test:research:operations` | Characterize native edit mutation and text premeasurement behavior |
@@ -105,11 +108,11 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run clean` | Delete the local generated files and caches listed below |
 | `mise tasks` | Discover all commands |
 
-`check` and [CI](.github/workflows/check.yml) validate d2web and one native-versus-React geometry case. `studio:check` is the separate, failing gate for the imported reference consumer and is not counted as a passing d2web check. Future Studio adoption will need its own integration checks. The comparison self-tests do not establish React parity; the dedicated React geometry test is the first real comparison. See the [porting map](docs/porting-map.md#react-geometry-adapter) for its exact subset and limits.
+`check` is the fast non-browser gate. `check:browser` includes the product browser suites and the native-versus-React research geometry comparison; [CI](.github/workflows/check.yml) runs it only on a manual dispatch with `browser=true`. `studio:check` is the separate, failing gate for the imported reference consumer. The comparison self-tests validate the harness; the React geometry case proves only its admitted subset. See the [conformance guide](docs/conformance.md) for the separate product catalog, semantic and external-output checks.
 
-Root rendering dependencies and build tools are pinned in `package.json`/`pnpm-lock.yaml`. `pnpm-workspace.yaml` permits esbuild's installation script only and includes only the root package; the imported Studio retains its own workspace policy and package-manager selection.
+Root rendering dependencies and build tools are pinned in `package.json`/`pnpm-lock.yaml`. `pnpm-workspace.yaml` includes `packages/*` and permits esbuild's installation script only; the imported Studio retains its own workspace policy and package-manager selection.
 
-The five research probes run in `check`; the other research tasks (React Flow, JointJS, consumer, host) are separate from root `check`/CI. None certify product capabilities. React Flow and JointJS Core are installed only by their opt-in research setups under `artifacts/research-reactflow/` and `artifacts/research-jointjs/`, with scripts/automatic peers disabled. Root build tools are shared; the historical React Flow probe also shares root React. `clean` removes those scratch installations/lockfiles along with artifacts; regenerating their locks can select newer transitive versions. They are not production dependencies or packaged library APIs.
+Native/Node research probes run alongside the product checks in `check`; research browser suites run in `check:browser`, and React Flow, JointJS, consumer and host experiments have separate opt-in tasks. Research results do not certify every product capability. React Flow and JointJS Core are installed only by their research setups under `artifacts/research-reactflow/` and `artifacts/research-jointjs/`, with scripts/automatic peers disabled. Root build tools are shared; the historical React Flow probe also shares root React. `clean` removes those scratch installations/lockfiles along with artifacts; regenerating their locks can select newer transitive versions. They are not production dependencies or packaged library APIs.
 
 ## Using the built package
 
@@ -148,4 +151,4 @@ Stop development servers, builds and tests before running `mise run clean`. It u
 | `imports/d2/`, the Studio's `.git/`, both pnpm lockfiles and `examples/` | Source/history/input data; never removed by `clean` |
 | User-wide Corepack, pnpm, mise and Playwright caches | Outside this checkout; untouched by repository cleanup |
 
-There is no global cache purge or broad `git clean` command. Local environment files and logs are ignored. The source is in the initial commit; later changes are uncommitted and nothing has been pushed or deployed.
+There is no global cache purge or broad `git clean` command. Local environment files and logs are ignored. Inspect `git status --short` for current uncommitted work; the historical research handoffs are not a statement of today's Git state.

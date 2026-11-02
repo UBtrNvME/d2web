@@ -1,6 +1,6 @@
 # d2web product definition (v1)
 
-Accepted by the user on 31 October 2026 as [ADR 0007](adr/0007-product-scope-v1.md). Builds on ADRs 0001-0006. Describes intent, not existing APIs.
+Accepted by the user on 31 October 2026 as [ADR 0007](adr/0007-product-scope-v1.md). Builds on ADRs 0001-0006; [ADR 0009](adr/0009-natural-web-forms.md) amends how fidelity is judged. This is the product scope; the [specifications](SPEC.md) describe the implemented contracts and their limits.
 
 ## What it is
 
@@ -21,11 +21,12 @@ Editing and undo (v2), React binding, editor UI, application state, persistence,
 
 ## Promises and limits
 
-- Fidelity: within 5% raster difference of native TALA; failures are recorded, not hidden.
-- Browsers: Chromium verified; others unverified and labelled so.
-- Packaging: npm package with worker and wasm; size budget not yet known.
+- Fidelity: D2's semantics, geometry and text decisions remain authoritative. Pixel comparisons diagnose differences; intended natural web forms are tested as behaviour (ADR 0009). The catalog retains its 5% image and 25% ink checks, with separately labelled equivalent, scene-checked and web-native cases.
+- Browsers: Chromium is the v1 reference. Firefox and Playwright WebKit have recorded test evidence; real Safari remains unverified. See [browser support](browser-support.md).
+- Packaging: the build produces an ESM package, worker and wasm ([spec 0003](specs/0003-packaging.md)); gzip budgets are 40 KB for the module and 15 MB for wasm. Registry publication is a separate decision.
 
-## Next
+## Current implementation and remaining work
 
-1. Spec the first contract: worker message protocol plus scene bridge with render options (theme, dark theme, sketch). Not started.
-2. Edit, font-mismatch reporting and packaging contracts follow.
+The worker/client, mount, source association, packaging, animation, accessibility attributes, fallback fonts, layout budget and image modes are implemented. Semantic content has `pre`/`code`, ARIA tables, selected positioned markdown wrappers and an opt-in browser-flow subset. Browser flow is not the default and unsupported content falls back to positioned paint.
+
+The [2 November browser review](web-native-audit.md) reproduces text displacement and clipping when updating under CSS zoom, and records animation/accessibility, consumer-content and font-lifecycle defects. These are open runtime work, even though the catalog regression check passes. The next rendering fix is baseline calibration under an existing viewport transform, with text-level regression coverage. Editing stays v2.

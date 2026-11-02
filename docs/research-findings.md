@@ -1,12 +1,14 @@
 # D2 web surface: research observations
 
+This file retains the research evidence that led to the product. Accepted architecture is now in the [ADRs](adr/README.md), implemented contracts in the [specifications](SPEC.md), and current defects/verification in the [browser audit](web-native-audit.md). Historical next-step and acceptance wording below does not override those records.
+
 Date: 30 October 2026. Experimental evidence and source findings, not an accepted architecture or complete capability claim. See the [plan](../tasks/plan.md) and [open tasks](../tasks/todo.md). No production runtime or imported application code was changed.
 
 Latest user direction: prefer native HTML/JavaScript/CSS/SVG as the foundation for future React components. React Flow is studied specifically for connection drawing, not as the intended foundation. Historical adoption comparisons below remain useful evidence but do not override this preference. The follow-up batch uses lower-cost GPT-6 Luna workers and independent coordinator/peer review. Plain modules/data/DOM primitives, framework bindings and optional consumer skins must retain explicit ownership and lifecycle boundaries.
 
 ## Current state
 
-Updated 31 October 2026. Open work is only in [todo.md](../tasks/todo.md); per-family status is in the [capability matrix](capability-matrix.md). No architecture is accepted.
+Research checkpoint snapshot, 31 October 2026. Follow [todo.md](../tasks/todo.md) for current work and the [ADRs](adr/README.md) for accepted decisions; the remaining material in this section records the earlier research state.
 
 - **Chosen by the user:** native HTML/JS/CSS/SVG foundation; D2/WASM owns compile, layout and theme; combined boundary, scene-led for paint with a thin association layer keyed by (revision, board path, ID). A direction, not a proven contract.
 - **Done with evidence below:** R0 framework comparison, R1 identity and join stress, rich content data and browser repaint (R2 data side), corpus scene census, corpus text repaint, whole-image SVG paint, HTML-first paint with CSS masks.

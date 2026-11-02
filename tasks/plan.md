@@ -1,8 +1,8 @@
 # Research plan: D2 as a web surface
 
-Status: proposed experiments, 30 October 2026. Research precedes architecture selection. The user requested broad investigation with local validation; this plan does not approve a stack or public API. Tasks and checkpoints live in [todo.md](todo.md).
+Status: historical research plan, 30 October 2026. The checkpoints subsequently informed accepted ADRs and the implemented read-only product. Use [product.md](../docs/product.md), the [specifications](../docs/SPEC.md) and [todo.md](todo.md) for current scope and work; this document retains the original hypotheses and experimental method.
 
-Research execution has begun under the user's automatic-research instruction. Current [findings](../docs/research-findings.md) include independent source/framework review, native/Node-WASM association and operation probes, and browser composition experiments. Read that evidence before following the original next-task wording below. Architecture acceptance and the remaining research tasks are still open.
+The [findings](../docs/research-findings.md) record independent source/framework review, native/Node-WASM association and operation probes, and browser composition experiments. Original next-task wording below is historical. Accepted decisions are in the ADRs; unresolved rendering and browser acceptance gaps are recorded in the [browser audit](../docs/web-native-audit.md).
 
 ## Purpose and constraints
 

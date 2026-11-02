@@ -1,6 +1,6 @@
 # Spec 0001: compile protocol and scene bridge (render only)
 
-Status: **accepted** (user, 31 October 2026). Section 7 still marks what is verified versus proposed; acceptance means this is the contract to build against, not that every row is proven. Scope set by [ADR 0007](../adr/0007-product-scope-v1.md) and [product.md](../product.md): v1 render only. Runtime shape is [ADR 0003](../adr/0003-runtime-shape.md). Nothing here exists as an API; every "verified" claim names the task that demonstrates it, and everything else is a proposal.
+Status: **accepted** (user, 31 October 2026), implemented in `packages/d2web/src/{protocol,request,client}.ts` and `packages/d2web-wasm/{compile,scenejson}`. Scope set by [ADR 0007](../adr/0007-product-scope-v1.md) and [product.md](../product.md): v1 render only. Runtime shape is [ADR 0003](../adr/0003-runtime-shape.md). Implementation and named test coverage do not certify every feature combination; current browser findings are in the [audit](../web-native-audit.md).
 
 ## 1. Purpose and non-goals
 
@@ -35,7 +35,7 @@ All messages are structured-clone JSON-like objects with `v` (protocol version, 
 - `id` correlates replies; `revision` is the host's document revision and is echoed untouched.
 - Render options are part of the request because they change the scene (section 5).
 - `seeds` are the TALA attempts, the same as `d2 --tala-seeds`: TALA lays the diagram out once per seed, one after another (the wasm is single-threaded), and keeps the best. The default is the d2 CLI's `[1, 2, 3]`, so results match `d2` without flags. A consumer may ask for fewer, for example `[1]` while the user is typing and the default once they stop; fewer seeds are faster but the layout can differ from native. A diagram's own `vars.d2-config.data.tala-seeds` takes precedence, as natively. dagre and ELK ignore the field. At most 16 distinct integers (D2's limit). Decided 2 November 2026.
-- Budgets are required by the builder (section 5). The worker supplies defaults; the request may lower or raise them (decided 31 October 2026).
+- Budgets are required by the builder (section 5). The host's request normalizer supplies defaults; the request may lower or raise them (decided 31 October 2026). A raw worker request must already carry the resolved budgets.
 - `boards` defaults to the root board only; other boards are requested by path or with `'all'` (decided 31 October 2026). The result lists which boards exist, so a consumer knows what it can ask for.
 
 ### 3.3 Worker to host: `result`
@@ -59,7 +59,7 @@ There is no cooperative cancel: the wasm thread cannot be interrupted. The only 
 
 The payload is D2's own scene document (`d2scene.Document`: view box, logical size, root node tree, assets, link regions) serialized as versioned JSON. Rules:
 1. **Whole, not reduced.** The worker serializes everything the builder produced, including masks, clips, filters, blend, animations, assets (fonts as bytes, embedded images) and link regions. The research dump already carries this; the geometry-subset serializer in `research/geometry/scene-probe.go` is explicitly not the model.
-2. **Stable shape.** Every primitive and paint is a tagged object (`{ $: 'Rect', ... }`) with documented fields. The current dump is reflection-based; replacing it with a designed encoder is the main implementation task of this slice and is **unverified**.
+2. **Closed encoding.** Every primitive and paint is a tagged object (`{ $: 'Rect', ... }`). `packages/d2web-wasm/scenejson` uses reflection with an explicit allow list, a type snapshot test and errors for unlisted types. It retains D2's exported field names and numeric enums. This is an implemented, versioned encoding, not a framework-independent semantic content tree; the TypeScript public `scene` field remains `unknown`.
 3. **Versioned.** `sceneVersion` increments on any breaking change. Unknown fields must be carried through by intermediaries and ignored by consumers; an unknown *primitive* or *paint* kind makes the painter fail visibly for that node instead of dropping it.
 4. **Self-contained.** Assets travel inside the scene; the scene never requires a fetch to paint, except fonts the consumer chose not to inline (ADR 0006). Amended by [spec 0010](0010-images.md): an image the scene cannot carry (the consumer chose `link` mode, or did not supply it and chose the link fallback) is still the builder's placeholder in the scene; its link travels on the association side (`AssociationObject.image`) and the painter shows it as an image element. The scene itself stays closed and network-free.
 
@@ -73,8 +73,8 @@ Verified basis: all 173 boards of 147 corpus runs build as scenes with zero erro
 - `sketch` changes path data.
 
 Consequences for the contract:
-- **Dark theme is not a scene option.** `d2scenebuild.Options` has `ThemeID` and `ThemeOverrides` but no dark theme field; native SVG achieves "automatic dark" by embedding a media query. A consumer wanting light and dark builds two scenes (two requests, or one request with `render` as a list). Decided 31 October 2026: `render` is a single set of options and light/dark pairing is the host's job (two requests). Painting a dark scene in a browser is still untested.
-- **Budgets are mandatory inputs.** The builder rejects zero sketch budgets even when sketch is off. The worker applies defaults and the request may raise or lower them; exceeding a budget is an error result, not truncation.
+- **Dark theme is not a scene option.** `d2scenebuild.Options` has `ThemeID` and `ThemeOverrides` but no dark theme field; native SVG achieves "automatic dark" by embedding a media query. Decided 31 October 2026: `render` is a single set of options and light/dark pairing is the host's job (two requests). `fonts.spec.mjs` compares both light and dark paint with native in a browser.
+- **Budgets are mandatory inputs.** The builder rejects zero sketch budgets even when sketch is off. The host resolves defaults and the request may raise or lower them; exceeding a budget is an error result, not truncation.
 - `pad`, `scale`, `center` and `themeOverrides` are scene options and are echoed.
 
 ## 6. Ordering, errors and limits
@@ -93,14 +93,14 @@ Consequences for the contract:
 | Message overhead about 1 ms | verified | `test:research:loop` |
 | Every corpus feature reduces to five primitives; all boards build | verified | `test:research:census` |
 | Theme, dark theme id and sketch reach the scene in native and WASM | verified | `test:research:options` |
-| Multi-board request returns every board | verified natively (census builds all boards) | `test:research:census`; worker path untested |
-| Stable designed scene encoding | proposed, not built | |
-| Association payload shape and source ranges over the worker | proposed | `test:research:identity`, `test:research:join` for the data |
-| Budget defaults | unknown values; policy decided (worker defaults, request may change) | numbers in the probes are placeholders |
-| Painting a dark-theme scene | unknown | |
+| Multi-board request returns requested boards | implemented; native/Node-WASM and browser coverage | `packages/d2web-wasm/tests/protocol.test.mjs`, feature-map board cases |
+| Closed versioned scene encoding | implemented; reflection plus explicit type allow list | `scenejson/scenejson_test.go`, `test:wasm` |
+| Association payload shape and UTF-16 source ranges over the worker | implemented in slice 4 | spec 0004, `test:wasm`, `association.spec.mjs` |
+| Budget defaults | implemented in host request normalization; raw worker inputs require resolved values | `src/request.ts`, `test:unit`, spec 0008 for layout timeout |
+| Painting a dark-theme scene | browser coverage for a named board, not every combination | `fonts.spec.mjs` |
 | Firefox | works (docs/browser-support.md) | |
 | Safari | Playwright WebKit works, real Safari unverified (docs/browser-support.md) | |
-| Worker and wasm packaging, bundle size | unknown | |
+| Worker and wasm packaging, bundle size | implemented; build and consumer test contracts in spec 0003 | `test:dist`, `test:consumer`; not rerun by the text review |
 
 ## 8. Decisions taken in review (user, 31 October 2026)
 

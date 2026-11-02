@@ -1,6 +1,40 @@
-# D2 web research: open work
+# d2web delivery and research ledger
 
-Only what is still to do. Evidence and results are in [research findings](../docs/research-findings.md); status per pipeline family is in the [capability matrix](../docs/capability-matrix.md); hypotheses and method are in [plan.md](plan.md). Nothing here is accepted architecture. Direction already chosen by the user: native HTML/JS/CSS/SVG foundation, D2/WASM owns compile/layout/theme, combined boundary (scene-led paint plus a thin association layer keyed by revision, board path and ID).
+Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
+
+## Browser review (2 November 2026)
+
+User scope: review code/docs in real browsers, investigate text differences and clipping with native D2, and correct documentation. The user supplied the AWS URL-shortener source and named Chrome; the same source is already a demo example. Production runtime changes were not part of this documentation/review pass. Findings, measurements and reproduction steps are in [the browser audit](../docs/web-native-audit.md).
+
+- [x] Restore locked Node dependencies and run the production Chromium client suite, feature catalog, focused text/font/mount checks and targeted native/browser comparisons. Raw artifacts stay under ignored `artifacts/browser-review/` and `artifacts/feature-map/`; no baselines or thresholds were changed.
+- [x] Reproduce the zoom-dependent text defect through the demo UI and controlled same-result updates at scales 0.4, 0.75, 1, 1.5 and 2. All 53 AWS positioned text runs move after a whitespace-only edit at fitted zoom; the 200% replay clips the heading. `mount.calibrate()` mixes screen and scene distances.
+- [x] Browser-confirm the prior animated-object role/event/content failure, late font-registration leak and object-level names on inline markdown links. These remain open runtime/contract work, not fixes delivered by this review.
+- [x] Correct entry docs, the spec index, obsolete implementation-status statements, comparison guidance and generated-report descriptions; retain research measurements as historical evidence.
+- [ ] Next runtime task: fix local-coordinate baseline calibration and add a focused test for repeat update under ancestor and scene scale, including multiline labels, connection labels and markdown clipping. Then preserve the object boundary through animated fallback and cover pending-font disposal. The owner is the next d2web rendering slice; these are not deferred acceptance of current behaviour.
+- [ ] WebKit: investigate the reproducible nonzero C1 checkpoint delta for `shape/sequence_diagram`; do not relax the zero-delta requirement.
+
+Revision note: review began at `d1be8f3`. Main advanced independently to `21ae1ab` (TALA-seed default correction in `0212cf4`) during execution. Preserve that implementation. Current comparisons use native and worker seeds `[1,2,3]`; the initial seed-1 pass remains a historical measurement. No commit, push or import repair was performed by this review. Existing untracked `.claude/artifacts/` is unrelated and preserved.
+
+Local execution setup: `imports/d2` is a source snapshot without `.git`, so the ordinary integrated `reference:fetch` gate fails. Set `GIT_CEILING_DIRECTORIES="$PWD/imports"` only for the review commands to prevent patch detection discovering the outer repository. The ignored `artifacts/browser-review/playwright.config.mjs` inherits the root config and excludes nested `.claude`/`imports`/`node_modules` trees to avoid a duplicate Playwright import. It does not change launch flags or thresholds. Logs are `/tmp/d2web-review-*.log`; diagnostic scripts and screenshot/JSON pairs are in `artifacts/browser-review/`.
+
+Verification record:
+
+| Command / check | Result |
+| --- | --- |
+| `mise exec -- pnpm install --frozen-lockfile` | Passed; existing exact dependency versions retained |
+| `mise run typecheck` | Passed on the updated main source |
+| `mise run test:unit` | 63 passed on updated main |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" mise exec -- node --test tests/features/catalog.test.mjs tests/features/compile.test.mjs` | 6 passed initially and in the final updated-main check; source-derived inventory and all catalog entries compiled |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" REVIEW_SUITE=client-current mise exec -- pnpm exec playwright test --config artifacts/browser-review/playwright.config.mjs packages/d2web/tests/browser` | Updated-main Chromium client suite: 79 passed, 2 skipped; same result as the initial pass; temporary config excludes packaged-consumer and demo suites from this invocation |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" REVIEW_SUITE=catalog-current mise exec -- pnpm exec playwright test --config artifacts/browser-review/playwright.config.mjs tests/features/paint.spec.mjs` | Passed on updated main: 298 rows; 276 ok, 8 equivalent, 1 differs, 3 size-mismatch, 10 scene-checked; same statuses as the initial pass |
+| Focused `fonts.spec.mjs`, `mount.spec.mjs`, `semantic.spec.mjs`, `text-scripts.spec.mjs`, same config | Chromium 24 passed; Firefox 24 passed; WebKit 23 passed / 1 failed; isolated WebKit C1 repeat failed with the same delta |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" mise exec -- node artifacts/browser-review/text-review.mjs` | Matched native/worker seeds 1,2,3; 18 cases / 21 variants; 743 text-run content matches, 0 native or worker compile failures; saved per-label bounds and paired images |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" mise exec -- node artifacts/browser-review/zoom-review.mjs` and `demo-review.mjs` | Reproduced on updated main; the demo's 64% fitted zoom shifts all 53 text runs after a blank-line edit |
+| `GIT_CEILING_DIRECTORIES="$PWD/imports" mise exec -- node artifacts/browser-review/behavior-review.mjs` | Browser diagnostic reproductions; see audit and JSON for failures found; this is not a product acceptance test |
+| `mise run check` | Blocked by missing `imports/d2/.git` at `reference:fetch`; not reported as passing |
+| `git diff --check`, `node --check` on the three edited feature-report modules, relative-link validation and report regeneration | Passed; new Markdown file links resolve, generated report is reproducible, 289-case rollup preserved |
+
+Not run as a completed gate: `check:full`, all research/packaged-consumer browser suites, the 147-run corpus, full Firefox/WebKit product catalogs, or real Safari. The supplemental screenshots are same-machine comparisons with matched image bytes, not proof of every glyph's ink bounds or arbitrary host CSS. Documentation changes and generator wording remain uncommitted.
 
 ## Decisions waiting on the user
 

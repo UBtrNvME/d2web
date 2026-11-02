@@ -1,6 +1,6 @@
 # Spec 0002: mount API (painted board in a host element)
 
-Status: **accepted** (user, 31 October 2026, with the three recommendations of section 8). Builds on [spec 0001](0001-compile-protocol.md) (compile protocol) and [ADR 0003](../adr/0003-runtime-shape.md) (shadow-root host, consumer-owned content). Scope per [product.md](../product.md): v1, read-only render. Nothing here exists as an API; the research it rests on is named in section 8.
+Status: **accepted** (user, 31 October 2026, with the three recommendations of section 8), implemented in `packages/d2web/src/mount.ts`. Builds on [spec 0001](0001-compile-protocol.md) (compile protocol) and [ADR 0003](../adr/0003-runtime-shape.md) (shadow-root host, consumer-owned content). Scope per [product.md](../product.md): v1, read-only render. The [browser review](../web-native-audit.md) records open text-calibration, animated-content and font-disposal defects.
 
 ## 1. Purpose and non-goals
 
@@ -16,7 +16,8 @@ mount(host: HTMLElement, options?: MountOptions): Mount
 interface MountOptions {
   idPrefix?: string;              // default: unique per mount ("d2w1-", "d2w2-", ...)
   a11y?: boolean;                 // default true: named focusable groups per D2 object
-  fonts?: 'register' | 'consumer'; // default 'register' (open question 1)
+  fonts?: 'register' | 'consumer'; // default 'register' (decision in section 8)
+  markdown?: 'positioned' | 'flow'; // default positioned; closed opt-in subset, spec 0009
 }
 
 interface Mount {
@@ -70,7 +71,13 @@ Compile results carry the font bytes D2 used (spec 0001 section 3.3). With `font
 | Font registration shared and reference-counted across mounts; `'consumer'` registers nothing | verified | `fonts.spec.mjs` |
 | Source to pixels through client and mount, light and dark within 5% of native D2 | verified on one board | `fonts.spec.mjs` |
 | `nodeBox` for path shapes is the bounds of the outline's points (control points included), not the exact outline | known approximation | `mount.ts` |
-| Animation painting, other browsers, screen readers, find-in-page | unknown / not built | |
+| Animation painting | implemented; animated object accessibility/events/content have confirmed defects | spec 0005; browser audit |
+| Firefox and Playwright WebKit | named suites have browser evidence; WebKit has an open C1 pixel failure | browser audit; real Safari unverified |
+| Screen readers | not tested with assistive technology | ARIA/DOM assertions do not establish spoken output |
+
+### Open browser defects (2 November 2026)
+
+Updating while an ancestor has a non-unit CSS scale miscalibrates positioned text; labels move and markdown may clip. Animated shape fallback omits the normal object accessibility boundary, prevents delegated object clicks and cannot display the consumer HTML replacement. Disposing while a font is loading can leave its later registration in `document.fonts`. The successful lifecycle rows above cover their named fixtures, not these combinations. Reproduction, measurements and next tests are in the [browser audit](../web-native-audit.md).
 
 ## 8. Decisions taken in review (user, 31 October 2026)
 
