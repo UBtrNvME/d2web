@@ -16,5 +16,6 @@ The accepted product scope is [read-only v1](product.md); [ADRs](adr/README.md) 
 | [0010 Images](specs/0010-images.md) | Accepted; supplied/bundled bytes, linked images and unresolved-image diagnostics |
 
 | [0011 Rendering contract](specs/0011-rendering-contract.md) | User-authorized implementation; typed prepared boards and explicit native/consumer DOM ownership; React renderer not built |
+| [0012 Edit API](specs/0012-edit-api.md) | Accepted (ADR 0012); edits published as checked patches; section 7 questions open; not built |
 
 Research probes under `research/` are evidence, not additional production APIs. The generated [feature map](feature-map.md) covers catalog constructs and paint measurements; it is not full semantic or browser acceptance.
