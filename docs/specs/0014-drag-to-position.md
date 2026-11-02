@@ -9,14 +9,14 @@ The author drags a shape on the canvas and it stays where they drop it. The posi
 ## 2. D2's rules (pinned v0.9.0, checked in source and in the browser)
 
 - `top` and `left` are non-negative integers (`d2compiler/compile.go`) and must be set together (`d2talalayout/adapter_validate.go`).
-- **Only TALA honours them.** dagre and ELK reject the whole compile: "layout engine … does not support locked positions" (`d2plugin/plugin_features.go`).
+- **Only TALA honours them.** dagre and ELK ignore them in D2's library compile, which d2web uses; only the `d2` CLI refuses such a diagram ("layout engine … does not support locked positions", `d2plugin.FeatureSupportCheck`, called from `d2cli/main.go` alone). Found while building task 3; the first draft said every compile refuses.
 - Coordinates: every fixed shape in one container shares an origin, `origin = painted top-left − (left, top)` (`layoutgraph/graph.go`, `fixedOrigin`). At the top level the origin is (0, 0): `a: {top: 100; left: 200}` paints at box X 200, Y 100, also with other fixed shapes far from the origin. Inside a container the origin is the container's corner plus TALA's `ContainerPadding` (60), more when the container has icons.
 
 ## 3. What the editor does
 
 - **Drag a shape** (TALA selected): the shape follows the pointer at once (its painted nodes are translated, as the layout snap does); on release one `client.edit` sets `<id>.top` and `<id>.left`, the text is patched, TALA recompiles and the snap animates the rest. A press that moves less than 4 px stays a click (selects).
 - **Drag empty space** pans, as now. Connections are not dragged.
-- **Other engines:** a drag on a shape pans and the status says positions need TALA. Switching a diagram that has `top`/`left` to dagre or ELK shows D2's own error; the menu does not hide it.
+- **Other engines:** a drag on a shape pans and the status says positions need TALA. A diagram with `top`/`left` lays out on dagre or ELK as if they were absent, as in D2's library (the `d2` CLI would refuse it).
 - **The new value** (integers, never below 0):
   1. the shape already has `top`/`left`: old value + drag distance (exact);
   2. else a sibling in the same container has them: origin from that sibling (exact);
@@ -33,7 +33,7 @@ The association (spec 0004) gains `properties.top` and `properties.left` with th
 
 - Go: `top`/`left` appear with source when declared and are absent otherwise.
 - Node: the position rules (each of the four cases, clamping at 0, rounding, zoom).
-- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; on dagre a shape drag makes no edit and shows the hint; Undo restores the text.
+- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
 
 ## 6. Boundaries
 

@@ -16,7 +16,10 @@ export function fit(w: number, h: number, W: number, H: number, pad = 32): View 
   return { x: (W - w * k) / 2, y: (H - h * k) / 2, k };
 }
 
-export function canvas(viewport: HTMLElement, content: HTMLElement, grid: HTMLElement, onChange: (v: View) => void) {
+// A press the consumer takes over (dragging a shape, spec 0014): distances are in diagram units.
+export type Grab = { move(dx: number, dy: number): void; drop(dx: number, dy: number): void; cancel(): void };
+
+export function canvas(viewport: HTMLElement, content: HTMLElement, grid: HTMLElement, onChange: (v: View) => void, grab?: (e: PointerEvent) => Grab | undefined) {
   let v: View = { x: 0, y: 0, k: 1 };
   const set = (next: View) => {
     v = next;
@@ -42,24 +45,29 @@ export function canvas(viewport: HTMLElement, content: HTMLElement, grid: HTMLEl
     else set({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY });
   }, { passive: false });
 
-  // Dragging anywhere pans; a press that moves less than 4px stays a click, so selection keeps working.
-  let drag: { id: number; sx: number; sy: number; x: number; y: number; moved: boolean } | undefined, panned = false;
+  // Dragging pans unless `grab` takes the press; a press that moves less than 4px stays a click, so selection keeps working.
+  let drag: { id: number; sx: number; sy: number; x: number; y: number; moved: boolean; grab?: Grab } | undefined, panned = false;
   viewport.addEventListener('pointerdown', e => {
     if (e.button !== 0 && e.button !== 1) return;
     panned = false;
-    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: v.x, y: v.y, moved: false };
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: v.x, y: v.y, moved: false, grab: grab?.(e) };
   });
   viewport.addEventListener('pointermove', e => {
     if (!drag || e.pointerId !== drag.id) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
     if (!drag.moved) { drag.moved = true; viewport.setPointerCapture(e.pointerId); viewport.classList.add('panning'); }
-    set({ ...v, x: drag.x + dx, y: drag.y + dy });
+    if (drag.grab) drag.grab.move(dx / v.k, dy / v.k);
+    else set({ ...v, x: drag.x + dx, y: drag.y + dy });
   });
   const end = (e: PointerEvent) => {
     if (!drag || e.pointerId !== drag.id) return;
     viewport.classList.remove('panning');
     panned = drag.moved;
+    if (drag.moved && drag.grab) {
+      if (e.type === 'pointerup') drag.grab.drop((e.clientX - drag.sx) / v.k, (e.clientY - drag.sy) / v.k);
+      else drag.grab.cancel();
+    }
     drag = undefined;
   };
   // The click after a pan must not select or deselect; the next press clears the flag if no click came.
