@@ -1,6 +1,7 @@
 // Painter: turns the scene JSON of spec 0001 (packages/d2web-wasm/scenejson) into SVG or HTML-first markup. It covers every primitive,
-// paint, clip, mask, filter and blend kind in the corpus; animations are not painted. Moved from the research tree; behaviour unchanged.
+// paint, clip, mask, filter and blend kind in the corpus; the native DOM renderer attaches the returned animation specifications.
 import { animationSpecs } from './animation.js';
+import { primBounds, subtreeBounds, objectForLink } from './geometry.ts';
 import { renderMarkdown, markdownCSS } from './markdown.js';
 
 const ALIGN = ['none', 'xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
@@ -200,40 +201,10 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     return [null, p.$ === 'Path' ? 'path' : 'other'];
   }
 
-  // Conservative painted bounds [x0, y0, x1, y1] of a node's subtree in the node's local coordinates, excluding its own transform.
-  function primBounds(p) {
-    if (!p) return null;
-    const pad = (p.Stroke?.Paint && p.Stroke.Width > 0 ? p.Stroke.Width * 2 : 0);
-    if (p.$ === 'Rect' || p.$ === 'Image') return [p.Box.X - pad, p.Box.Y - pad, p.Box.X + p.Box.Width + pad, p.Box.Y + p.Box.Height + pad];
-    if (p.$ === 'Ellipse') return [p.Center.X - p.RadiusX - pad, p.Center.Y - p.RadiusY - pad, p.Center.X + p.RadiusX + pad, p.Center.Y + p.RadiusY + pad];
-    if (p.$ === 'Path') {
-      const b = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const c of p.Commands) for (const q of c.Kind === 5 ? [] : [c.P1, ...(c.Kind >= 2 && c.Kind <= 3 ? [c.P2] : []), ...(c.Kind === 3 ? [c.P3] : [])]) {
-        const r = c.Kind === 4 ? Math.max(c.RadiusX, c.RadiusY) : 0;
-        b[0] = Math.min(b[0], q.X - r - pad); b[1] = Math.min(b[1], q.Y - r - pad); b[2] = Math.max(b[2], q.X + r + pad); b[3] = Math.max(b[3], q.Y + r + pad);
-      }
-      return b[0] === Infinity ? null : b;
-    }
-    if (p.$ === 'TextRun') { const w = p.Text.length * p.Font.Size; return [p.Origin.X - w, p.Origin.Y - 2 * p.Font.Size, p.Origin.X + w, p.Origin.Y + p.Font.Size]; }
-    return null;
-  }
-  function subtreeBounds(n) {
-    let b = primBounds(n.Primitive);
-    for (const c of n.Children ?? []) {
-      const cb = subtreeBounds(c);
-      if (!cb) continue;
-      const m = c.Transform;
-      for (const [x, y] of [[cb[0], cb[1]], [cb[2], cb[1]], [cb[0], cb[3]], [cb[2], cb[3]]]) {
-        const X = m.A * x + m.C * y + m.E, Y = m.B * x + m.D * y + m.F;
-        b = b ? [Math.min(b[0], X), Math.min(b[1], Y), Math.max(b[2], X), Math.max(b[3], Y)] : [X, Y, X, Y];
-      }
-    }
-    return b;
-  }
-
   // Accessibility probe: every direct child of the root that is not a root:* helper is a D2 object or connection. It becomes a
   // focusable named group; the name is its label runs (or the ID when it has none). Paint is unchanged.
-  const objects = new Set(a11y ? (scene.Root?.Children ?? []).filter(c => c.ID && !c.ID.startsWith('root:')) : []);
+  const objectNodes = new Set((scene.Root?.Children ?? []).filter(c => c.ID && !c.ID.startsWith('root:')));
+  const objects = new Set(a11y ? objectNodes : []);
   const labelOf = n => (n.Children ?? []).filter(c => c.ID?.startsWith(`${n.ID}:label:`)).map(c => c.Primitive?.Text).filter(Boolean).join(' ');
   // Spec 0006: names, nesting and descriptions are D2's own data (association payload, link regions) in ARIA form; no wording of ours.
   const info = new Map(association.map(o => [o.id, o]));
@@ -255,19 +226,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     return ` id="${domId.get(n)}" role="group" tabindex="0" aria-label="${esc(nameOf(n))}"${description ? ` aria-description="${esc(description)}"` : ''}${owned.has(n) ? ` aria-owns="${owned.get(n).join(' ')}"` : ''}`;
   };
 
-  // A link region carries no object ID; it belongs to the smallest D2 object whose bounds hold the region (within its stroke).
-  function objectFor(l) {
-    let best = null, area = Infinity;
-    for (const n of scene.Root?.Children ?? []) {
-      if (!n.ID || n.ID.startsWith('root:')) continue;
-      const b = subtreeBounds(n), m = n.Transform;
-      if (!b || !m) continue;
-      const x0 = m.A * b[0] + m.E - 4, y0 = m.D * b[1] + m.F - 4, x1 = m.A * b[2] + m.E + 4, y1 = m.D * b[3] + m.F + 4;
-      const r = l.Box;
-      if (r.X >= x0 && r.Y >= y0 && r.X + r.Width <= x1 && r.Y + r.Height <= y1 && (x1 - x0) * (y1 - y0) < area) { area = (x1 - x0) * (y1 - y0); best = n; }
-    }
-    return best;
-  }
+  const objectFor = link => objectForLink(scene, link);
   const linkName = l => { const n = objectFor(l); return n ? nameOf(n) : ''; };
   if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
@@ -350,7 +309,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       else if (/^(---+|\*\*\*+|___+)$/.test(lines[0])) rule = true;
       else if (!/^[\s#>*_`~|+-]/.test(lines[0])) paragraphs.add(lines[0]);
     }
-    const width = primBounds(n.Clip?.Path)?.[2];
+    const viewport = primBounds(n.Clip?.Path), width = viewport?.[2];
     const translation = [scene.Root, owner, n].every(o => o.Transform.A === 1 && o.Transform.D === 1 && o.Transform.B === 0 && o.Transform.C === 0);
     const dx = translation ? scene.Root.Transform.E + owner.Transform.E + n.Transform.E : 0;
     const dy = translation ? scene.Root.Transform.F + owner.Transform.F + n.Transform.F : 0;
@@ -370,7 +329,9 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
         else if (p.Font.Asset !== 'font:SourceSansPro:regular' || p.Font.Size !== 16) return null;
         if (!tag && translation) {
           const ink = p.Ink;
-          const matches = (scene.Links ?? []).filter(l => l.URL && ink?.Valid && Math.abs(l.Box.X - dx - ink.Min.X) < .001 && Math.abs(l.Box.Y - dy - ink.Min.Y) < .001 && Math.abs(l.Box.Width - (ink.Max.X - ink.Min.X)) < .001 && Math.abs(l.Box.Height - (ink.Max.Y - ink.Min.Y)) < .001);
+          // D2 clips link regions to the markdown viewport; glyph ink can extend above its top edge.
+          const box = ink?.Valid && [Math.max(ink.Min.X, viewport?.[0] ?? -Infinity), Math.max(ink.Min.Y, viewport?.[1] ?? -Infinity), Math.min(ink.Max.X, viewport?.[2] ?? Infinity), Math.min(ink.Max.Y, viewport?.[3] ?? Infinity)];
+          const matches = (scene.Links ?? []).filter(l => l.URL && box && Math.abs(l.Box.X - dx - box[0]) < .001 && Math.abs(l.Box.Y - dy - box[1]) < .001 && Math.abs(l.Box.Width - (box[2] - box[0])) < .001 && Math.abs(l.Box.Height - (box[3] - box[1])) < .001);
           if (matches.length === 1) { link = matches[0]; tag = 'a'; text = `[${text}](${link.URL})`; }
         }
         spelling += text;
@@ -386,10 +347,10 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       if (!l) return contents(mark.tag, body);
       usedLinks.add(l);
       // Move the existing hit region into the text anchor; no second anchor or keyboard stop.
-      // No data-k=link here: mount resolves these nested hits through their object, rather than treating local coordinates as scene coordinates.
+      // No data-k=link here: the DOM renderer resolves nested hits through their object, not these local coordinates.
       body += `<span style="position:absolute;left:${px(l.Box.X - dx)};top:${px(l.Box.Y - dy)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></span>`;
       // A positioned anchor at the same origin stays focusable even in browsers that cannot focus display:contents.
-      return `<a${hrefOf(l.URL) ? ` href="${esc(l.URL)}"` : ''}${linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:0;top:0;font:inherit;color:inherit;text-decoration:none">${body}</a>`;
+      return `<a${hrefOf(l.URL) ? ` href="${esc(l.URL)}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:0;top:0;font:inherit;color:inherit;text-decoration:none">${body}</a>`;
     }).join('');
     let body = '';
     for (let i = 0; i < children.length;) {
@@ -509,11 +470,11 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     if (effect) {
       const before = inEffect;
       inEffect = true;
-      const out = svgBox(node(n));
+      const out = svgBox(node(objectNodes.has(n) ? { ...n, ID: '' } : n));
       inEffect = before;
       count('svg:effect-subtree-nodes');
       for (const [kind, on] of Object.entries({ mask: n.Mask, clip: n.Clip, filter: n.Filters?.length, blend: n.Blend, animation: n.Animations?.length })) if (on) count(`effect:${kind}`);
-      return out;
+      return objectNodes.has(n) ? `<div data-id="${esc(n.ID)}"${a11yAttrs(n)} style="position:absolute;left:0;top:0">${out}</div>` : out;
     }
     const style = ['position:absolute', 'left:0', 'top:0', 'transform-origin:0 0'];
     // CSS matrix() needs commas; the SVG attribute form with spaces is silently ignored there.

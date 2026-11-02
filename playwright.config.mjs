@@ -4,6 +4,7 @@ const browserName = process.env.D2WEB_BROWSER ?? 'chromium';
 
 export default defineConfig({
   testDir: '.',
+  testIgnore: ['**/.claude/**', '**/imports/**', '**/node_modules/**'],
   testMatch: ['tests/browser/*.spec.mjs', 'tests/features/*.spec.mjs', 'research/browser/*.spec.mjs', 'packages/*/tests/browser/*.spec.mjs'],
   outputDir: './artifacts/playwright',
   snapshotPathTemplate: '{testDir}/../../artifacts/native-png/{testName}/{arg}{ext}',

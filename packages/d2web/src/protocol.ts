@@ -1,4 +1,6 @@
 // Message types for spec 0001 (docs/specs/0001-compile-protocol.md). Types only; the spec is the contract, this file mirrors it.
+import type { SceneDocument } from './scene.ts';
+
 export const PROTOCOL_VERSION = 1;
 export const SCENE_VERSION = 1;
 
@@ -76,7 +78,7 @@ export interface Diagnostic {
 
 export interface BoardResult {
   path: string;
-  scene: unknown; // designed scene encoding, versioned by sceneVersion (not built yet)
+  scene: SceneDocument; // closed scene encoding v1, independent of any DOM or framework
   association: Association; // keyed by (revision, board path, object ID); spec 0004
 }
 

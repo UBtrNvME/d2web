@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs packages/d2web/tests/render.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -61,7 +61,7 @@ run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs packages/d2web/tests/browser/images.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs packages/d2web/tests/browser/images.spec.mjs packages/d2web/tests/browser/regressions.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
@@ -164,7 +164,7 @@ run = ["node research/rich-browser.mjs", "pnpm exec playwright test research/bro
 
 [tasks."test:research:census"]
 description = "Build native scenes for every corpus board, tally what a browser must paint and repaint every root board in Chromium as SVG and as HTML-first markup against native SVG"
-run = ["node research/census.mjs", "pnpm exec playwright test research/browser/census.spec.mjs research/browser/paint.spec.mjs research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/run", "D2_CSS_MASKS=subtree pnpm exec playwright test research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/run"]
+run = ["node research/census.mjs", "pnpm exec playwright test research/browser/paint.spec.mjs --reporter=line --output=artifacts/research-census/paint-run", "pnpm exec playwright test research/browser/census.spec.mjs research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/run", "D2_CSS_MASKS=subtree pnpm exec playwright test research/browser/html.spec.mjs --reporter=line --output=artifacts/research-census/subtree-run"]
 
 [tasks."test:research:lifecycle"]
 description = "Two painted boards per document under hostile host CSS: ID collisions, style isolation, mount/update/failure/dispose/remount effects"

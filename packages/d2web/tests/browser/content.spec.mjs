@@ -74,3 +74,70 @@ test('size handshake: a measured consumer card becomes D2 width/height and the n
   expect(out.box.Height).toBe(out.asked[1]);
   expect(out.holder).toEqual([out.asked[0], out.asked[1]]);
 });
+
+test('consumer roots keep identity, state and listeners; private data-id attributes cannot impersonate D2 objects', async ({ page }) => {
+  await ready(page);
+  const out = await page.evaluate(async () => {
+    const card = document.createElement('div'), input = document.createElement('input');
+    card.dataset.id = 'db'; input.value = 'unsaved consumer state'; card.append(input);
+    let clicks = 0; card.addEventListener('click', () => clicks++);
+    m.setNodeContent('api', card);
+    await m.update(result);
+    input.click();
+    const preserved = document.getElementById('a').shadowRoot.querySelector('[data-d2-content="api"]').firstChild === card;
+    m.setNodeContent('api', null);
+    const detached = card.parentNode === null;
+    m.setNodeContent('api', card);
+    m.dispose();
+    return { preserved, detached, disposed: card.parentNode === null, input: card.firstChild === input, value: input.value, clicks, events };
+  });
+  expect(out).toEqual({ preserved: true, detached: true, disposed: true, input: true, value: 'unsaved consumer state', clicks: 1, events: [['click', 'api']] });
+});
+
+test('ownership errors preserve registrations and prevent moving roots, their children or renderer DOM between slots', async ({ page }) => {
+  await ready(page);
+  const out = await page.evaluate(async () => {
+    const host = document.createElement('div'); document.body.append(host);
+    const other = d2web.mount(host, { a11y: false }); await other.update(result);
+    const card = document.createElement('div'), child = document.createElement('button');
+    card.append(child); m.setNodeContent('api', card);
+    const orphan = document.createElement('div'), outer = document.createElement('div'), inner = document.createElement('span');
+    orphan.append(inner); outer.append(orphan); m.setNodeContent('future', orphan);
+    const errors = [];
+    for (const [mount, id, el] of [
+      [m, 'db', card], [other, 'api', card], [other, 'db', child],
+      [m, 'db', document.getElementById('a')],
+      [m, 'db', host.shadowRoot.querySelector('[data-id="db"]')],
+      [other, 'db', outer], [other, 'db', inner],
+    ]) {
+      try { mount.setNodeContent(id, el); errors.push(false); } catch (e) { errors.push(e.name === 'Error' && /content/.test(e.message)); }
+    }
+    const intact = card.firstChild === child && card.parentElement?.dataset.d2Content === 'api';
+    m.setNodeContent('api', null);
+    other.setNodeContent('db', card);
+    const transferred = card.parentElement?.dataset.d2Content === 'db';
+    const identities = []; other.on('click', e => identities.push(e.id)); child.click();
+    other.dispose();
+    return { errors, intact, transferred, identities };
+  });
+  expect(out).toEqual({ errors: [true, true, true, true, true, true, true], intact: true, transferred: true, identities: ['db'] });
+});
+
+test('native copy and tooltip handlers leave consumer content alone', async ({ page }) => {
+  await ready(page);
+  const out = await page.evaluate(() => {
+    const card = document.createElement('div'), pre = document.createElement('pre'), tip = document.createElement('div');
+    pre.textContent = 'consumer clipboard text'; tip.role = 'tooltip'; tip.dataset.dismissed = 'consumer';
+    card.append(pre, tip); m.setNodeContent('api', card);
+    pre.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+    const escape = tip.dataset.dismissed;
+    pre.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }));
+    const focusout = tip.dataset.dismissed;
+    const range = document.createRange(); range.selectNodeContents(pre);
+    const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    const clipboard = new ClipboardEvent('copy', { bubbles: true, composed: true, cancelable: true, clipboardData: new DataTransfer() });
+    pre.dispatchEvent(clipboard);
+    return { escape, focusout, prevented: clipboard.defaultPrevented, copied: clipboard.clipboardData.getData('text/plain') };
+  });
+  expect(out).toEqual({ escape: 'consumer', focusout: 'consumer', prevented: false, copied: '' });
+});

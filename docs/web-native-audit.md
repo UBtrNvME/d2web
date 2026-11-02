@@ -1,6 +1,18 @@
 # Web-native audit and browser review
 
-## Current assessment (2 November 2026)
+## Current implementation (2 November 2026, after fixes)
+
+The reviewed runtime defects now have fixes and regression coverage: text baselines are measured in local coordinates under scale; animated SVG fallback retains a named HTML object frame; font loads are shared and cannot register after disposal; recognized inline links are named by their own text. The native DOM implementation now owns paint topology, measurement, animation targets and event identity. `prepareBoard` exposes the complete typed scene, association and resources without a DOM; [spec 0011](specs/0011-rendering-contract.md) defines this input and single-owner consumer content.
+
+`mise run check:full` passed after the fixes, including 87 Chromium product tests with 2 existing skips, the feature catalog, native/research comparisons and package/consumer/demo gates. The focused 34-test set passed in Firefox (34/34) and Playwright WebKit (34/34); the final copy/tooltip/content/semantic set passed 29/29 in each. The AWS demo replay displaced 0 of 53 labels after a blank-line edit at 64% fitted zoom; controlled updates at all five zoom levels had zero baseline movement and zero update pixel delta. WebKit's old C1 discrepancy was traced to the checkpoint reference's unsupported fragment-mask transport, not changed label geometry. The reference-only transport correction keeps its own paint independent and the zero-delta assertion unchanged. Exact final integrated results are in [the current task ledger](../tasks/todo.md#bug-fixes-and-rendering-contract-2-november-2026).
+
+The missing upstream Git metadata was restored only after comparing all imported source files with the official pinned D2 commit; the imported source was unchanged. Root browser discovery now excludes nested worktrees/imports. Research census commands explicitly run the paint-artifact producer before its HTML consumer.
+
+This remains a framework-independent native web runtime with incomplete semantic coverage. It is not a full React renderer or proof of complete browser/assistive-technology support. Native/browser font rasterization differences, native layout overlap, conservative object bounds, limited markdown flow and real Safari remain documented limits. No reference images or comparison thresholds were relaxed.
+
+## Review baseline before these fixes (2 November 2026)
+
+The following findings and measurements describe the pre-fix implementation and explain the work above.
 
 d2web has a framework-independent native browser foundation: Go/WASM compilation in a worker, TypeScript lifecycle and events, HTML/SVG paint and Web Animations. SVG geometry is a valid native web form. The implementation is **not yet fully web native or free of rendering defects**. HTML element share and closed catalog rows do not prove semantic content, clipping, accessible behaviour or consumer replacement.
 
@@ -8,7 +20,7 @@ The review covers production source and docs, the Chromium client suite and feat
 
 ### Confirmed defect: updating under zoom shifts and clips text
 
-**Priority: P1, open.** `packages/d2web/src/mount.ts` `calibrate()` measures the baseline marker with `getBoundingClientRect()`, then subtracts that screen-pixel distance from the scene-coordinate `data-y`. An ancestor CSS scale changes the measured distance. Repeating `update()` with the same result therefore changes positioned text geometry, even though D2 has not changed anything.
+**Priority at review: P1; fixed in the follow-up above.** `packages/d2web/src/mount.ts` `calibrate()` measures the baseline marker with `getBoundingClientRect()`, then subtracts that screen-pixel distance from the scene-coordinate `data-y`. An ancestor CSS scale changes the measured distance. Repeating `update()` with the same result therefore changes positioned text geometry, even though D2 has not changed anything.
 
 Reproduction through the demo UI in Chromium:
 

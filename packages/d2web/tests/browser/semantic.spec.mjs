@@ -110,7 +110,7 @@ test('markdown: semantic blocks and inline runs retain D2 text, IDs, names and l
   await expect(link).toHaveCount(1);
   expect(await link.evaluate(el => el.innerText.trim())).toBe('link');
   await expect(page.locator('#a a[href="https://x.test"]')).toHaveCount(1);
-  await expect(link).toHaveAttribute('aria-label', markdown);
+  await expect(link).toHaveAccessibleName('link');
   await expect(link.locator(':scope > span')).toHaveCount(1);
   await page.route('https://x.test/**', route => route.abort());
   await link.evaluate(el => el.addEventListener('click', e => e.preventDefault()));
@@ -165,7 +165,7 @@ test('markdown: fenced literals are not headings or emphasis; inline links reuse
   await expect(page.locator('#a a')).toHaveAttribute('aria-label', /\[link\]\(javascript:alert\(1\)\)/);
 });
 
-test('C1: every content, table and shape case matches the checkpoint painter', async ({ page }, testInfo) => {
+test('C1: every content, table and shape case matches the checkpoint painter', async ({ page, browserName }, testInfo) => {
   test.setTimeout(10 * 60_000);
   await open(page, { body: host });
   await page.addScriptTag({ content: beforeBundle });
@@ -176,6 +176,25 @@ test('C1: every content, table and shape case matches the checkpoint painter', a
       if (result.error) throw new Error(JSON.stringify(result.error));
       window.m = before.mount((() => { const h = document.getElementById('a'), c = h.cloneNode(false); h.replaceWith(c); return c; })()); await m.update(result);
     }, entry);
+    // WebKit cannot resolve the checkpoint's HTML -> SVG fragment masks. Transport only its own mask as an image;
+    // the reference geometry/paint stays independent of the candidate, and the required pixel delta stays zero.
+    if (browserName === 'webkit') await page.evaluate(() => {
+      const shadow = document.getElementById('a').shadowRoot;
+      for (const el of shadow.querySelectorAll('[style*="mask:url(#"]')) {
+        const id = el.style.cssText.match(/mask:\s*url\(["']?#([^\s)"']+)/)?.[1];
+        const mask = id && shadow.getElementById(id);
+        const width = parseFloat(el.style.width), height = parseFloat(el.style.height);
+        if (!mask || !(width > 0 && height > 0) || mask.querySelector('[href], [style*="url("], [fill*="url("], [filter]')) throw new Error('unsupported checkpoint mask transport');
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}" style="mask-type:${mask.style.maskType || 'luminance'}">${mask.innerHTML}</mask><rect width="${width}" height="${height}" mask="url(#m)"/></svg>`;
+        const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+        for (const prefix of ['', '-webkit-']) {
+          el.style.setProperty(`${prefix}mask-image`, url);
+          el.style.setProperty(`${prefix}mask-size`, '100% 100%');
+          el.style.setProperty(`${prefix}mask-repeat`, 'no-repeat');
+        }
+        el.style.setProperty('mask-mode', 'alpha');
+      }
+    });
     const previous = await shot(page, '#a');
     const oldBox = await page.evaluate(() => result.boards[0].association.objects.filter(o => o.kind === 'shape').map(o => m.nodeBox(o.id)));
     await page.evaluate(async () => { m.dispose(); m = d2web.mount((() => { const h = document.getElementById('a'), c = h.cloneNode(false); h.replaceWith(c); return c; })()); await m.update(result); });

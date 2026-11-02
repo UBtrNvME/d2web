@@ -50,3 +50,7 @@ Not changed: the group role (D2 does not say a shape is a button or a heading), 
 | `aria-owns` is announced the same way across Chromium, Firefox and Safari | unknown |
 | Screen reader behaviour (VoiceOver, NVDA) | unknown; only the accessibility tree is tested |
 | Find-in-page on painted text | unknown until the test runs |
+
+## Inline-link naming follow-up (2 November 2026)
+
+Recognized positioned and flowing markdown links use their rendered link text as the accessible name. Whole-object and unrecognized region overlays retain object-level names; unsafe URLs stay href-less. Object groups retain the complete D2 label. Animated fallback preserves the same named, focusable HTML object frame. `regressions.spec.mjs` covers two separately named links and animated content/events.

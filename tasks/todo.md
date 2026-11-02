@@ -2,6 +2,39 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
+## Bug fixes and rendering contract (2 November 2026)
+
+Accepted scope: fix the browser-review defects first, then build renderer input and explicit DOM ownership. A React renderer is a later task. Baseline: `54c7329` on `main`. Existing `.claude/artifacts/` is preserved.
+
+- [x] Local-coordinate text calibration, including repeated updates at ancestor scales 0.4/0.75/1/1.5/2, D2 render scale 1.5, positioned and flowing markdown.
+- [x] Animated shape fallback retains the named/focusable HTML object frame and supports native events and visible consumer content.
+- [x] Pending font loads cannot register after dispose; simultaneous mounts share one load and release the face with the last holder.
+- [x] Inline markdown links use separate link-text names; clip-aware ink matching handles text extending above D2's viewport.
+- [x] Typed complete scene and DOM-free `prepareBoard`, shared geometry helpers, and native renderer isolation. [Spec 0011](../docs/specs/0011-rendering-contract.md) records renderer input, resource and DOM ownership boundaries.
+- [x] Consumer roots retain identity, state and listeners. Runtime-owned identity ignores consumer `data-id`. Sharing/nesting registered roots or taking renderer DOM throws before registration changes. Clear/dispose detach roots. Native copy/tooltip handlers capture only renderer-created elements and leave consumer descendants untouched.
+- [x] WebKit C1 cause isolated: legacy checkpoint fragment masks fail in WebKit. Reference-only data-URI mask transport restores exact comparison without candidate inputs or relaxed thresholds.
+- [x] Restore only missing `imports/d2/.git` metadata after an exact source-tree comparison with official pinned `v0.9.0` (`d5a51743b6d5c00f1ec6f8340003f5d5a6ba4eda`). Source and imported Studio unchanged. Exclude nested worktrees from Playwright discovery.
+- [x] Reproduce and correct research census ordering: the old combined invocation scheduled `html.spec.mjs` before `paint.spec.mjs`, so fresh `paint.json` was missing. Producer and consumers now use separate sequential invocations/output directories.
+
+Verification:
+
+| Command | Result |
+| --- | --- |
+| `mise exec -- node --test packages/d2web/tests/render.test.mjs` and `mise run typecheck` | 2 prepared-board checks passed, including borrowed font resources; typecheck passed; full gate includes 65 unit tests |
+| Focused regressions/events/content/mount Chromium suite | 18 passed after renderer extraction; expanded ownership checks also passed separately (5 content cases before copy/tooltip coverage) |
+| Focused semantic/regressions/content/fonts/mount/text-scripts set, `D2WEB_BROWSER=firefox` / `webkit` | 34 passed in each engine, including C1 exact checkpoint comparison |
+| Initial `mise run check:full` (before census ordering fix) | Fast gate, catalog and packaging/consumer/demo checks passed; research census failed on missing producer artifact and stopped the remaining tasks. Corrected task ordering; next full run passed in 203.79 s (86 Chromium product tests passed, 2 existing skips). Final ownership-handler addition passed in the final full run below |
+
+Final `mise run check:full`: **passed, exit 0, 211.14 s**. Includes 65 unit tests, native/Node-WASM checks, typecheck, every Chromium browser/research suite, feature catalog, distribution size/declaration tests, packaged consumers and demo. Chromium product result: **87 passed, 2 existing skips**. Catalog: 298 board rows; no baseline/status regression. `git diff --check` and changed-document file-link validation passed.
+
+Final focused check: `D2WEB_BROWSER=firefox` and `webkit` with `mise exec -- pnpm exec playwright test packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs --reporter=line` (separate output folders) passed **29/29 in each engine**, including the final consumer-copy/tooltip test.
+
+Logs: `/tmp/d2web-contract-*.log`; ignored browser evidence in `artifacts/render-contract/` and `artifacts/browser-fixes/`. Changed source: `src/{mount,dom,render,scene,geometry,protocol,index,paint}` and declarations; tests: prepared-board units, browser content/regressions/semantic, plus mise and Playwright discovery configuration. Documentation links this slice from README, product, spec index, relevant specs, audit and browser support. No dependencies, native reference images, thresholds or upstream source changed. The user authorized committing and pushing this slice after verification; unrelated `.claude/artifacts/` is excluded.
+
+AWS/demo replay: `mise exec -- node artifacts/browser-fixes/zoom-fixed.mjs` passed with zero baseline movement and zero update pixel delta at all five scales; `demo-fixed.mjs` passed with 0 of 53 labels displaced by the blank-line edit at 64% zoom. The original review artifacts were preserved. Independent read-only review found no introduced code regression.
+
+Current state: the bug fixes and rendering-contract slice are complete; source, tests and this handoff ship together. Next: a bounded React renderer, if requested. Remaining acceptance limits: full semantic content support, exact/general affine object bounds, real Safari, assistive-technology behaviour and Linux CI evidence.
+
 ## Browser review (2 November 2026)
 
 User scope: review code/docs in real browsers, investigate text differences and clipping with native D2, and correct documentation. The user supplied the AWS URL-shortener source and named Chrome; the same source is already a demo example. Production runtime changes were not part of this documentation/review pass. Findings, measurements and reproduction steps are in [the browser audit](../docs/web-native-audit.md).
@@ -10,8 +43,8 @@ User scope: review code/docs in real browsers, investigate text differences and 
 - [x] Reproduce the zoom-dependent text defect through the demo UI and controlled same-result updates at scales 0.4, 0.75, 1, 1.5 and 2. All 53 AWS positioned text runs move after a whitespace-only edit at fitted zoom; the 200% replay clips the heading. `mount.calibrate()` mixes screen and scene distances.
 - [x] Browser-confirm the prior animated-object role/event/content failure, late font-registration leak and object-level names on inline markdown links. These remain open runtime/contract work, not fixes delivered by this review.
 - [x] Correct entry docs, the spec index, obsolete implementation-status statements, comparison guidance and generated-report descriptions; retain research measurements as historical evidence.
-- [ ] Next runtime task: fix local-coordinate baseline calibration and add a focused test for repeat update under ancestor and scene scale, including multiline labels, connection labels and markdown clipping. Then preserve the object boundary through animated fallback and cover pending-font disposal. The owner is the next d2web rendering slice; these are not deferred acceptance of current behaviour.
-- [ ] WebKit: investigate the reproducible nonzero C1 checkpoint delta for `shape/sequence_diagram`; do not relax the zero-delta requirement.
+- [x] Follow-up delivered above: fix local-coordinate baseline calibration and add a focused test for repeat update under ancestor and scene scale, including multiline labels, connection labels and markdown clipping. Then preserve the object boundary through animated fallback and cover pending-font disposal. The owner is the next d2web rendering slice; these are not deferred acceptance of current behaviour.
+- [x] Follow-up delivered above: investigate the reproducible nonzero C1 checkpoint delta for `shape/sequence_diagram`; do not relax the zero-delta requirement.
 
 Revision note: review began at `d1be8f3`. Main advanced independently to `21ae1ab` (TALA-seed default correction in `0212cf4`) during execution. Preserve that implementation. Current comparisons use native and worker seeds `[1,2,3]`; the initial seed-1 pass remains a historical measurement. No commit, push or import repair was performed by this review. Existing untracked `.claude/artifacts/` is unrelated and preserved.
 
@@ -53,7 +86,7 @@ Not run as a completed gate: `check:full`, all research/packaged-consumer browse
 
 ## Slice 1: compile protocol, render only (spec 0001)
 
-Product code, not research. Each step ends with a passing test in `check` (or `check:browser` when it needs Chromium). Types already exist in [src/protocol.ts](../src/protocol.ts).
+Product code, not research. Each step ends with a passing test in `check` (or `check:browser` when it needs Chromium). Types already exist in [protocol.ts](../packages/d2web/src/protocol.ts).
 
 - [x] 1. Request validation (done 31 October 2026: `packages/d2web/src/request.ts`, `packages/d2web/tests/request.test.mjs`, run by `test:unit`; budget defaults are placeholders from the probes, root board is the empty path): reject a malformed `compile` (missing entry, unknown engine, non-numeric budget), apply budget and board defaults, echo the options used. Unit tests, no wasm.
 - [x] 2. Scene encoder (done 31 October 2026): `packages/d2web-wasm/scenejson`, closed type set (an unlisted type is an error; snapshot test pins the set), font bytes returned beside the JSON instead of inside it, `Version = 1`. `test:wasm` (in `check`) encodes every board of the 82 `.d2` files under examples/files and examples/boards; archive cases (txtar) are not in this test. It keeps the research field names, so the painter in step 5 reads it unchanged; it is still reflection-based underneath, with the allow list as the contract. The compile+build pipeline sits in the test file and moves into the worker package in step 3.

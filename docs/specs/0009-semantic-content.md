@@ -124,3 +124,9 @@ D2 emits a multi-line label as one text run per line (`label:0`, `label:1`, ...)
 ## Stage B: underscore emphasis and strikethrough (2 November 2026)
 
 `_em_`, `__strong__` and `~~del~~` now parse in flow (`em`, `strong`, `del` with `text-decoration:line-through`), with the same boundary rules as `*` (no intraword, no nesting). `content/markdown-rich` moved from positioned to flow with fit delta 0 by 0; `content/markdown` still falls back on its lazy list continuation, `content/markdown-table` on the GFM table. Unit tests cover the new syntax and the `snake_case` rejection.
+
+## Checkpoint transport and link naming (2 November 2026)
+
+The WebKit C1 sequence-diagram mismatch came from the checkpoint painter's unsupported HTML fragment-mask reference: it drew connections through their labels. The current painter already uses a standalone SVG image mask. C1 now transports only the checkpoint DOM's own mask geometry/paint to a standalone SVG image in WebKit, failing on external references. No candidate paint or pixels feed the reference, and the zero-delta assertion is unchanged. Native D2 comparisons are untouched.
+
+Inline anchors now take their accessible name from link text, while object groups retain the raw D2 markdown label. Matching accounts for D2's markdown clip when a glyph's ink starts above its viewport. Local-coordinate baseline calibration is owned by the native renderer, per [spec 0011](0011-rendering-contract.md).
