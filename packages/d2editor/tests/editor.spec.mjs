@@ -72,7 +72,7 @@ async function patch(page, expected, action) {
 
 test.setTimeout(180_000);
 
-test('built page loads its real worker and wasm and paints the start example', async ({ page }) => {
+test('built page loads its real worker and wasm and paints the starter diagram', async ({ page }) => {
   await open(page);
   await visible(page, 'api');
   // As the demo: the canvas takes D2's solid scene background and the board's own background rectangle is hidden, so the dots run under the diagram.
@@ -302,11 +302,30 @@ test('layout changes animate surviving nodes, new nodes fade and edits pulse; re
   expect(errors).toEqual([]);
 });
 
-test('examples, opening, downloading, restore and editing/idle seeds work at /editor/', async ({ page }) => {
-  await open(page, '/editor/');
-  await page.selectOption('#example', 'Container');
+test('theme and layout menus reach the compile, are restored on reload, and other engines skip the idle TALA compile', async ({ page }) => {
+  await open(page);
+  const last = () => page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1));
+  await page.selectOption('#theme', '4');
+  await expect.poll(async () => (await last()).render.themeId).toBe(4);
+  await page.selectOption('#layout', 'dagre');
+  await expect.poll(async () => (await last()).layout).toBe('dagre');
   await painted(page);
-  await visible(page, 'services.api');
+  await visible(page, 'api');
+  await type(page, 'a -> b\n');
+  const count = await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').length);
+  await page.waitForTimeout(1300);
+  expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').length)).toBe(count);
+  await page.reload();
+  await painted(page);
+  await expect(page.locator('#theme')).toHaveValue('4');
+  await expect(page.locator('#layout')).toHaveValue('dagre');
+  expect((await last()).layout).toBe('dagre');
+});
+
+test('opening, downloading, restore and editing/idle seeds work at /editor/', async ({ page }) => {
+  await open(page, '/editor/');
+  // No example menu (user, 2 November 2026): files come from Open or the source pane.
+  await expect(page.locator('#example')).toHaveCount(0);
   const text = '# opened file\r\na: From file\r\n';
   await page.locator('#open').setInputFiles({ name: 'mine.d2', mimeType: 'text/plain', buffer: Buffer.from(text) });
   await expect(page.locator('#src')).toHaveValue(text.replaceAll('\r\n', '\n'));

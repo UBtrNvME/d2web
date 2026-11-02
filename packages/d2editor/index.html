@@ -22,8 +22,9 @@
     <button type="button" id="fit" title="Fit the diagram (Shift+1)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Fit</button>
   </div>
   <div class="document">
+    <label>Theme <select id="theme"></select></label>
+    <label>Layout <select id="layout"><option value="tala">TALA</option><option value="dagre">dagre</option><option value="elk">ELK</option></select></label>
     <label>Board <select id="board"><option value="">root</option></select></label>
-    <label>Example <select id="example"></select></label>
     <label class="file" title="Open a .d2 file"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>Open<input type="file" id="open" accept=".d2,text/plain"></label>
     <button type="button" id="download" title="Download the D2 text"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>Download</button>
   </div>

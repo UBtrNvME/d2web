@@ -1,5 +1,5 @@
 // d2editor (spec 0013): the D2 text is the only document; canvas actions become d2web edits (spec 0012) and land in it as checked patches.
-import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type SceneDocument } from '../../d2web/src/index.ts';
+import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
 import { createHistory } from './history.ts';
 import { snap } from './snap.ts';
 import { canvas } from './canvas.ts';
@@ -9,24 +9,30 @@ const src = $<HTMLTextAreaElement>('src');
 const ENTRY = 'main.d2';
 // D2's own default light and dark themes follow the system scheme, as in the demo.
 const dark = matchMedia('(prefers-color-scheme: dark)');
-const render = () => ({ themeId: dark.matches ? 200 : 0, sketch: false, pad: 24, scale: 1, center: false });
+// D2's themes (d2themescatalog), for the Theme menu; Auto picks D2's own default light or dark theme.
+const THEMES: [number, string][] = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
+const themeSelect = document.getElementById('theme') as HTMLSelectElement, layoutSelect = document.getElementById('layout') as HTMLSelectElement;
+themeSelect.append(new Option('Auto (follow system)', 'auto'), ...THEMES.map(([id, name]) => new Option(`${name} (${id})`, String(id))));
+const render = () => ({ themeId: themeSelect.value === 'auto' ? (dark.matches ? 200 : 0) : +themeSelect.value, sketch: false, pad: 24, scale: 1, center: false });
+const layout = () => layoutSelect.value as Engine;
 // D2's shapes (d2target), for the inspector.
 const SHAPES = ['rectangle', 'square', 'page', 'parallelogram', 'document', 'cylinder', 'queue', 'package', 'step', 'callout', 'stored_data', 'person', 'diamond', 'oval', 'circle', 'hexagon', 'cloud', 'text', 'code', 'class', 'sql_table', 'image', 'sequence_diagram', 'c4-person', 'hierarchy'];
 const START = 'users: Users {shape: person}\napi: API\ndb: Database {shape: cylinder}\nusers -> api: requests\napi -> db: reads\n';
-const EXAMPLES: Record<string, string> = {
-  Services: START,
-  Container: 'services: {\n  api: API\n  db: Database {shape: cylinder}\n  api -> db\n}\n',
-  Boards: 'a: Root\nlayers: {\n  detail: {\n    a: API\n    b: Database\n    a -> b\n  }\n}\n',
-};
 const STORAGE = 'd2editor.text';
 let initial = START;
-try { initial = localStorage.getItem(STORAGE) ?? START; } catch { /* storage is optional */ }
+const VIEW = 'd2editor.view';
+try {
+  initial = localStorage.getItem(STORAGE) ?? START;
+  // Restore only values the menus offer.
+  const view = JSON.parse(localStorage.getItem(VIEW) ?? '{}');
+  for (const [select, value] of [[themeSelect, view.theme], [layoutSelect, view.layout]] as const) if ([...select.options].some(o => o.value === value)) select.value = value;
+} catch { /* storage is optional */ }
 
 const client = createClient({ spawn: spawnWorker() });
 const view = mount($('host'));
 const history = createHistory(initial);
 const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; });
-// Fit the next painted board: on load, an opened file or example, and a board switch.
+// Fit the next painted board: on load, an opened file, and a board switch.
 let fitNext = true;
 // `painted` is the revision the canvas shows.
 const state = { text: initial, revision: 0, painted: -1, board: '', result: undefined as CompileResult | undefined, selected: '', connectFrom: '' };
@@ -61,7 +67,7 @@ async function compile(seeds?: number[]) {
   const revision = state.revision, board = state.board, run = ++compileRun;
   let result: CompileResult;
   try {
-    result = await client.compile({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, render: render(), boards: [board], seeds });
+    result = await client.compile({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, render: render(), layout: layout(), boards: [board], seeds });
   } catch (error) {
     if (run === compileRun && revision === state.revision && (error as Error).name !== 'SupersededError') status(String(error), true);
     return;
@@ -120,7 +126,8 @@ function setText(text: string, { record = true, edits, delay = 0 }: { record?: b
   try { localStorage.setItem(STORAGE, text); } catch { /* storage is optional */ }
   status('Compiling…');
   typing = setTimeout(() => void compile([1]), delay);
-  idle = setTimeout(() => void compile(), 1000);
+  // Seeds are TALA's: other engines need no second compile when the user stops.
+  if (layout() === 'tala') idle = setTimeout(() => void compile(), 1000);
 }
 
 src.addEventListener('input', () => setText(src.value, { delay: 250 }));
@@ -315,8 +322,6 @@ function openText(text: string) {
   connecting(false);
   setText(text, { record: false });
 }
-$<HTMLSelectElement>('example').append(...Object.keys(EXAMPLES).map(name => new Option(name, name)));
-$('example').addEventListener('change', event => openText(EXAMPLES[(event.target as HTMLSelectElement).value]));
 $<HTMLInputElement>('open').addEventListener('change', async event => {
   const input = event.target as HTMLInputElement, file = input.files?.[0], revision = state.revision;
   if (!file) return;
@@ -332,6 +337,13 @@ $('download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
-dark.addEventListener('change', () => { status('Compiling…'); void compile(); });
+dark.addEventListener('change', () => { if (themeSelect.value === 'auto') { status('Compiling…'); void compile(); } });
+// A new engine changes the geometry, so the board is fitted again; a theme keeps the view.
+for (const select of [themeSelect, layoutSelect]) select.addEventListener('change', () => {
+  try { localStorage.setItem(VIEW, JSON.stringify({ theme: themeSelect.value, layout: layoutSelect.value })); } catch { /* storage is optional */ }
+  if (select === layoutSelect) fitNext = true;
+  status('Compiling…');
+  void compile();
+});
 src.value = initial;
 setText(initial, { record: false });
