@@ -8,11 +8,18 @@
   aside { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-right: 1px solid #8884; overflow: auto; }
   textarea { flex: 1; min-height: 200px; font: 13px ui-monospace, monospace; tab-size: 2; }
   label { display: flex; gap: 6px; align-items: center; }
-  /* The canvas: the board lives on a surface painted with D2's own background for the chosen theme (set from the scene in run()). */
-  main { overflow: auto; padding: 16px; background: Canvas; transition: background-color .15s; }
+  /* The canvas is demo chrome, not part of d2web: an infinite, dotted surface the board sits on. Its colour is D2's own scene background for the
+     chosen theme (set in paintCanvas); the dots are a translucent ink picked for contrast with it. Pan and zoom are the demo's, in #world. */
+  main { position: relative; overflow: hidden; touch-action: none; cursor: grab; background-color: Canvas; --dot: color-mix(in srgb, CanvasText 28%, transparent);
+    background-image: radial-gradient(circle, var(--dot) 1.2px, transparent 1.5px); background-size: var(--gap, 24px) var(--gap, 24px); background-position: var(--px, 0) var(--py, 0); }
+  main.panning { cursor: grabbing; user-select: none; }
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center; cursor: default; }
+  .zoom button { min-width: 32px; height: 32px; font: inherit; cursor: pointer; }
+  .zoom output { min-width: 3.5em; text-align: center; font-size: 12px; opacity: .8; }
   #status { font-size: 12px; opacity: .7; min-height: 1.4em; }
   #errors { color: #c0392b; white-space: pre-wrap; font: 12px ui-monospace, monospace; }
-  @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; border-bottom: 1px solid #8884; } }
+  @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; border-bottom: 1px solid #8884; } main { height: 70vh; } }
 </style>
 <aside>
   <label>Example <select id="example"></select></label>
@@ -24,7 +31,15 @@
   <div id="status" role="status"></div>
   <div id="errors"></div>
 </aside>
-<main><div id="host"></div></main>
+<main aria-label="Diagram canvas: drag empty space to pan, Ctrl or Cmd with the wheel (or pinch) to zoom">
+  <div id="world"><div id="host"></div></div>
+  <div class="zoom" role="group" aria-label="Canvas zoom">
+    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+    <output id="zoom-level" aria-live="off">100%</output>
+    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+    <button type="button" id="zoom-fit" aria-label="Fit diagram to canvas">Fit</button>
+  </div>
+</main>
 <script type="module">
 import { createClient, spawnWorker, mount } from './index.js';
 
@@ -82,6 +97,7 @@ async function run() {
   $('board').value = last.boards.some(b => b.path === chosen) ? chosen : '';
   await view.update(last, $('board').value);
   paintCanvas();
+  if (fitNext) { fitNext = false; fit(); }
   $('status').textContent = `${last.boards.length} board(s), compiled in ${Math.round(performance.now() - started)} ms (${last.millis ?? '?'} ms in D2)`;
 }
 let timer;
@@ -89,11 +105,77 @@ const later = () => { clearTimeout(timer); timer = setTimeout(run, 300); };
 $('src').addEventListener('input', later);
 for (const id of ['theme', 'layout', 'sketch']) $(id).addEventListener('change', run);
 function paintCanvas() {
-  const board = last?.boards.find(b => b.path === $('board').value);
-  document.querySelector('main').style.background = backgroundOf(board?.scene);
+  const board = last?.boards.find(b => b.path === $('board').value), color = backgroundOf(board?.scene), canvas = document.querySelector('main');
+  canvas.style.backgroundColor = color;
+  // Dots are black or white ink at low alpha, whichever contrasts with the scene's background; with no solid background the system text colour is used.
+  const [r, g, b] = color ? color.match(/\d+/g).map(Number) : [];
+  canvas.style.setProperty('--dot', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.25)') : '');
 }
+
+// The infinite canvas (demo only): a pan/zoom transform on #world and a dot grid that moves and scales with it. Dragging empty space (or any
+// touch) pans; Ctrl/Cmd+wheel and pinch zoom around the pointer; the plain wheel pans. Drags that start on a D2 object are left alone, so
+// text selection, clicks, links and focus inside the board behave as before.
+const canvas = document.querySelector('main'), world = $('world');
+const camera = { x: 0, y: 0, k: 1 };
+const MIN = 0.1, MAX = 4;
+function applyCamera() {
+  world.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.k})`;
+  let gap = 24 * camera.k;
+  while (gap < 12) gap *= 2; // keep the dots from turning into a haze when zoomed out
+  canvas.style.setProperty('--gap', `${gap}px`);
+  canvas.style.setProperty('--px', `${camera.x % gap}px`);
+  canvas.style.setProperty('--py', `${camera.y % gap}px`);
+  $('zoom-level').textContent = `${Math.round(camera.k * 100)}%`;
+}
+function zoomAt(factor, cx, cy) {
+  const k = Math.min(MAX, Math.max(MIN, camera.k * factor)), ratio = k / camera.k;
+  camera.x = cx - (cx - camera.x) * ratio; camera.y = cy - (cy - camera.y) * ratio; camera.k = k;
+  applyCamera();
+}
+const centre = () => { const r = canvas.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
+function fit() {
+  const r = canvas.getBoundingClientRect(), w = $('host').offsetWidth, h = $('host').offsetHeight;
+  if (!w || !h) return;
+  camera.k = Math.min(1, Math.max(MIN, Math.min((r.width - 80) / w, (r.height - 80) / h)));
+  camera.x = (r.width - w * camera.k) / 2; camera.y = (r.height - h * camera.k) / 2;
+  applyCamera();
+}
+$('zoom-in').addEventListener('click', () => zoomAt(1.25, ...centre()));
+$('zoom-out').addEventListener('click', () => zoomAt(0.8, ...centre()));
+$('zoom-fit').addEventListener('click', fit);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-Math.max(-60, Math.min(60, e.deltaY * (e.deltaMode ? 5 : 1))) * 0.01), e.clientX - r.left, e.clientY - r.top); // trackpad pinch arrives as ctrl+wheel
+  else { camera.x -= e.deltaX; camera.y -= e.deltaY; applyCamera(); }
+}, { passive: false });
+const pointers = new Map();
+let moved = false, pinch = null, panning = false;
+const onObject = e => e.composedPath().some(el => (el.dataset?.id !== undefined && !['root', 'root:background'].includes(el.dataset.id)) || el.closest?.('.zoom'));
+canvas.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || (e.pointerType !== 'touch' && onObject(e))) return;
+  pointers.set(e.pointerId, [e.clientX, e.clientY]); moved = false;
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); }
+});
+canvas.addEventListener('pointermove', e => {
+  const last = pointers.get(e.pointerId);
+  if (!last) return;
+  const dx = e.clientX - last[0], dy = e.clientY - last[1];
+  if (!moved && Math.hypot(dx, dy) < 4 && pointers.size === 1) return;
+  if (!moved) { moved = true; panning = true; canvas.classList.add('panning'); canvas.setPointerCapture(e.pointerId); }
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 2 && pinch) {
+    const [a, b] = [...pointers.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), r = canvas.getBoundingClientRect();
+    zoomAt(d / pinch, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); pinch = d;
+  } else if (pointers.size === 1) { camera.x += dx; camera.y += dy; applyCamera(); }
+});
+const release = e => { pointers.delete(e.pointerId); pinch = null; if (!pointers.size) { canvas.classList.remove('panning'); setTimeout(() => { panning = false; }, 0); } };
+canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release);
+canvas.addEventListener('click', e => { if (panning) { e.stopPropagation(); e.preventDefault(); } }, true); // a pan is not a click on whatever it ended over
+let fitNext = true; // fit on load and when an example is picked, not on every recompile, so editing does not move the camera
+applyCamera();
 dark.addEventListener('change', () => { if ($('theme').value === 'auto') run(); });
 $('board').addEventListener('change', () => last && view.update(last, $('board').value).then(paintCanvas));
-$('example').addEventListener('change', () => { $('src').value = examples[$('example').value]; run(); });
+$('example').addEventListener('change', () => { $('src').value = examples[$('example').value]; fitNext = true; run(); });
 $('example').dispatchEvent(new Event('change'));
 </script>
