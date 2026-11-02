@@ -14,6 +14,7 @@ import (
 
 	"github.com/d2lang/d2/d2compiler"
 	"github.com/d2lang/d2/d2graph"
+	"github.com/d2lang/d2/d2renderers/d2scene"
 )
 
 // Spec 0010: images. The worker never fetches. The page resolves image links (a preflight tells it which) and sends the bytes with the compile
@@ -187,7 +188,7 @@ func (s *imageStore) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // unresolvedImages is one warning per link of a board that was not supplied (or was rejected), naming the objects that use it (spec 0010 2.4).
-func (s *imageStore) unresolvedImages(board string, g *d2graph.Graph) []Diagnostic {
+func (s *imageStore) unresolvedImages(board string, g *d2graph.Graph, shownAsLink bool) []Diagnostic {
 	var links []ImageLink
 	collectLinks(g, board, false, &links)
 	type use struct{ ids []string }
@@ -213,8 +214,46 @@ func (s *imageStore) unresolvedImages(board string, g *d2graph.Graph) []Diagnost
 		if r, ok := s.rejected[requestKey(source)]; ok {
 			why = r
 		}
+		shown := "a placeholder"
+		if shownAsLink {
+			shown = "a link, not bundled"
+		}
 		out = append(out, Diagnostic{Severity: "warning", Code: "image-unresolved", Board: board,
-			Message: fmt.Sprintf("image %q is shown as a placeholder: %s (used by %s)", source, why, strings.Join(uses[source].ids, ", "))})
+			Message: fmt.Sprintf("image %q is shown as %s: %s (used by %s)", source, shown, why, strings.Join(uses[source].ids, ", "))})
 	}
 	return out
+}
+
+// attachLinkedImages adds, to each object whose image link was not supplied, the link and the scene node of its placeholder (spec 0010 2.3).
+// A link whose node is not in the scene is left out rather than guessed. store is nil when nothing was supplied (link mode).
+func attachLinkedImages(a *Association, doc *d2scene.Document, board string, g *d2graph.Graph, store *imageStore) {
+	var links []ImageLink
+	collectLinks(g, board, false, &links)
+	nodes := map[string]bool{}
+	var walk func(*d2scene.Node)
+	walk = func(n *d2scene.Node) {
+		nodes[n.ID] = true
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	walk(doc.Root)
+	byID := map[string]*AssocObject{}
+	for i := range a.Objects {
+		byID[a.Objects[i].ID] = &a.Objects[i]
+	}
+	for _, l := range links {
+		if store != nil {
+			if _, ok := store.byKey[requestKey(l.Source)]; ok {
+				continue
+			}
+		}
+		node := l.ID + ":icon" // the scene builder names a `shape: image` node <id>:image (observed, spec 0010 test 13)
+		if l.Kind == "image" {
+			node = l.ID + ":image"
+		}
+		if o := byID[l.ID]; o != nil && nodes[node] {
+			o.Image = &AssocImage{Source: l.Source, Role: l.Kind, Node: node}
+		}
+	}
 }

@@ -41,6 +41,15 @@ type AssocObject struct {
 	Properties map[string]Property `json:"properties"`
 	Src        string              `json:"src,omitempty"`
 	Dst        string              `json:"dst,omitempty"`
+	// Spec 0010 2.3: the link of an image the scene could not carry, for the painter to show as a real image element.
+	Image *AssocImage `json:"image,omitempty"`
+}
+
+// AssocImage names the image link of an object, the scene node that holds D2's placeholder for it (<id>:icon) and the role D2 gave it.
+type AssocImage struct {
+	Source string `json:"source"`
+	Role   string `json:"role"` // icon, image or edge-icon
+	Node   string `json:"node"`
 }
 
 type Association struct {

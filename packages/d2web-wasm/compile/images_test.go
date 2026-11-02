@@ -197,3 +197,79 @@ func TestStoreEnforcesTheLimitsAgain(t *testing.T) {
 		t.Fatalf("cumulative limit accepted %d images, want 8", got)
 	}
 }
+
+func linkRequest(source string, images map[string]ImageInput) []byte {
+	var m map[string]any
+	_ = json.Unmarshal(imageRequest(source, nil, images), &m)
+	m["linkImages"] = true
+	raw, _ := json.Marshal(m)
+	return raw
+}
+
+// Spec 0010 test 13: in link mode each object with an image link has image.source and image.node, and the node exists in the scene.
+func TestLinkModeAssociatesLinksWithPlaceholderNodes(t *testing.T) {
+	source := "a: { icon: https://i.test/a.svg }\np: { shape: image; icon: https://i.test/p.svg }\na -> p: { icon: https://i.test/e.svg }\nplain\n"
+	var res map[string]any
+	if err := json.Unmarshal(Handle(context.Background(), linkRequest(source, nil)), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res["error"] != nil || res["echo"].(map[string]any)["images"] != "link" || len(res["diagnostics"].([]any)) != 0 {
+		t.Fatalf("link mode: %v", res)
+	}
+	board := res["boards"].([]any)[0].(map[string]any)
+	ids := map[string]bool{}
+	var walk func(n map[string]any)
+	walk = func(n map[string]any) {
+		ids[n["ID"].(string)] = true
+		for _, c := range n["Children"].([]any) {
+			walk(c.(map[string]any))
+		}
+	}
+	walk(board["scene"].(map[string]any)["Root"].(map[string]any))
+	got := map[string][3]string{}
+	for _, o := range board["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		if img, ok := obj["image"].(map[string]any); ok {
+			got[obj["id"].(string)] = [3]string{img["source"].(string), img["role"].(string), img["node"].(string)}
+			if !ids[img["node"].(string)] {
+				t.Errorf("node %q is not in the scene", img["node"])
+			}
+		}
+	}
+	want := map[string][3]string{
+		"a":           {"https://i.test/a.svg", "icon", "a:icon"},
+		"p":           {"https://i.test/p.svg", "image", "p:image"},
+		"(a -> p)[0]": {"https://i.test/e.svg", "edge-icon", "(a -> p)[0]:icon"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("%s = %v, want %v", id, got[id], w)
+		}
+	}
+}
+
+// Bundle with fallback 'link': a supplied link is real vectors with no association entry; the unsupplied one is a link, and still warned about.
+func TestFallbackLinkOnlyForUnresolvedLinks(t *testing.T) {
+	source := "a: { icon: https://i.test/a.svg }\nb: { icon: https://i.test/b.svg }\n"
+	var res map[string]any
+	_ = json.Unmarshal(Handle(context.Background(), linkRequest(source, map[string]ImageInput{"https://i.test/a.svg": {Type: "image/svg+xml", Data: []byte(goIcon)}})), &res)
+	if res["error"] != nil || res["echo"].(map[string]any)["images"] != "bundle" {
+		t.Fatalf("%v", res)
+	}
+	with := map[string]bool{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		_, has := obj["image"]
+		with[obj["id"].(string)] = has
+	}
+	if with["a"] || !with["b"] {
+		t.Fatalf("image entries = %v, want only b", with)
+	}
+	d := res["diagnostics"].([]any)
+	if len(d) != 1 || !strings.Contains(d[0].(map[string]any)["message"].(string), "a link") {
+		t.Fatalf("diagnostics = %v", d)
+	}
+}

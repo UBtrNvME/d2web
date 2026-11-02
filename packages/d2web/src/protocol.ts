@@ -48,6 +48,9 @@ export interface CompileRequest {
   // Spec 0010: image bytes the page resolved, by the link exactly as the preflight reported it. Present (even empty) means bundle mode: the worker
   // serves these to D2's image resolver and warns about every link it was not given. Absent: nothing is fetched or reported.
   images?: Record<string, ImageBytes>;
+  // Spec 0010 2.3: also report, per object, the link of every image that was not supplied, so the painter can show it as an image element (link mode, or
+  // bundle with fallback 'link'). Set by the client from its `images` option.
+  linkImages?: boolean;
 }
 
 export interface ImageBytes { type: string; data: Uint8Array }
@@ -117,5 +120,7 @@ export interface AssociationObject {
   properties: Record<string, { value: string; source: Source | null }>;
   src?: string;
   dst?: string;
+  // Spec 0010: the link of an image the scene could not carry; `node` is the placeholder's scene node (<id>:icon, <id>:image for `shape: image`).
+  image?: { source: string; role: 'icon' | 'image' | 'edge-icon'; node: string };
 }
 export interface Association { objects: AssociationObject[] }

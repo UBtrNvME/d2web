@@ -193,3 +193,25 @@ test('16. fetchImages: allowed origins with credentials omitted by default; null
   assert.equal(seen.at(-1)[1].credentials, 'include');
   assert.throws(() => fetchImages({ allow: ['not an origin'] }), ProtocolError);
 });
+
+test('link mode: no preflight, no images field, no resolve; the worker is asked to report links', async () => {
+  const { spawn, spawned } = fakes({ links: [link('https://i.test/a.svg')] });
+  const client = createClient({ spawn, images: { mode: 'link' } });
+  await client.compile(input(1));
+  assert.deepEqual(types(spawned[0]), ['compile']);
+  assert.equal('images' in spawned[0].sent[0], false);
+  assert.equal(spawned[0].sent[0].linkImages, true);
+  client.dispose();
+});
+
+test('17. bundle with fallback "link" sends the bytes it has and asks for links of the rest; without fallback it does not', async () => {
+  for (const fallback of [undefined, 'link']) {
+    const { spawn, spawned } = fakes({ links: [link('https://i.test/a.svg'), link('https://i.test/b.svg', '', 'b')] });
+    const client = createClient({ spawn, images: { mode: 'bundle', fallback, resolve: async s => (s.endsWith('a.svg') ? bytes(1) : null) } });
+    await client.compile(input(1));
+    const compile = spawned[0].sent.find(m => m.type === 'compile');
+    assert.deepEqual(Object.keys(compile.images), ['https://i.test/a.svg']);
+    assert.equal(compile.linkImages, fallback ? true : undefined);
+    client.dispose();
+  }
+});

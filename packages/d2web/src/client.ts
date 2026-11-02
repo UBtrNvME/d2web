@@ -31,7 +31,7 @@ export interface ClientOptions {
   images?: ImagesOption;
 }
 
-export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id' | 'images'>;
+export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id' | 'images' | 'linkImages'>;
 
 export class SupersededError extends Error {}
 // `code: 'budget'` marks a compile aborted by budgets.maxLayoutMillis (spec 0008); other timeouts have no code.
@@ -132,12 +132,13 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         if (running !== job || mine !== worker) return;
       }
       let request = job.request;
+      if (imageOption?.mode === 'link') request = { ...request, linkImages: true };
       if (resolveImages) {
         job.timer = timeout(silentTimeoutMs, 'images not resolved');
         const images = await prepareImages(job, mine, resolveImages);
         if (running !== job || mine !== worker) return;
         clearTimeout(job.timer);
-        request = { ...request, images };
+        request = { ...request, images, ...(imageOption?.mode === 'bundle' && imageOption.fallback ? { linkImages: true } : {}) };
       }
       job.timer = budget <= silentTimeoutMs ? timeout(budget, 'compile exceeded budgets.maxLayoutMillis', 'budget') : timeout(silentTimeoutMs, 'no reply');
       mine.postMessage(request);

@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/demo-images.test.mjs packages/d2web/tests/images.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/demo-images.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"

@@ -72,6 +72,8 @@ type Request struct {
 	Boards   json.RawMessage   `json:"boards"`
 	// Spec 0010: images the page resolved, by the link exactly as the preflight reported it. Present (even empty) means bundle mode.
 	Images map[string]ImageInput `json:"images"`
+	// Spec 0010 2.3: report, per object, the link of every image that was not supplied (link mode, or bundle with fallback 'link').
+	LinkImages bool `json:"linkImages"`
 }
 
 type Diagnostic struct {
@@ -141,6 +143,8 @@ func Handle(ctx context.Context, raw []byte) []byte {
 		res.Echo.Layout, res.Echo.Render = req.Layout, req.Render
 		if req.Images != nil {
 			res.Echo.Images = "bundle"
+		} else if req.LinkImages {
+			res.Echo.Images = "link"
 		}
 		run(ctx, &req, &res)
 	}
@@ -278,9 +282,12 @@ func run(ctx context.Context, req *Request, res *Result) {
 			res.Fonts[string(id)] = bytes
 		}
 		assoc := associate(graphs[path], doc)
+		if req.LinkImages {
+			attachLinkedImages(assoc, doc, path, graphs[path], store)
+		}
 		res.Boards = append(res.Boards, Board{Path: path, Scene: data, Association: assoc})
 		if store != nil {
-			res.Diagnostics = append(res.Diagnostics, store.unresolvedImages(path, graphs[path])...)
+			res.Diagnostics = append(res.Diagnostics, store.unresolvedImages(path, graphs[path], req.LinkImages)...)
 		}
 		res.Diagnostics = append(res.Diagnostics, missingGlyphDiagnostics(path, fallback.uncovered(), assoc.Objects)...)
 	}

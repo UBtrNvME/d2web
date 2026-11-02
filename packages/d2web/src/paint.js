@@ -36,6 +36,14 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const defs = [];
   const next = prefix => `${idPrefix}${prefix}${++ids}`;
 
+  // Spec 0010 2.3: an image D2 could not carry (link mode, or a link the page did not supply) is a placeholder in the scene; the association names its link
+  // and node. Only http, https and image data URLs become an element (the link-safety rule of ADR 0009); anything else, including relative paths, stays D2's placeholder.
+  const imageLinks = new Map(association.filter(o => o.image?.node && o.image.source).map(o => [o.image.node, o.image.source]));
+  const linkedImage = (p, id) => {
+    if (p.Asset !== 'image:unavailable' || !imageLinks.has(id)) return '';
+    try { const u = new URL(imageLinks.get(id)); return u.protocol === 'http:' || u.protocol === 'https:' || (u.protocol === 'data:' && /^data:image\//i.test(u.href)) ? u.href : ''; } catch { return ''; }
+  };
+
   const stops = list => list.map(s => { const [c, a] = split(s.Color); return `<stop offset="${num(s.Offset)}" stop-color="${c}" stop-opacity="${a}"/>`; }).join('');
   const units = u => (u === 1 ? 'userSpaceOnUse' : 'objectBoundingBox');
   const gradientAttrs = p => `gradientUnits="${units(p.Units)}"${isIdentity(p.Transform) ? '' : ` gradientTransform="${matrix(p.Transform)}"`} spreadMethod="${SPREAD[p.Spread]}"`;
@@ -73,7 +81,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     }).join(' ');
   }
 
-  function primitive(p) {
+  function primitive(p, id) {
     if (!p) return '';
     if (inEffect) count(`svg:in-effect:${p.$}`);
     switch (p.$) {
@@ -88,6 +96,8 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
         const asset = scene.Assets[p.Asset];
         const fit = `${ALIGN[p.Aspect.Align]}${p.Aspect.Align ? (p.Aspect.Fit ? ' slice' : ' meet') : ''}`;
         const box = `x="${num(p.Box.X)}" y="${num(p.Box.Y)}" width="${num(p.Box.Width)}" height="${num(p.Box.Height)}"`;
+        const link = linkedImage(p, id);
+        if (link) return `<image ${box} preserveAspectRatio="${fit}" href="${esc(link)}" referrerpolicy="no-referrer"/>`;
         if (asset.$ === 'RasterAsset') return `<image ${box} preserveAspectRatio="${fit}" href="data:${asset.MIMEType};base64,${asset.Data}"/>`;
         if (asset.$ === 'VectorAsset') return `<svg ${box} viewBox="${[asset.ViewBox.X, asset.ViewBox.Y, asset.ViewBox.Width, asset.ViewBox.Height].map(num).join(' ')}" preserveAspectRatio="${fit}" overflow="hidden">${node(asset.Root)}</svg>`;
         throw new Error(`image asset ${asset.$}`);
@@ -145,7 +155,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     if (clip) attrs.push(`clip-path="url(#${clip})"`);
     if (mask) attrs.push(`mask="url(#${mask})"`);
     if (n.Filters?.length) attrs.push(`filter="url(#${filterDef(n.Filters)})"`);
-    return `<g ${attrs.join(' ')}>${primitive(n.Primitive)}${kids(n).map(node).join('')}</g>`;
+    return `<g ${attrs.join(' ')}>${primitive(n.Primitive, n.ID)}${kids(n).map(node).join('')}</g>`;
   }
 
   // HTML mode: real elements where an HTML equivalent is exact enough, nested SVG for everything else. The reason for
@@ -156,7 +166,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   const px = n => `${num(n)}px`;
 
   // Returns [markup, reason]: reason is set when the primitive must be SVG.
-  function primitiveHtml(p, codeToken = false) {
+  function primitiveHtml(p, codeToken = false, id) {
     if (!p) return ['', null];
     const stroke = p.Stroke && p.Stroke.Paint && p.Stroke.Width > 0 ? p.Stroke : null;
     const strokeOk = !stroke || (solid(stroke.Paint) && !stroke.Dashes?.length && split(stroke.Paint.Color)[1] === 1);
@@ -180,10 +190,12 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     }
     if (p.$ === 'Image') {
       const asset = scene.Assets[p.Asset];
-      if (asset.$ !== 'RasterAsset') return [null, 'vector-image'];
+      const link = linkedImage(p, id);
+      if (asset.$ !== 'RasterAsset' && !link) return [null, 'vector-image'];
       const a = p.Aspect.Align;
       const position = a ? `${['left', 'center', 'right'][(a - 1) % 3]} ${['top', 'center', 'bottom'][Math.floor((a - 1) / 3)]}` : 'center';
-      return [`<img data-k="image" alt="" src="data:${asset.MIMEType};base64,${asset.Data}" style="position:absolute;left:${px(p.Box.X)};top:${px(p.Box.Y)};width:${px(p.Box.Width)};height:${px(p.Box.Height)};object-fit:${a ? (p.Aspect.Fit ? 'cover' : 'contain') : 'fill'};object-position:${position}">`, null];
+      if (link) count('html:linked-image');
+      return [`<img data-k="image" alt="" ${link ? `src="${esc(link)}" referrerpolicy="no-referrer" decoding="async"` : `src="data:${asset.MIMEType};base64,${asset.Data}"`} style="position:absolute;left:${px(p.Box.X)};top:${px(p.Box.Y)};width:${px(p.Box.Width)};height:${px(p.Box.Height)};object-fit:${a ? (p.Aspect.Fit ? 'cover' : 'contain') : 'fill'};object-position:${position}">`, null];
     }
     return [null, p.$ === 'Path' ? 'path' : 'other'];
   }
@@ -521,8 +533,8 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       if (n.Mask) { outer.push(cssMaskImage(n, -bx, -by, w, h)); count('html:masked-group'); }
       let own = '';
       if (n.Primitive) {
-        const [markup, reason] = primitiveHtml(n.Primitive, codeToken);
-        if (markup === null) { own = svgBox(primitive(n.Primitive)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
+        const [markup, reason] = primitiveHtml(n.Primitive, codeToken, n.ID);
+        if (markup === null) { own = svgBox(primitive(n.Primitive, n.ID)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
       }
       return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${outer.join(';')}"><div style="position:absolute;left:${px(-bx)};top:${px(-by)}">${own}${childrenHtml(n)}</div></div>`;
     }
@@ -536,8 +548,8 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     }
     let own = '';
     if (n.Primitive) {
-      const [markup, reason] = primitiveHtml(n.Primitive, codeToken);
-      if (markup === null) { own = svgBox(primitive(n.Primitive)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
+      const [markup, reason] = primitiveHtml(n.Primitive, codeToken, n.ID);
+      if (markup === null) { own = svgBox(primitive(n.Primitive, n.ID)); count(`svg:${reason}`); } else if (markup) { own = markup; count(`html:${n.Primitive.$}`); }
     }
     return `<div${n.ID ? ` data-id="${esc(n.ID)}"` : ''}${a11yAttrs(n)} style="${style.join(';')}">${own}${childrenHtml(n)}</div>`;
   }
