@@ -75,9 +75,10 @@ test.setTimeout(180_000);
 test('built page loads its real worker and wasm and paints the start example', async ({ page }) => {
   await open(page);
   await visible(page, 'api');
-  // The canvas takes the board's painted background, so no sheet edge shows.
+  // As the demo: the canvas takes D2's solid scene background and the board's own background rectangle is hidden, so the dots run under the diagram.
   const paper = await object(page, 'root:background').locator('[data-k="rect"]').evaluate(el => getComputedStyle(el).backgroundColor);
   await expect(page.locator('#canvas')).toHaveCSS('background-color', paper);
+  await expect(object(page, 'root:background')).toBeHidden();
   await type(page, 'fresh: Typed\n');
   await visible(page, 'fresh');
   await expect(object(page, 'api')).toHaveCount(0);
