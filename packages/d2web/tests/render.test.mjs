@@ -9,7 +9,7 @@ shape.Transform = { ...matrix, E: 10, F: 20 };
 const result = {
   revision: 7, fonts: { 'font:test': 'Zm9udA==' },
   boards: [{ path: '/layers/one', scene: { Root: node('root', null, [shape]), ViewBox: { X: 0, Y: 0, Width: 200, Height: 100 }, LogicalWidth: 200, LogicalHeight: 100, Links: [{ Box: { X: 15, Y: 23, Width: 100, Height: 40 }, URL: 'https://example.test' }] },
-    association: { objects: [{ id: 'a', kind: 'shape', label: 'Alpha', nodes: ['a', 'a:outline'], references: [], properties: {} }] } }],
+    association: { objects: [{ id: 'a', kind: 'shape', label: 'Alpha', nodes: ['a', 'a:outline'], references: [], properties: {}, links: [0] }] } }],
 };
 
 test('prepareBoard is DOM-free and preserves the complete scene, source association and revision', () => {
@@ -33,4 +33,17 @@ test('prepareBoard rejects errored/missing boards and leaves the result untouche
   assert.throws(() => prepareBoard(result, '/missing'), /no board/);
   const invalid = { ...result, boards: [{ ...result.boards[0], scene: { Root: null } }] };
   assert.throws(() => prepareBoard(invalid, '/layers/one'), /Root and ViewBox/);
+});
+
+test('prepareBoard takes link owners and outline boxes from D2 when the association carries them', () => {
+  const input = structuredClone(result);
+  const big = node('big', null, [node('big:outline', { $: 'Rect', Box: { X: 0, Y: 0, Width: 200, Height: 100 } })]);
+  input.boards[0].scene.Root.Children.unshift(big);
+  input.boards[0].association.objects = [
+    { ...input.boards[0].association.objects[0], box: { X: 1, Y: 2, Width: 3, Height: 4 }, links: undefined },
+    { id: 'big', kind: 'shape', label: 'Big', nodes: ['big'], references: [], properties: {}, links: [0] },
+  ];
+  const board = prepareBoard(input, '/layers/one');
+  assert.equal(board.links[0].objectId, 'big'); // D2's owner, though the region also lies inside the smaller `a`
+  assert.deepEqual(board.objects[0].bounds, { X: 1, Y: 2, Width: 3, Height: 4 });
 });

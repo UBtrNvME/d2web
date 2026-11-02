@@ -22,12 +22,16 @@ Object = {
   references: [ Source ],        // declarations that name the object
   properties: { label, fill?, stroke?, ... : { value, source: Source | null } },   // absent = D2 default
   src?: id, dst?: id             // connections only
+  box?: { X, Y, Width, Height }  // shape: D2's own box (position, width, height); connection: exact bounds of its painted paths (route, arrowheads; d2scene GeometryBounds)
+  links?: [ index ],             // indices into the scene's Links that D2 added for this object
+  html?: string                  // markdown only: D2's goldmark document, D2's elements and the attributes D2 reads; absent otherwise
 }
 Source = { path, start: Pos, end: Pos }
 Pos    = { line, column, offset }  // line 0-based; column and offset in UTF-16 units, so offset is a JS string index
 ```
 
 Rules:
+- `links` (amendment, 2 November 2026): D2's scene builder adds a region per shape, then per connection, that has a link, tooltip or prettyLink, in diagram order (`d2scenebuild` preflight, `compileLinkRegions`), then inline-link regions while it builds markdown; the worker replays that order (and leaves `links` out if the count does not match), and an inline-link region goes to the smallest markdown viewport holding it: the clip of a `<id>:markdown` scene node, translated to scene coordinates (within 0.5 px, D2 rounds region boxes). `html` is `textmeasure.RenderMarkdown`, the document `LayoutMarkdown` lays out, re-serialised with only D2's markdown elements (`validateMarkdownSVGNodes`, less `img`) and the attributes D2 reads (`a` href/title, `ol` start/type, cell `align`), `href` first; any other element (an image) leaves it absent. It is untrusted author text after that filter: the page still applies its link policy.
 - The join key is (revision, board path, object `id`), as decided in ADR 0002. A board's association is complete for that board only; imported and layered boards each carry their own.
 - `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. It lists the named scene nodes (`<id>` and `<id>:...`) of the object. Anonymous nodes (empty ID, the plain paint primitives) have no name to list; each belongs to its nearest named ancestor. Every scene node except the helpers `root` and `root:background` is covered by exactly one object (test, section 6). Owner lookup uses the observed `<ownerID>:<suffix>` convention inside the worker, where a test pins it, so consumers do not depend on it.
 - `properties` has an entry for `label` and for each D2 style keyword (named as in D2's JSON: `fill`, `strokeWidth`, `fontSize`, `3d`, ...) for which D2 holds a value. The source is the declaration that owns that value, which can be a class, glob or imported-file declaration that is not in `references` (R1 finding). A value D2 holds no declaration for (theme or builder default) is absent from `properties`; `source` is null only if D2 reports no key for a held value.

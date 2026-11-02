@@ -256,8 +256,18 @@ test('flow markdown: one block with real elements, D2 identity, safe links and o
   await expect(page.locator('#a a[href^="javascript:"]')).toHaveCount(0);
 });
 
+test('flow markdown: D2 structures the old subset refused now flow from D2\'s own document', async ({ page }) => {
+  for (const [text, selector] of [['- outer\n  - nested', 'ul ul li'], ['- first\n  continuation', 'li'], ['| a | b |\n|:-|-:|\n| 1 | 2 |\n| 3 | 4 |', 'td[align=right]'], ['plain <b>raw HTML</b>', 'b'], ['snake_case_word', 'p'], ['1. a\n   1. b\n      1. c', 'ol ol ol li']]) {
+    await ready(page, text.includes('|') ? 'md: ||md\n' + text + '\n||' : markdownSource(text), { markdown: 'flow' });
+    await expect(page.locator(`#a [data-flow-markdown] ${selector}`).first(), text).toBeAttached();
+    await expect(page.locator('#a [data-id="md:markdown"] [data-k="text"]')).toHaveCount(0);
+  }
+  // D2's nested ordered markers: decimal, lower-roman, lower-alpha (github-markdown.css as D2 ships it).
+  expect(await page.locator('#a [data-flow-markdown] ol').evaluateAll(els => els.map(el => getComputedStyle(el).listStyleType))).toEqual(['decimal', 'lower-roman', 'lower-alpha']);
+});
+
 test('flow markdown: unsupported sources fall back byte for byte; positioned remains the default', async ({ page }) => {
-  for (const text of [markdown, '- outer\n  - nested', '- first\n  continuation', '| a | b |\n|---|---|\n| 1 | 2 |', '~single tilde~', '```\nunfinished', 'snake_case_word', '<b>raw HTML</b>']) {
+  for (const text of [markdown, '![image](https://x.test/i.png)']) {
     await ready(page, text.includes('|') ? 'md: ||md\n' + text + '\n||' : markdownSource(text), { idPrefix: 'same-' });
     const original = await page.locator('#a').evaluate(el => el.shadowRoot.innerHTML);
     const positioned = await page.evaluate(async () => {
@@ -272,7 +282,6 @@ test('flow markdown: unsupported sources fall back byte for byte; positioned rem
     });
     expect(fallback, text).toBe(original);
     await expect(page.locator('#a [data-flow-markdown]')).toHaveCount(0);
-    await expect(page.locator('#a [data-k="text"]').first()).toBeAttached();
   }
 });
 

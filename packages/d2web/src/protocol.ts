@@ -129,5 +129,11 @@ export interface AssociationObject {
   dst?: string;
   // Spec 0010: the link of an image the scene could not carry; `node` is the placeholder's scene node (<id>:icon, <id>:image for `shape: image`).
   image?: { source: string; role: 'icon' | 'image' | 'edge-icon'; node: string };
+  // D2's markdown HTML (goldmark, as D2 lays it out) with only D2's elements and the attributes D2 reads; absent when the label holds anything else.
+  html?: string;
+  // The object's outline box in scene coordinates, from D2's exact path geometry.
+  box?: { X: number; Y: number; Width: number; Height: number };
+  // Indices into the scene's Links that D2 added for this object.
+  links?: number[];
 }
 export interface Association { objects: AssociationObject[] }

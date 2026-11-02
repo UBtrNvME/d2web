@@ -1,7 +1,8 @@
-import type { Primitive, SceneDocument, SceneNode, LinkRegion } from './scene.ts';
+import type { Primitive, SceneDocument, SceneNode } from './scene.ts';
+import type { Association } from './protocol.ts';
 
 type Extent = [number, number, number, number];
-// Conservative paint extents used for mask rasters and region ownership, not a replacement for D2's layout boxes.
+// Conservative paint extents used for mask rasters, not a replacement for D2's layout boxes.
 export function primBounds(p: Primitive | null): Extent | null {
   if (!p) return null;
   const pad = 'Stroke' in p && p.Stroke?.Paint && p.Stroke.Width > 0 ? p.Stroke.Width * 2 : 0;
@@ -33,17 +34,9 @@ export function subtreeBounds(n: SceneNode): Extent | null {
   return b;
 }
 
-// Match D2's flat link region to the smallest containing object's conservative paint extent.
-// shortcut: ownership assumes axis-aligned object transforms; general affine scenes need fully transformed bounds.
-export function objectForLink(scene: SceneDocument, link: LinkRegion): SceneNode | undefined {
-  let best: SceneNode | undefined, area = Infinity;
-  for (const n of scene.Root.Children ?? []) {
-    if (!n.ID || n.ID.startsWith('root:')) continue;
-    const b = subtreeBounds(n), m = n.Transform;
-    if (!b || !m) continue;
-    const x0 = m.A * b[0] + m.E - 4, y0 = m.D * b[1] + m.F - 4, x1 = m.A * b[2] + m.E + 4, y1 = m.D * b[3] + m.F + 4;
-    const r = link.Box;
-    if (r.X >= x0 && r.Y >= y0 && r.X + r.Width <= x1 && r.Y + r.Height <= y1 && (x1 - x0) * (y1 - y0) < area) { area = (x1 - x0) * (y1 - y0); best = n; }
-  }
-  return best;
+// The owner D2 added each link region for (association `links`, spec 0004). A region without one stays unowned rather than guessed.
+export function linkOwners(scene: SceneDocument, association: Association): (string | undefined)[] {
+  const owners: (string | undefined)[] = [];
+  for (const o of association.objects) for (const i of o.links ?? []) owners[i] = o.id;
+  return (scene.Links ?? []).map((_, i) => owners[i]);
 }
