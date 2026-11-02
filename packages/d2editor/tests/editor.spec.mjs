@@ -178,6 +178,31 @@ test('a nested shape beside a fixed sibling lands where dropped; empty space pan
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
 });
 
+test('in a circle container a reachable drop lands at the drop point, an unreachable one at the nearest position D2 allows; one Undo each', async ({ page }) => {
+  await open(page);
+  // Pinning the first child moves a circle's origin (TALA grows the circle around it), so the editor measures and corrects instead of assuming.
+  const text = 'c: {\n  shape: circle\n  d\n  e\n}\n';
+  await type(page, text);
+  await select(page, 'c.d');
+  const before = await outline(page), k = await zoom(page);
+  await drag(page, 'c.d', 40, 120);
+  await expect.poll(async () => {
+    const at = await outline(page).catch(() => undefined);
+    return at && Math.max(Math.abs(at.X - (before.X + 40 / k)), Math.abs(at.Y - (before.Y + 120 / k)));
+  // top/left are integers and one unit can move a shape in a circle by more than a pixel (about 1.2 here), so within 2 px.
+  }, { timeout: 20_000 }).toBeLessThanOrEqual(2);
+  await painted(page);
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue(text);
+  await painted(page);
+  // Above the origin there is no non-negative top: the shape ends at top 0, D2's nearest.
+  await drag(page, 'c.d', 0, -60);
+  await expect(page.locator('#src')).toHaveValue(/top: 0\b/, { timeout: 20_000 });
+  await painted(page);
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue(text);
+});
+
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, '# services\na: API\nb: DB\n');

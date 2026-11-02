@@ -13,6 +13,9 @@ test('undo and redo restore exact texts; a new text clears redo; reset forgets',
   assert.equal(h.undo(), 'b');
   h.reset('x');
   assert.equal(h.undo(), undefined); assert.equal(h.current, 'x');
+  const r = createHistory('a');
+  r.push('b'); r.replace('b2');
+  assert.equal(r.current, 'b2'); assert.equal(r.undo(), 'a', 'a replaced text undoes with its step'); assert.equal(r.redo(), 'b2');
   const small = createHistory('0', 2);
   for (const t of ['1', '2', '3']) small.push(t);
   assert.equal(small.undo(), '2'); assert.equal(small.undo(), '1'); assert.equal(small.undo(), undefined, 'oldest steps beyond the limit are dropped');

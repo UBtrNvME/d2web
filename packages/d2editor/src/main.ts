@@ -43,7 +43,7 @@ let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, 
 // A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
 let notice = '';
 // `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was.
-let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number } } | undefined;
+let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number; target?: { X: number; Y: number }; tries?: number } } | undefined;
 
 function status(message: string, error = false) {
   $('status').textContent = message;
@@ -100,6 +100,7 @@ async function compile(seeds?: number[]) {
   if (before) snap($('host').shadowRoot!, before, after, change?.ids, change?.changed);
   pending = undefined;
   state.result = result;
+  if (change?.moved?.target && change.moved.tries) correct(after, change.moved.id, change.moved.target, change.moved.tries - 1);
   state.painted = revision;
   if (focused && focused === state.selected) $('host').shadowRoot?.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
   status(notice || `compiled in ${Math.round(result.millis)} ms`, Boolean(notice));
@@ -123,26 +124,28 @@ function paintCanvas(scene: SceneDocument) {
 }
 
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.
-function setText(text: string, { record = true, edits, delay = 0 }: { record?: boolean; edits?: Range[]; delay?: number } = {}) {
+// `settled` compiles with the default seeds at once (a drag is measured on the layout that stays, not on the quick one-seed pass).
+function setText(text: string, { record = true, replace = false, settled = false, edits, delay = 0 }: { record?: boolean; replace?: boolean; settled?: boolean; edits?: Range[]; delay?: number } = {}) {
   notice = '';
   clearTimeout(typing);
   clearTimeout(idle);
   state.text = text;
   state.revision++;
-  if (record) history.push(text);
+  if (replace) history.replace(text);
+  else if (record) history.push(text);
   if (src.value !== text) src.value = text;
   mark(edits);
   try { localStorage.setItem(STORAGE, text); } catch { /* storage is optional */ }
   status('Compiling…');
-  typing = setTimeout(() => void compile([1]), delay);
+  typing = setTimeout(() => void compile(settled ? undefined : [1]), delay);
   // Seeds are TALA's: other engines need no second compile when the user stops.
-  if (layout() === 'tala') idle = setTimeout(() => void compile(), 1000);
+  if (layout() === 'tala' && !settled) idle = setTimeout(() => void compile(), 1000);
 }
 
 src.addEventListener('input', () => setText(src.value, { delay: 250 }));
 
 // One canvas action, one transaction. Only a checked patch changes the text; anything else leaves it as it was.
-async function edit(ops: EditOp[]): Promise<EditResult | undefined> {
+async function edit(ops: EditOp[], { replace = false, settled = false } = {}): Promise<EditResult | undefined> {
   const revision = state.revision, board = state.board, selected = state.selected;
   let result: EditResult;
   try { result = await client.edit({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, board, ops }); }
@@ -152,7 +155,7 @@ async function edit(ops: EditOp[]): Promise<EditResult | undefined> {
   if (result.patch) {
     follow(result.ids);
     pending = { revision: revision + 1, ids: result.ids, changed: [selected] };
-    setText(result.patch.text, { edits: result.patch.edits });
+    setText(result.patch.text, { edits: result.patch.edits, replace, settled });
     for (const d of result.diagnostics) status(d.message);
     return result;
   }
@@ -211,14 +214,26 @@ function grab(): Grab | undefined {
     move(dx, dy) { dragged = nodes; for (const el of nodes) el.style.translate = `${dx}px ${dy}px`; },
     cancel: reset,
     drop(dx, dy) {
-      const at = place(board.association.objects, object.id, dx, dy)!;
+      const at = place(board.association.objects, object.id, dx, dy)!, box = object.box!;
+      // An estimated origin is measured after the compile (see correct): the drop point in diagram coordinates.
+      const target = at.exact ? undefined : { X: box.X + dx, Y: box.Y + dy };
       state.selected = object.id;
-      void edit([{ op: 'set', key: `${object.id}.top`, value: String(at.top) }, { op: 'set', key: `${object.id}.left`, value: String(at.left) }]).then(result => {
+      void edit([{ op: 'set', key: `${object.id}.top`, value: String(at.top) }, { op: 'set', key: `${object.id}.left`, value: String(at.left) }], { settled: true }).then(result => {
         if (!result) return reset();
-        if (pending) pending.moved = { id: object.id, dx, dy };
+        if (pending) pending.moved = { id: object.id, dx, dy, target, tries: 3 };
       });
     },
   };
+}
+// After a nested drop, measure where TALA painted the shape and correct top/left by the difference (TALA's origin is painted top-left minus
+// top/left, and moves with its container), a few times at most; each correction is folded into the drag's Undo step.
+function correct(association: Parameters<typeof getObject>[0], id: string, target: { X: number; Y: number }, tries: number) {
+  const o = getObject(association, id), top = o?.properties.top?.value, left = o?.properties.left?.value;
+  if (!o?.box || top === undefined || left === undefined) return;
+  const dx = Math.round(target.X - o.box.X), dy = Math.round(target.Y - o.box.Y);
+  if (!dx && !dy) return;
+  void edit([{ op: 'set', key: `${id}.top`, value: String(Math.max(0, +top + dy)) }, { op: 'set', key: `${id}.left`, value: String(Math.max(0, +left + dx)) }], { replace: true, settled: true })
+    .then(result => { if (result && pending) pending.moved = { id, dx: 0, dy: 0, target, tries }; });
 }
 // A drag on a shape pans on other engines; say why once it moves.
 $('canvas').addEventListener('pointermove', () => { if (hint && $('canvas').classList.contains('panning')) { hint = false; status('Positions need the TALA layout engine; this drag pans the canvas.'); } });

@@ -25,6 +25,8 @@ export function createHistory(initial: string, limit = 200) {
       past.push(current);
       return (current = text);
     },
+    // A follow-up that belongs to the current step (a measured correction of a drag, spec 0014): Undo skips it with that step.
+    replace(text: string) { current = text; future.length = 0; },
     // A text from outside the editing flow (an opened file, an example): no way back past it.
     reset(text: string) { past.length = future.length = 0; current = text; },
   };
