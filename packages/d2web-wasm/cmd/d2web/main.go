@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"d2web.local/wasm/compile"
+	"d2web.local/wasm/edit"
 )
 
 // serve is set by serve_js.go on js/wasm.
@@ -27,6 +28,10 @@ func main() {
 	}
 	if json.Unmarshal([]byte(os.Args[1]), &peek) == nil && peek.Type == "preflight" {
 		os.Stdout.Write(compile.Preflight([]byte(os.Args[1])))
+		return
+	}
+	if peek.Type == "edit" {
+		os.Stdout.Write(edit.Handle([]byte(os.Args[1]), compile.ProtocolVersion))
 		return
 	}
 	os.Stdout.Write(compile.Handle(context.Background(), []byte(os.Args[1])))

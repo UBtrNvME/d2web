@@ -15,12 +15,12 @@ function fakes(behave, ready = {}) {
     w.postMessage = m => { w.sent.push(m); behave(m, reply => { if (!w.terminated) w.onmessage?.({ data: reply }); }, w); };
     w.terminate = () => { w.terminated = true; };
     spawned.push(w);
-    setTimeout(() => w.onmessage?.({ data: { v: 1, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1, patched: false, ...ready } }), 1);
+    setTimeout(() => w.onmessage?.({ data: { v: 2, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1, patched: false, ...ready } }), 1);
     return w;
   };
   return { spawn, spawned };
 }
-const result = (m, extra = {}) => ({ v: 1, type: 'result', id: m.id, revision: m.revision, millis: 1, available: [''], boards: [], diagnostics: [], echo: {}, ...extra });
+const result = (m, extra = {}) => ({ v: 2, type: 'result', id: m.id, revision: m.revision, millis: 1, available: [''], boards: [], diagnostics: [], echo: {}, ...extra });
 const answer = (ms = 0) => (m, reply) => setTimeout(() => reply(result(m)), ms);
 
 test('compile resolves with the worker result after ready', async () => {
@@ -96,7 +96,7 @@ test('error results resolve (they are answers); dispose terminates and rejects l
 });
 
 test('a worker with another protocol or scene version is rejected with VersionError, not left hanging', async () => {
-  for (const ready of [{ v: 2 }, { sceneVersion: 9 }]) {
+  for (const ready of [{ v: 1 }, { sceneVersion: 9 }]) {
     const { spawn, spawned } = fakes(answer(), ready);
     const client = createClient({ spawn });
     await assert.rejects(client.compile(input(1)), VersionError);
@@ -177,4 +177,65 @@ test('the worker refusing the fonts rejects the compile with FontError', async (
 test('a malformed font list is refused when the client is created, before any fetch', () => {
   const { spawn } = fakes(answer());
   for (const bad of ['x', [{ url: 'u' }], [{ name: 'n' }], [{ name: 'n', url: 'u', sha256: 'zz' }], [{ name: 'n', url: 'u', extra: 1 }]]) assert.throws(() => createClient({ spawn, fonts: bad, fetch: async () => { throw new Error('no'); } }), /fonts/);
+});
+
+// Spec 0012 section 5: edits are never coalesced, run in order ahead of a waiting compile, and a patch from an older revision is never published.
+const editInput = (revision, key = 'b') => ({ revision, files: { 'main.d2': 'a' }, entry: 'main.d2', ops: [{ op: 'create', key }] });
+const edited = (m, ms = 0) => setTimeout(() => m.reply({ v: 2, type: 'edited', id: m.m.id, revision: m.m.revision, millis: 1, patch: { file: 'main.d2', edits: [], text: m.m.ops[0].key }, ids: { created: [], renamed: {}, deleted: [] }, diagnostics: [] }), ms);
+const both = (compileMs = 0, editMs = 0) => (m, reply) => m.type === 'edit' ? edited({ m, reply }, editMs) : setTimeout(() => reply(result(m)), compileMs);
+
+test('edits run in order and none is dropped', async () => {
+  const { spawn, spawned } = fakes(both(0, 5));
+  const client = createClient({ spawn });
+  const out = await Promise.all(['x', 'y', 'z'].map((key, i) => client.edit(editInput(1 + i, key))));
+  assert.deepEqual(out.map(r => r.error?.code ?? r.patch.text), [ 'stale', 'stale', 'z' ], 'earlier patches are stale once a newer revision was sent');
+  assert.deepEqual(spawned[0].sent.map(m => m.ops[0].key), ['x', 'y', 'z'], 'every edit reached the worker, in order');
+  const same = await Promise.all(['p', 'q'].map(key => client.edit(editInput(3, key))));
+  assert.deepEqual(same.map(r => r.patch.text), ['p', 'q'], 'edits of the same revision are all published');
+  client.dispose();
+});
+
+test('an edit older than a sent revision is stale at once and never sent', async () => {
+  const { spawn, spawned } = fakes(both());
+  const client = createClient({ spawn });
+  await client.compile(input(4));
+  const r = await client.edit(editInput(3));
+  assert.equal(r.error.code, 'stale'); assert.equal(r.patch, undefined);
+  assert.deepEqual(spawned[0].sent.map(m => m.type), ['compile']);
+  client.dispose();
+});
+
+test('a compile of a newer revision sent while an edit runs makes its result stale', async () => {
+  const { spawn } = fakes(both(0, 20));
+  const client = createClient({ spawn });
+  const pending = client.edit(editInput(1));
+  await wait(5);
+  const compiled = client.compile(input(2));
+  assert.equal((await pending).error.code, 'stale');
+  assert.equal((await compiled).revision, 2);
+  client.dispose();
+});
+
+test('an edit waits behind a running compile and runs ahead of a waiting one', async () => {
+  const { spawn, spawned } = fakes(both(20, 0));
+  const client = createClient({ spawn, supersedeAfterMs: 10_000 });
+  const first = client.compile(input(1)).catch(e => e); // superseded by the waiting compile, as before
+  await wait(5);
+  const second = client.compile(input(2));
+  const change = client.edit(editInput(2));
+  assert.equal((await change).patch.text, 'b');
+  assert(await first instanceof SupersededError);
+  await second;
+  assert.deepEqual(spawned[0].sent.map(m => `${m.type}${m.revision}`), ['compile1', 'edit2', 'compile2']);
+  client.dispose();
+});
+
+test('an invalid edit rejects without reaching the worker', async () => {
+  const { spawn, spawned } = fakes(both());
+  const client = createClient({ spawn });
+  await assert.rejects(client.edit({ ...editInput(1), ops: [] }), /1 to 256/);
+  await assert.rejects(client.edit({ ...editInput(1), ops: [{ op: 'move', key: 'a' }] }), /unknown operation/);
+  await wait(5);
+  assert.equal(spawned[0].sent.length, 0);
+  client.dispose();
 });

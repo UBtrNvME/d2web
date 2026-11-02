@@ -13,7 +13,7 @@ const defaults = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
 export const boardTarget = path => path.slice(1).replaceAll('/', '.');
 
 export const requestFor = (entry, id = 1) => JSON.stringify(normalizeCompileRequest({
-  v: 1, type: 'compile', id, revision: 1, entry: 'main.d2', files: { 'main.d2': entry.source, ...entry.files },
+  v: 2, type: 'compile', id, revision: 1, entry: 'main.d2', files: { 'main.d2': entry.source, ...entry.files },
   render: { ...defaults, ...entry.render }, boards: entry.boards ?? [''], ...(entry.layout ? { layout: entry.layout } : {}),
 }));
 

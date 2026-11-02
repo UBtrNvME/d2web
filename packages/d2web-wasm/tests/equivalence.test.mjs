@@ -22,7 +22,7 @@ const cases = ['geometry', 'chess', 'animation', 'arrowhead_scaling', 'unfilled_
 for (const name of cases) {
   test(`product scene equals the census scene: ${name}`, () => {
     const source = readFileSync(join(root, `examples/files/${name}.d2`), 'utf8');
-    const product = JSON.parse(goRun(join(output, 'd2web'), [JSON.stringify(normalizeCompileRequest({ v: 1, type: 'compile', id: 1, revision: 1, files: { 'main.d2': source }, entry: 'main.d2', render }))], opts));
+    const product = JSON.parse(goRun(join(output, 'd2web'), [JSON.stringify(normalizeCompileRequest({ v: 2, type: 'compile', id: 1, revision: 1, files: { 'main.d2': source }, entry: 'main.d2', render }))], opts));
     assert.equal(product.error, undefined, product.error?.message);
     const dir = mkdtempSync(join(tmpdir(), 'equiv-'));
     writeFileSync(join(dir, 'main.d2'), source);

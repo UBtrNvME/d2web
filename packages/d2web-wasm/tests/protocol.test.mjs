@@ -16,7 +16,7 @@ goRun('go', ['build', '-o', join(output, 'd2web.wasm'), './cmd/d2web'], { cwd: m
 const goRoot = goRun('go', ['env', 'GOROOT'], opts).trim();
 
 const render = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
-const request = (source, patch = {}) => JSON.stringify(normalizeCompileRequest({ v: 1, type: 'compile', id: 1, revision: 3, files: { 'main.d2': source }, entry: 'main.d2', render, ...patch }));
+const request = (source, patch = {}) => JSON.stringify(normalizeCompileRequest({ v: 2, type: 'compile', id: 1, revision: 3, files: { 'main.d2': source }, entry: 'main.d2', render, ...patch }));
 const native = json => JSON.parse(goRun(join(output, 'd2web'), [json], opts));
 const wasm = json => {
   for (let attempt = 1; ; attempt++) {
@@ -75,9 +75,9 @@ test('failures return an error and no boards', () => {
   assert.equal(syntax.revision, 3);
   const budget = native(request(simple, { budgets: { maxNodes: 1 } }));
   assert.equal(budget.error.code, 'budget'); assert.equal(budget.boards, undefined);
-  const malformed = native('{"v":1,');
+  const malformed = native('{"v":2,');
   assert.equal(malformed.error.code, 'internal');
-  const unnormalized = native(JSON.stringify({ v: 1, type: 'compile', id: 2, revision: 0, files: { 'main.d2': 'a' }, entry: 'main.d2', layout: 'tala', render, boards: [''] }));
+  const unnormalized = native(JSON.stringify({ v: 2, type: 'compile', id: 2, revision: 0, files: { 'main.d2': 'a' }, entry: 'main.d2', layout: 'tala', render, boards: [''] }));
   assert.equal(unnormalized.error.code, 'internal', 'budgets are required');
 });
 
@@ -86,7 +86,7 @@ test('failures return an error and no boards', () => {
 const svgIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" fill="#00ADD8"/></svg>';
 const withImages = 'a: { icon: "https://i.test/go.svg#frag" }\nb: { icon: https://i.test/none.svg }\n';
 const images = { 'https://i.test/go.svg#frag': { type: 'image/svg+xml', data: Buffer.from(svgIcon).toString('base64') } };
-const preflight = source => JSON.stringify({ v: 1, type: 'preflight', id: 4, files: { 'main.d2': source }, entry: 'main.d2' });
+const preflight = source => JSON.stringify({ v: 2, type: 'preflight', id: 4, files: { 'main.d2': source }, entry: 'main.d2' });
 const assetsOf = r => Object.keys(r.boards[0].scene.Assets ?? {}).filter(id => id.startsWith('image:'));
 
 test('images: preflight, supplied bytes and unresolved warnings; native and Node/WASM agree', { timeout: 300_000 }, () => {
@@ -137,4 +137,27 @@ test('seeds: the request chooses TALA attempts; the diagram\'s own tala-seeds wi
   assert.notEqual(positions(one), positions(best), 'seed 1 alone lays this diagram out differently');
   const own = 'vars: {d2-config: {data: {tala-seeds: [1; 2; 3]}}}\n' + seedSensitive;
   assert.equal(positions(native(request(own, { seeds: [1] }))), positions(native(request(own))), 'tala-seeds in the source overrides the request');
+});
+
+// Spec 0012: native and Node/WASM answer the same edit requests; a failure publishes no patch.
+const edit = (source, ops, patch = {}) => JSON.stringify({ v: 2, type: 'edit', id: 5, revision: 9, files: { 'main.d2': source }, entry: 'main.d2', ops, ...patch });
+test('edit: checked patches and failures; native and Node/WASM agree', { timeout: 300_000 }, () => {
+  const requests = [
+    edit('# note\na: A\nb\na -> b\n', [{ op: 'set', key: 'a.style.fill', value: 'red' }]),
+    edit('a\nb\na -> b\n', [{ op: 'rename', key: 'a', name: 'c' }, { op: 'create', key: 'd' }, { op: 'delete', key: '(c -> b)[0]' }]),
+    edit(layers, [{ op: 'set', key: 'y.style.fill', value: 'red' }], { board: '/layers/one' }),
+    edit('a\n', [{ op: 'set', key: 'a.style.opacity', value: '2' }]),
+    edit('a: {', [{ op: 'create', key: 'b' }]),
+  ];
+  const results = requests.map(native);
+  assert.equal(native(JSON.stringify({ ...JSON.parse(requests[0]), v: 1 })).error.code, 'internal');
+  const [restyle, several, layer, refused, broken] = results;
+  assert.equal(restyle.type, 'edited'); assert.equal(restyle.id, 5); assert.equal(restyle.revision, 9);
+  assert.equal(restyle.patch.text, '# note\na: A {style.fill: red}\nb\na -> b\n');
+  assert.deepEqual(restyle.patch.edits, [{ start: 7, end: 12, text: 'a: A {style.fill: red}\n' }]);
+  assert.deepEqual(several.ids, { created: ['d'], renamed: { a: 'c', '(a -> b)[0]': '(c -> b)[0]' }, deleted: ['(c -> b)[0]'] });
+  assert.match(layer.patch.text, /one: \{\n    y -> z\n    y\.style\.fill: red\n/);
+  assert.equal(refused.patch, undefined); assert.equal(refused.error.code, 'edit'); assert.equal(refused.error.op, 0);
+  assert.equal(broken.error.code, 'compile');
+  for (const [i, r] of requests.entries()) assert.deepEqual(stable(wasm(r)), stable(results[i]), `request ${i}`);
 });

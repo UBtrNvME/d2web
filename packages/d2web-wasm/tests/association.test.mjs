@@ -15,7 +15,7 @@ goRun('go', ['build', '-o', join(output, 'd2web'), './cmd/d2web'], { cwd: module
 goRun('go', ['build', '-o', join(output, 'd2web.wasm'), './cmd/d2web'], { cwd: module, env: { ...env, GOOS: 'js', GOARCH: 'wasm' } });
 const goRoot = goRun('go', ['env', 'GOROOT'], { cwd: module, env }).trim();
 const render = { themeId: 0, sketch: false, pad: 0, scale: 1, center: false };
-const request = (files, patch = {}) => JSON.stringify(normalizeCompileRequest({ v: 1, type: 'compile', id: 1, revision: 1, files, entry: 'main.d2', render, boards: 'all', ...patch }));
+const request = (files, patch = {}) => JSON.stringify(normalizeCompileRequest({ v: 2, type: 'compile', id: 1, revision: 1, files, entry: 'main.d2', render, boards: 'all', ...patch }));
 const run = (binary, args) => JSON.parse(goRun(binary, args, { cwd: output, env, timeout: 60_000 }));
 const native = json => run(join(output, 'd2web'), [json]);
 const wasm = json => run(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [join(output, 'd2web.wasm'), json]);

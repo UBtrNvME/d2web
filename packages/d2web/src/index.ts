@@ -1,6 +1,6 @@
 export { createClient, FontError, SupersededError, TimeoutError, VersionError } from './client.ts';
 export { spawnWorker } from './client.ts';
-export type { SpawnWorkerOptions, ClientOptions, CompileInput, WorkerLike } from './client.ts';
+export type { SpawnWorkerOptions, ClientOptions, CompileInput, EditInput, WorkerLike } from './client.ts';
 export type { FontSpec } from './protocol.ts';
 export { fetchImages } from './images.ts';
 export type { ImageLimits, ImageResolve, ImageSource, ImagesOption } from './images.ts';
@@ -10,5 +10,5 @@ export type { RenderBoard, RenderObject, RenderLink } from './render.ts';
 export type * from './scene.ts';
 export type { Box, D2Event, D2EventType, Mount, MountOptions, UpdateReport } from './mount.ts';
 export { countObjects, getObject, objectsAt } from './association.ts';
-export { normalizeCompileRequest, ProtocolError } from './request.ts';
+export { normalizeCompileRequest, normalizeEditRequest, ProtocolError } from './request.ts';
 export * from './protocol.ts';

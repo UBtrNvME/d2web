@@ -18,12 +18,12 @@ function fakes({ links = [], delay = 0 } = {}) {
     w.postMessage = m => {
       w.sent.push(m);
       const reply = r => setTimeout(() => { if (!w.terminated) w.onmessage?.({ data: r }); }, delay);
-      if (m.type === 'preflight') reply({ v: 1, type: 'images', id: m.id, links });
-      if (m.type === 'compile') reply({ v: 1, type: 'result', id: m.id, revision: m.revision, millis: 1, available: [''], boards: [], diagnostics: [], echo: {} });
+      if (m.type === 'preflight') reply({ v: 2, type: 'images', id: m.id, links });
+      if (m.type === 'compile') reply({ v: 2, type: 'result', id: m.id, revision: m.revision, millis: 1, available: [''], boards: [], diagnostics: [], echo: {} });
     };
     w.terminate = () => { w.terminated = true; };
     spawned.push(w);
-    setTimeout(() => w.onmessage?.({ data: { v: 1, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1, patched: false } }), 1);
+    setTimeout(() => w.onmessage?.({ data: { v: 2, type: 'ready', d2: '0.9.0', engines: ['tala'], sceneVersion: 1, patched: false } }), 1);
     return w;
   };
   return { spawn, spawned };
@@ -89,7 +89,7 @@ test('without the option there is no preflight, no images field and no resolve (
 test('a D2 error from the preflight skips the fetch; the compile still goes out', async () => {
   const { spawn, spawned } = fakes();
   spawned.length = 0;
-  const failing = () => { const w = spawn(); const post = w.postMessage; w.postMessage = m => m.type === 'preflight' ? (w.sent.push(m), setTimeout(() => w.onmessage({ data: { v: 1, type: 'images', id: m.id, links: [], error: 'syntax' } }), 0)) : post(m); return w; };
+  const failing = () => { const w = spawn(); const post = w.postMessage; w.postMessage = m => m.type === 'preflight' ? (w.sent.push(m), setTimeout(() => w.onmessage({ data: { v: 2, type: 'images', id: m.id, links: [], error: 'syntax' } }), 0)) : post(m); return w; };
   let called = 0;
   const client = createClient({ spawn: failing, images: { mode: 'bundle', resolve: async () => { called++; return bytes(1); } } });
   await client.compile(input(1));

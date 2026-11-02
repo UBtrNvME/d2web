@@ -73,7 +73,7 @@ p: { shape: image; icon: "https://i.test/p.svg#frag" }
 layers: { next: { x: { icon: https://i.test/layer.svg } } }
 `,
 	}
-	raw, _ := json.Marshal(map[string]any{"v": 1, "type": "preflight", "id": 7, "files": files, "entry": "main.d2"})
+	raw, _ := json.Marshal(map[string]any{"v": 2, "type": "preflight", "id": 7, "files": files, "entry": "main.d2"})
 	var res PreflightResult
 	if err := json.Unmarshal(Preflight(raw), &res); err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ layers: { next: { x: { icon: https://i.test/layer.svg } } }
 }
 
 func TestPreflightReportsAD2ErrorAndNoLinks(t *testing.T) {
-	raw, _ := json.Marshal(map[string]any{"v": 1, "type": "preflight", "id": 1, "files": map[string]string{"main.d2": "a: {"}, "entry": "main.d2"})
+	raw, _ := json.Marshal(map[string]any{"v": 2, "type": "preflight", "id": 1, "files": map[string]string{"main.d2": "a: {"}, "entry": "main.d2"})
 	var res PreflightResult
 	_ = json.Unmarshal(Preflight(raw), &res)
 	if res.Error == "" || len(res.Links) != 0 {
