@@ -4,6 +4,7 @@ package edit
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"testing/fstest"
 	"time"
@@ -54,23 +55,33 @@ type IDs struct {
 }
 
 type Error struct {
-	Code      string `json:"code"` // compile | edit | panic | recompile | unchecked | internal
-	Message   string `json:"message"`
-	Op        *int   `json:"op,omitempty"`
-	Formatted string `json:"formatted,omitempty"`
-	Reason    string `json:"reason,omitempty"` // unchecked: conflict | inequivalent
+	Code      string   `json:"code"` // compile | edit | panic | recompile | unchecked | internal
+	Message   string   `json:"message"`
+	Op        *int     `json:"op,omitempty"`
+	Formatted string   `json:"formatted,omitempty"`
+	Reason    string   `json:"reason,omitempty"` // unchecked: conflict | inequivalent | label
+	Labels    []string `json:"labels,omitempty"` // unchecked, reason label: `id: "before" -> "after"`
+}
+
+// Diagnostic has the shape of spec 0001's; `edit-override` marks an edit that wrote a local override for something an imported file declares.
+type Diagnostic struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Board    string `json:"board,omitempty"`
+	File     string `json:"file,omitempty"`
+	Code     string `json:"code"`
 }
 
 type Result struct {
-	V           int     `json:"v"`
-	Type        string  `json:"type"`
-	ID          int     `json:"id"`
-	Revision    int     `json:"revision"`
-	Millis      float64 `json:"millis"`
-	Patch       *Patch  `json:"patch,omitempty"`
-	IDs         IDs     `json:"ids"`
-	Diagnostics []any   `json:"diagnostics"`
-	Error       *Error  `json:"error,omitempty"`
+	V           int          `json:"v"`
+	Type        string       `json:"type"`
+	ID          int          `json:"id"`
+	Revision    int          `json:"revision"`
+	Millis      float64      `json:"millis"`
+	Patch       *Patch       `json:"patch,omitempty"`
+	IDs         IDs          `json:"ids"`
+	Diagnostics []Diagnostic `json:"diagnostics"`
+	Error       *Error       `json:"error,omitempty"`
 }
 
 // Handle is the JSON entry point used by the worker and the native command.
@@ -78,9 +89,9 @@ func Handle(raw []byte, version int) []byte {
 	var req Request
 	var res Result
 	if err := json.Unmarshal(raw, &req); err != nil {
-		res = Result{Type: "edited", Diagnostics: []any{}, Error: &Error{Code: "internal", Message: "malformed request: " + err.Error()}}
+		res = Result{Type: "edited", Diagnostics: []Diagnostic{}, Error: &Error{Code: "internal", Message: "malformed request: " + err.Error()}}
 	} else if req.V != version || req.Type != "edit" {
-		res = Result{Type: "edited", ID: req.ID, Revision: req.Revision, Diagnostics: []any{}, Error: &Error{Code: "internal", Message: fmt.Sprintf("expected an edit request at protocol version %d", version)}}
+		res = Result{Type: "edited", ID: req.ID, Revision: req.Revision, Diagnostics: []Diagnostic{}, Error: &Error{Code: "internal", Message: fmt.Sprintf("expected an edit request at protocol version %d", version)}}
 	} else {
 		res = Apply(req)
 	}
@@ -91,7 +102,7 @@ func Handle(raw []byte, version int) []byte {
 
 func Apply(req Request) (res Result) {
 	start := time.Now()
-	res = Result{Type: "edited", ID: req.ID, Revision: req.Revision, IDs: IDs{Created: []string{}, Renamed: map[string]string{}, Deleted: []string{}}, Diagnostics: []any{}}
+	res = Result{Type: "edited", ID: req.ID, Revision: req.Revision, IDs: IDs{Created: []string{}, Renamed: map[string]string{}, Deleted: []string{}}, Diagnostics: []Diagnostic{}}
 	defer func() { res.Millis = float64(time.Since(start).Microseconds()) / 1000 }()
 	text := req.Files[req.Entry]
 	g, err := compile(req, text)
@@ -100,10 +111,20 @@ func Apply(req Request) (res Result) {
 		return
 	}
 	formatted := d2format.Format(g.AST)
+	before := labels(g, "", map[string]string{})
 	board, err := boardPath(req.Board)
 	if err != nil {
 		res.Error = &Error{Code: "edit", Message: err.Error()}
 		return
+	}
+	warnings := overrides(g, board, req)
+	targeted := map[string]bool{}
+	if bg := d2oracle.GetBoardGraph(g, board); bg != nil {
+		for _, op := range req.Ops {
+			if id, _ := target(bg, op.Key); id != "" {
+				targeted[req.Board+" "+id] = true
+			}
+		}
 	}
 	for i, op := range req.Ops {
 		code, err := run(&g, board, op, &res.IDs)
@@ -122,7 +143,8 @@ func Apply(req Request) (res Result) {
 	if strings.HasSuffix(text, "\n") || text == "" {
 		patched += "\n"
 	}
-	if pg, err := compile(req, patched); err != nil || d2format.Format(pg.AST) != output {
+	pg, err := compile(req, patched)
+	if err != nil || d2format.Format(pg.AST) != output {
 		reason := "inequivalent"
 		if conflicts > 0 {
 			reason = "conflict"
@@ -130,8 +152,119 @@ func Apply(req Request) (res Result) {
 		res.Error = &Error{Code: "unchecked", Message: "no patch to the author's text prints as the edit's result", Formatted: output, Reason: reason}
 		return
 	}
+	if changed := guard(before, pg, req.Ops, targeted); len(changed) > 0 {
+		res.Error = &Error{Code: "unchecked", Message: "the patch changes labels the operations did not set", Formatted: output, Reason: "label", Labels: changed}
+		return
+	}
 	res.Patch = &Patch{File: req.Entry, Edits: ranges(text, patched), Text: patched}
+	res.Diagnostics = append(res.Diagnostics, warnings...)
 	return
+}
+
+// overrides warns when an edit targets a board, object or connection that only an imported file declares: d2oracle then writes a local override
+// into the entry (`x: {...@x; new}`), the imported file is unchanged. Read from the graph before the operations run, since they mutate it.
+func overrides(g *d2graph.Graph, board []string, req Request) []Diagnostic {
+	bg := d2oracle.GetBoardGraph(g, board)
+	if bg == nil {
+		return nil
+	}
+	warn := func(what, file string) Diagnostic {
+		return Diagnostic{Severity: "warning", Code: "edit-override", Board: req.Board, File: file,
+			Message: fmt.Sprintf("%s is declared in %s; the edit writes a local override into %s", what, file, req.Entry)}
+	}
+	sorted := func(files map[string]bool) string {
+		var names []string
+		for f := range files {
+			names = append(names, f)
+		}
+		sort.Strings(names)
+		return strings.Join(names, ", ")
+	}
+	// An imported board's AST is synthesized in the entry; its objects' references still name the file that declares them.
+	if len(board) > 0 {
+		files := map[string]bool{}
+		for _, o := range bg.Objects {
+			for _, r := range o.References {
+				files[r.Key.Range.Path] = true
+			}
+		}
+		if len(files) > 0 && !files[req.Entry] {
+			return []Diagnostic{warn("board "+req.Board, sorted(files))}
+		}
+	}
+	var out []Diagnostic
+	seen := map[string]bool{}
+	for _, op := range req.Ops {
+		id, files := target(bg, op.Key)
+		if id == "" || seen[id] || files[req.Entry] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, warn(id, sorted(files)))
+	}
+	return out
+}
+
+// target finds the object or connection a key addresses (the longest ID the key starts with) and the files that declare it.
+func target(g *d2graph.Graph, key string) (string, map[string]bool) {
+	id, files := "", map[string]bool{}
+	owns := func(candidate string) bool {
+		return len(candidate) > len(id) && (key == candidate || strings.HasPrefix(key, candidate+"."))
+	}
+	for _, o := range g.Objects {
+		if c := o.AbsID(); owns(c) {
+			id, files = c, map[string]bool{}
+			for _, r := range o.References {
+				files[r.Key.Range.Path] = true
+			}
+		}
+	}
+	for _, e := range g.Edges {
+		if c := e.AbsID(); owns(c) {
+			id, files = c, map[string]bool{}
+			for _, r := range e.References {
+				files[r.Edge.Range.Path] = true
+			}
+		}
+	}
+	return id, files
+}
+
+// labels maps every object and connection, on every board, to its label, keyed by board path and ID.
+func labels(g *d2graph.Graph, board string, out map[string]string) map[string]string {
+	for _, o := range g.Objects {
+		out[board+" "+o.AbsID()] = o.Label.Value
+	}
+	for _, e := range g.Edges {
+		out[board+" "+e.AbsID()] = e.Label.Value
+	}
+	for kind, boards := range map[string][]*d2graph.Graph{"layers": g.Layers, "scenarios": g.Scenarios, "steps": g.Steps} {
+		for _, b := range boards {
+			labels(b, board+"/"+kind+"/"+b.Name, out)
+		}
+	}
+	return out
+}
+
+// guard lists labels of objects present before and after that changed to a value no `set` operation wrote, other than the objects the operations
+// address (whose label D2 may derive from the edit: a replaced class, a glob filter). A label set through a shared declaration (a class, a
+// glob) changes on every object that uses it, to the value the operation wrote, so that is allowed.
+// shortcut: matches by value, not by which declaration owns the label; switch to association sources if an unwritten change ever matches a set value.
+func guard(before map[string]string, patched *d2graph.Graph, ops []Op, targeted map[string]bool) []string {
+	written := map[string]bool{}
+	for _, op := range ops {
+		if op.Op == "set" && op.Value != nil {
+			written[*op.Value] = true
+		}
+	}
+	var out []string
+	for id, after := range labels(patched, "", map[string]string{}) {
+		if prev, ok := before[id]; ok && prev != after && !written[after] && !targeted[id] {
+			out = append(out, fmt.Sprintf("%s: %q -> %q", strings.TrimPrefix(id, " "), prev, after))
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func compile(req Request, text string) (*d2graph.Graph, error) {

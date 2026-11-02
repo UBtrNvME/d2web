@@ -126,3 +126,89 @@ func applyEdits(text string, edits []Range) string {
 
 func toUTF16(s string) []uint16   { return utf16.Encode([]rune(s)) }
 func fromUTF16(u []uint16) string { return string(utf16.Decode(u)) }
+
+// d2format lowercases a label that spells a keyword (docs/ideas/d2editor.md): deleting `a` rewrites the `testing:` line and `Scenarios` would
+// become `scenarios` on the canvas. The guard refuses the patch and offers D2's formatted text.
+func TestLabelGuardRefusesAKeywordLabelChange(t *testing.T) {
+	res := apply(t, "testing: Scenarios {\n  a\n}\n", Op{Op: "delete", Key: "testing.a"})
+	if res.Patch != nil || res.Error == nil || res.Error.Code != "unchecked" || res.Error.Reason != "label" {
+		t.Fatalf("%+v %+v", res.Patch, res.Error)
+	}
+	if len(res.Error.Labels) != 1 || !strings.Contains(res.Error.Labels[0], `"Scenarios" -> "scenarios"`) || res.Error.Formatted == "" {
+		t.Fatalf("%+v", res.Error)
+	}
+}
+
+// A label owned by a shared declaration changes on every object that uses it: D2's semantics, not damage.
+func TestLabelGuardAllowsAnOwnedRelabel(t *testing.T) {
+	text := "classes: {c: {label: Old}}\na.class: c\nb.class: c\nd: Keep\n"
+	res := apply(t, text, Op{Op: "set", Key: "classes.c.label", Value: str("New")})
+	if res.Error != nil {
+		t.Fatal(res.Error)
+	}
+	if !strings.Contains(res.Patch.Text, "label: New") {
+		t.Fatalf("%q", res.Patch.Text)
+	}
+}
+
+func TestNestedBoardPath(t *testing.T) {
+	text := "layers: {\n  x: {\n    scenarios: {\n      y: {\n        a\n      }\n    }\n  }\n}\n"
+	ops := []Op{{Op: "set", Key: "a.style.fill", Value: str("red")}}
+	res := Apply(Request{Files: map[string]string{"main.d2": text}, Entry: "main.d2", Board: "/layers/x/scenarios/y", Ops: ops})
+	if res.Error != nil || !strings.Contains(res.Patch.Text, "        a: {style.fill: red}\n") {
+		t.Fatalf("%+v %+v", res.Patch, res.Error)
+	}
+	if res := Apply(Request{Files: map[string]string{"main.d2": text}, Entry: "main.d2", Board: "/layers/x/y", Ops: ops}); res.Error == nil || res.Error.Code != "edit" {
+		t.Fatalf("a path without keywords is refused: %+v", res.Error)
+	}
+}
+
+// ADR 0012 decision 5 and spec 0012 §4.1/§4.4: editing what an imported file declares writes a local override into the entry, with a warning.
+func TestImportedBoardsAndObjectsWarn(t *testing.T) {
+	read := func(dir string, names ...string) map[string]string {
+		files := map[string]string{}
+		for _, n := range names {
+			raw, err := os.ReadFile("../../../examples/" + dir + "/" + n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[n] = string(raw)
+		}
+		return files
+	}
+	cases := []struct {
+		files map[string]string
+		board string
+		op    Op
+		warn  []string // substrings of the one warning, or none
+	}{
+		{read("boards", "main.d2", "x.d2", "y.d2"), "/layers/x", Op{Op: "create", Key: "new_in_x"}, []string{"/layers/x", "x.d2"}},
+		{map[string]string{"main.d2": "s: @shared\n", "shared.d2": "a\n"}, "", Op{Op: "set", Key: "s.a.style.fill", Value: str("red")}, []string{"s.a", "shared.d2"}},
+		// imp.a is declared in shared.d2 but also referenced in main.d2 (`imp.a -> imp.b`): the entry already declares it, so no warning.
+		{read("research/join/imports", "main.d2", "shared.d2"), "", Op{Op: "set", Key: "imp.a.style.fill", Value: str("red")}, nil},
+		{read("research/join/imports", "main.d2", "shared.d2"), "", Op{Op: "set", Key: "x.style.fill", Value: str("red")}, nil},
+	}
+	for _, c := range cases {
+		res := Apply(Request{Files: c.files, Entry: "main.d2", Board: c.board, Ops: []Op{c.op}})
+		if res.Error != nil {
+			t.Fatalf("%v: %+v", c.op, res.Error)
+		}
+		if strings.Contains(res.Patch.Text, "meow") || res.Patch.File != "main.d2" {
+			t.Fatalf("imported text copied into the entry: %q", res.Patch.Text)
+		}
+		if len(c.warn) == 0 {
+			if len(res.Diagnostics) != 0 {
+				t.Fatalf("%v: %+v", c.op, res.Diagnostics)
+			}
+			continue
+		}
+		if len(res.Diagnostics) != 1 || res.Diagnostics[0].Code != "edit-override" || res.Diagnostics[0].Severity != "warning" {
+			t.Fatalf("%v: %+v", c.op, res.Diagnostics)
+		}
+		for _, w := range c.warn {
+			if !strings.Contains(res.Diagnostics[0].Message, w) {
+				t.Fatalf("%v: %q lacks %q", c.op, res.Diagnostics[0].Message, w)
+			}
+		}
+	}
+}

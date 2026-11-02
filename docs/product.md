@@ -17,7 +17,7 @@ A reusable browser runtime that compiles D2 text with D2's own Go/WASM (compile,
 
 ## v1 excludes
 
-Editing and undo (v2, in progress: [ADR 0012](adr/0012-editing-in-scope.md)), React binding, editor UI, application state, persistence, plugin framework, implicit skins or effects, browsers other than Chromium as a supported target.
+Editing and undo (v2: the edit API is built, [ADR 0012](adr/0012-editing-in-scope.md); undo stays the consumer's), React binding, editor UI, application state, persistence, plugin framework, implicit skins or effects, browsers other than Chromium as a supported target.
 
 ## Promises and limits
 
@@ -31,4 +31,4 @@ The worker/client, mount, source association, packaging, animation, accessibilit
 
 The [2 November browser review](web-native-audit.md) reproduced zoom-dependent text clipping, animation/content ownership and font-lifecycle defects. The follow-up fixes these combinations and adds a typed renderer input and explicit DOM ownership ([spec 0011](specs/0011-rendering-contract.md)). This is a foundation for an independent framework renderer; a React renderer and complete semantic coverage are not delivered.
 
-Editing (v2) entered scope with [ADR 0012](adr/0012-editing-in-scope.md): d2web will own a worker edit API that publishes each edit as a checked patch to the author's text, for one file and its boards. Its contract is [spec 0012](specs/0012-edit-api.md) (accepted); nothing is built yet.
+Editing (v2) entered scope with [ADR 0012](adr/0012-editing-in-scope.md): d2web will own a worker edit API that publishes each edit as a checked patch to the author's text, for one file and its boards. Its contract is [spec 0012](specs/0012-edit-api.md); `client.edit` and the worker's `edit` message are built (protocol version 2) and verified natively, in Node/WASM and in Chromium. No editor UI: that is a consumer such as `d2editor`.

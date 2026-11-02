@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { goEnv, goRun, root } from '../../../tests/examples.mjs';
@@ -148,10 +148,12 @@ test('edit: checked patches and failures; native and Node/WASM agree', { timeout
     edit(layers, [{ op: 'set', key: 'y.style.fill', value: 'red' }], { board: '/layers/one' }),
     edit('a\n', [{ op: 'set', key: 'a.style.opacity', value: '2' }]),
     edit('a: {', [{ op: 'create', key: 'b' }]),
+    JSON.stringify({ ...JSON.parse(edit('', [{ op: 'create', key: 'new_in_x' }], { board: '/layers/x' })), files: Object.fromEntries(['main.d2', 'x.d2', 'y.d2'].map(f => [f, readFileSync(join(root, 'examples/boards', f), 'utf8')])) }),
   ];
   const results = requests.map(native);
   assert.equal(native(JSON.stringify({ ...JSON.parse(requests[0]), v: 1 })).error.code, 'internal');
-  const [restyle, several, layer, refused, broken] = results;
+  const [restyle, several, layer, refused, broken, imported] = results;
+  assert.deepEqual(imported.diagnostics.map(d => [d.code, d.board, d.file]), [['edit-override', '/layers/x', 'x.d2']]);
   assert.equal(restyle.type, 'edited'); assert.equal(restyle.id, 5); assert.equal(restyle.revision, 9);
   assert.equal(restyle.patch.text, '# note\na: A {style.fill: red}\nb\na -> b\n');
   assert.deepEqual(restyle.patch.edits, [{ start: 7, end: 12, text: 'a: A {style.fill: red}\n' }]);

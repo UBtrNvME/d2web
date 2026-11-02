@@ -130,7 +130,7 @@ export interface EditResult {
   ids: { created: string[]; renamed: Record<string, string>; deleted: string[] };
   diagnostics: Diagnostic[];
   // `formatted` and `reason` only for 'unchecked': D2's formatted whole file, offered for the user to approve, never applied.
-  error?: { code: EditErrorCode; message: string; op?: number; formatted?: string; reason?: 'conflict' | 'inequivalent' | 'label' };
+  error?: { code: EditErrorCode; message: string; op?: number; formatted?: string; reason?: 'conflict' | 'inequivalent' | 'label'; labels?: string[] };
 }
 
 export type HostMessage = CompileRequest | FontsMessage | PreflightRequest | EditRequest;

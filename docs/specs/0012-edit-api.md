@@ -1,6 +1,6 @@
 # Spec 0012: edit API (edits published as checked patches)
 
-Status: **accepted** (user, 2 November 2026: "Approve", as drafted; the questions in section 7 stay open). Build in progress: tasks 1-3 of the [plan](../../tasks/todo.md) (edit core, operations, worker message, protocol version 2) are done. Scope set by [ADR 0012](../adr/0012-editing-in-scope.md); mechanism by [ADR 0004](../adr/0004-edit-wrapper-and-patches.md); transport by [spec 0001](0001-compile-protocol.md). Evidence: `test:research:transaction`, `test:research:roundtrip` and the probe results in the [d2editor idea](../ideas/d2editor.md#probe-results-publishing-edits-as-patches-2-november-2026).
+Status: **accepted** (user, 2 November 2026: "Approve", as drafted; the questions in section 7 stay open). Built 2 November 2026 (section 8). Scope set by [ADR 0012](../adr/0012-editing-in-scope.md); mechanism by [ADR 0004](../adr/0004-edit-wrapper-and-patches.md); transport by [spec 0001](0001-compile-protocol.md). Evidence: `test:research:transaction`, `test:research:roundtrip` and the probe results in the [d2editor idea](../ideas/d2editor.md#probe-results-publishing-edits-as-patches-2-november-2026).
 
 ## 1. Purpose and non-goals
 
@@ -72,7 +72,7 @@ For each request, in the worker:
 3. Print the edited AST with `d2format` (**the edit API's result**) and compile it; failure is `recompile`.
 4. Three-way merge, line based: base is `d2format` of the original, ours is the author's text, theirs is the edit API's result. Where formatting and the edit touch the same region, keep the author's spelling of each line the edit only respelled; otherwise the edit's text wins for that region (`merge3` in `research/roundtrip.go`, plain Go, no `git`).
 5. **Equivalence gate:** `d2format` of the patched text must equal the edit API's result byte for byte.
-6. **Label guard:** compile the patched text; every object present before and after must keep its label, unless an operation's key names that object's label (section 7, question 1).
+6. **Label guard:** compile the patched text; every object and connection on every board present before and after must keep its label, unless it changed to a value a `set` operation wrote or it is an object an operation addresses (D2 may derive its label from the edit: applying a class that replaces one setting `label: ""`, or a glob filter such as `**: {&label: end; label: ⬤}`; both found by the corpus gate). A label owned by a shared declaration (a class, a glob) changes on every object that uses it to exactly that value, so it passes; the keyword-lowercasing bug does not. A failure is `unchecked`, `reason: 'label'`, with `labels: ['id: "before" -> "after"']`.
 7. Both pass: publish `patch` (minimal UTF-16 ranges from the line diff of author's text against patched text). Either fails: `unchecked` with `formatted`.
 
 ### 4.1 Boards
@@ -84,8 +84,12 @@ All offsets are UTF-16 code units, as association ranges (spec 0004), so they ar
 ### 4.3 What is never published
 Reformatting the author's text, changes to any file other than `entry`, a patch that failed either gate, partial transactions.
 
+### 4.3a Known `d2oracle` faults the gates catch
+
+Found by the corpus gate, 2 November 2026: `Set` relabelling an object whose label a glob with a label filter sets (`**: {&label: start; label: ⬤}` in `examples/files/glob_dimensions.d2`) rewrites another glob's filter (`&label: end` becomes `&label: probe label`), so an unrelated object loses its label. The label guard returns `unchecked`, `reason: 'label'`; the offered `formatted` text carries the same change, listed in `labels`, so a consumer must show those before offering approval. Not reported upstream yet.
+
 ### 4.4 Imported objects
-Editing an object declared in an imported file writes a local override into the entry (oracle behaviour). The result carries a `warning` diagnostic, `code: 'edit-override'`, naming the object and the imported file.
+Editing an object or connection that only an imported file declares writes a local override into the entry (oracle behaviour). The result carries a `warning` diagnostic, `code: 'edit-override'`, naming the board or object and the imported file; an object the entry also references (for example as a connection endpoint) is the entry's too and gets no warning. An imported board is recognised by its objects' references, since D2 synthesizes its AST in the entry. Known `d2oracle` limit: setting a property on a connection declared only in an import (`imp.(a -> b)[0].style.stroke` with `imp: @shared`) drops the import and fails to recompile; the edit is refused as `edit` and nothing is published.
 
 ## 5. Ordering and stale edits (host client)
 
@@ -100,7 +104,7 @@ d2web provides no inverse operations. A consumer undoes by restoring an earlier 
 
 ## 7. Open questions
 
-Answered with the build plan (user, 2 November 2026): question 1 as proposed; question 3, `move` stays out until a consumer needs it; question 4, bump to 2 as ADR 0012 says. Questions 2, 5 and 6 stay open.
+Answered with the build plan (user, 2 November 2026): question 1 as proposed (built as a match on the written value rather than on association sources, which accepts the same cases with less machinery; see §4 step 6); question 3, `move` stays out until a consumer needs it; question 4, bump to 2 as ADR 0012 says. Questions 2, 5 and 6 stay open.
 
 1. **Label guard and shared declarations.** A relabel through a glob or shared declaration changes several labels at once; that is D2 ownership, not damage. Proposed: an object's label change is allowed when the association says its label's source is the declaration the operation edited. Unverified.
 2. **Blank-line noise.** `d2 fmt` adds a blank line beside every edit in one probe file (`Layers (boards)`). Accept as is (equivalent, one line), or strip blank-only additions the author's text did not have?
@@ -111,17 +115,20 @@ Answered with the build plan (user, 2 November 2026): question 1 as proposed; qu
 
 ## 8. Build and verification
 
-Code: `packages/d2web-wasm/edit` (operations under recover, `merge3` moved from `research/roundtrip.go`, the two gates), wired into the existing wasm entry; `packages/d2web/src/{protocol,request,client}.ts` (types, validation, `client.edit`, stale rule). The research probes stay as evidence.
+Built 2 November 2026 (plan and handoff in [tasks/todo.md](../../tasks/todo.md)). Code: `packages/d2web-wasm/edit` (operations under recover, `merge3` copied from `research/roundtrip.go`, equivalence gate, label guard, override warnings, UTF-16 ranges), served by `cmd/d2web` (native) and `d2webEdit` (wasm), forwarded by `worker.js`; `packages/d2web/src/{protocol,request,client}.ts` (types, `normalizeEditRequest`, `client.edit`, the stale rule). The research probes stay as evidence.
 
-| Claim | Check |
-| --- | --- |
-| Every operation kind publishes a patch that changes only its own lines on a `d2 fmt` file | Go unit tests in `packages/d2web-wasm/edit` |
-| Reformatted files publish without their reformatting; equivalence is a hard gate | the 90-file round-trip corpus moved into a product test (782 edits, equivalence required, per-file extra-line counts recorded) |
-| Keyword label case returns `unchecked` with `formatted` and the changed label | Go unit test with `testing: Scenarios { a }`, delete `a` |
-| A panic is recovered, reported as `panic`, and the next request succeeds | the `d2oracle.Delete` glob-index fixture from `test:research:transaction` |
-| Board paths, refused imported boards, `edit-override` warning | `packages/d2web-wasm/tests/protocol.test.mjs`, native and Node/WASM |
-| Identical results native, Node/WASM and Chromium WASM | extend `test:wasm` and a Chromium spec in `packages/d2web/tests/browser` |
-| Patch offsets are UTF-16 (non-BMP text before the edit) | Go and JS unit tests |
-| `stale` at send and at result; edits not coalesced | `client.test.mjs` |
+| Claim | State | Evidence |
+| --- | --- | --- |
+| Every operation kind publishes a patch; on a `d2 fmt` file only the edit's own lines change | verified | `edit/edit_test.go`, `edit/corpus_test.go` |
+| Corpus: 649 patches on 79 `examples/files` diagrams, none changing a line beyond the edit; ranges rebuild the patched text; one expected `unchecked` (§4.3a) | verified | `edit/corpus_test.go` in `go test ./...` (`check`) |
+| Reformatted files publish without their reformatting | verified on `mocha_soc.d2`; the demo's diagrams only in `test:research:roundtrip` | `TestEditKeepsAnUnformattedFile` |
+| Keyword label case returns `unchecked` with `formatted` and the changed label; owned relabels and addressed objects pass | verified | `TestLabelGuard*`, corpus |
+| A panic is recovered as `panic`; the next request succeeds | verified on the unpatched checkout (the test logs when the oracle is patched) | `TestFailuresPublishNothing` |
+| Nested board paths; imported boards and objects edited as overrides with `edit-override` | verified | `TestNestedBoardPath`, `TestImportedBoardsAndObjectsWarn`, `protocol.test.mjs` |
+| Identical results native, Node/WASM and Chromium WASM | verified for the requests in the tests | `protocol.test.mjs`, `packages/d2web/tests/browser/edit.spec.mjs` |
+| Patch offsets are UTF-16 | verified (non-BMP text before the edit) | `TestOffsetsAreUTF16` |
+| `stale` at send and at result; edits not coalesced; run ahead of a waiting compile | verified with scripted workers | `client.test.mjs` |
+| Edit, patch, compile, repaint in a browser | verified in Chromium only | `edit.spec.mjs` |
+| An edit's wait behind a running TALA compile | not measured (question 5) | |
 
-Gates: `mise run check` (Go, unit and Node/WASM tests), `mise run check:browser` (Chromium), `mise run check:full` before handoff.
+Gates: `mise run check` (Go, unit and Node/WASM tests), `mise run check:browser` (Chromium), `mise run check:full` before handoff; all passed 2 November 2026.

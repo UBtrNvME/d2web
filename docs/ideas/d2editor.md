@@ -78,4 +78,4 @@ Design consequence for the d2web edit API: compile, run the `d2oracle` edit on a
 1. ~~The formatting probe~~ and ~~patch publishing~~ done (above).
 2. An ADR from the user lifting "editing is v2": [ADR 0012](../adr/0012-editing-in-scope.md), accepted 2 November 2026.
 3. A spec for the d2web transactional edit API ([spec 0012](../specs/0012-edit-api.md), accepted 2 November 2026): operations in, a checked patch out (equivalence gate, label guard, crash recovery, stale-revision rejection), multi-board paths.
-4. Report the keyword-lowercasing formatter bug to D2 upstream.
+4. Report the keyword-lowercasing formatter bug to D2 upstream, and the `d2oracle.Set` glob-filter rewrite found by the product corpus gate ([spec 0012](../specs/0012-edit-api.md) §4.3a).
