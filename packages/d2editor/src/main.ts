@@ -7,7 +7,9 @@ import { canvas } from './canvas.ts';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
 const ENTRY = 'main.d2';
-const render = { themeId: 0, sketch: false, pad: 24, scale: 1, center: false };
+// D2's own default light and dark themes follow the system scheme, as in the demo.
+const dark = matchMedia('(prefers-color-scheme: dark)');
+const render = () => ({ themeId: dark.matches ? 200 : 0, sketch: false, pad: 24, scale: 1, center: false });
 // D2's shapes (d2target), for the inspector.
 const SHAPES = ['rectangle', 'square', 'page', 'parallelogram', 'document', 'cylinder', 'queue', 'package', 'step', 'callout', 'stored_data', 'person', 'diamond', 'oval', 'circle', 'hexagon', 'cloud', 'text', 'code', 'class', 'sql_table', 'image', 'sequence_diagram', 'c4-person', 'hierarchy'];
 const START = 'users: Users {shape: person}\napi: API\ndb: Database {shape: cylinder}\nusers -> api: requests\napi -> db: reads\n';
@@ -59,7 +61,7 @@ async function compile(seeds?: number[]) {
   const revision = state.revision, board = state.board, run = ++compileRun;
   let result: CompileResult;
   try {
-    result = await client.compile({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, render, boards: [board], seeds });
+    result = await client.compile({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, render: render(), boards: [board], seeds });
   } catch (error) {
     if (run === compileRun && revision === state.revision && (error as Error).name !== 'SupersededError') status(String(error), true);
     return;
@@ -74,8 +76,12 @@ async function compile(seeds?: number[]) {
   $<HTMLSelectElement>('board').replaceChildren(...result.available.map(path => new Option(path || 'root', path, false, path === state.board)));
   const before = state.result?.boards?.find(b => b.path === board)?.association;
   const focused = $('host').shadowRoot?.activeElement?.getAttribute('data-id');
+  outline?.remove();
   try { await view.update(result, board); } catch (error) { status(String(error), true); return; }
   if (revision !== state.revision || run !== compileRun) return;
+  // The canvas takes the board's own background, so the diagram sits on it rather than on a pasted sheet.
+  const paper = $('host').shadowRoot!.querySelector('[data-id="root:background"] [data-k="rect"]');
+  $('canvas').style.backgroundColor = paper ? getComputedStyle(paper).backgroundColor : '';
   if (fitNext) { fitNext = false; camera.fit(); }
   const after = result.boards!.find(b => b.path === board)!.association;
   const change = pending?.revision === revision ? pending : undefined;
@@ -165,8 +171,21 @@ function objectOf(id: string) {
   return board && id ? getObject(board.association, id) : undefined;
 }
 
+// The selection, outlined at D2's box in the same scene coordinate parent as the object's outer node (as snap.ts does).
+let outline: HTMLElement | undefined;
+function highlight(object: ReturnType<typeof objectOf>) {
+  outline?.remove();
+  const box = object?.box, node = object && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
+  if (!box || !node?.parentElement) return;
+  outline = Object.assign(document.createElement('div'), { className: 'selection' });
+  outline.setAttribute('aria-hidden', 'true');
+  outline.style.cssText = `position:absolute;pointer-events:none;left:${box.X}px;top:${box.Y}px;width:${box.Width}px;height:${box.Height}px;outline:2px solid #3975d5;outline-offset:4px;border-radius:2px`;
+  node.parentElement.append(outline);
+}
+
 function inspect() {
   const object = objectOf(state.selected);
+  highlight(object);
   $('inspector').hidden = !object;
   if (!object) return;
   const form = $<HTMLFormElement>('props');
@@ -299,5 +318,6 @@ $('download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
+dark.addEventListener('change', () => { status('Compiling…'); void compile(); });
 src.value = initial;
 setText(initial, { record: false });

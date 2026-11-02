@@ -4,9 +4,10 @@
   --accent: #3975d5; --danger: #c0392b; --ok: #2e9d5b; --busy: #d79b00; --mark: #f5c40066;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #18181b; --panel: #1f1f23; --fg: #ececf1; --muted: #9a9aa5; --line: #ffffff1f; --control: #2a2a2f; --hover: #ffffff14; --danger: #ef6b5b; }
+  /* Close to D2's Dark Mauve (theme 200) background, which the canvas shows in dark mode. */
+  :root { --bg: #1e1e2e; --panel: #181825; --fg: #e4e4ef; --muted: #9a9ab0; --line: #ffffff1c; --control: #26263a; --hover: #ffffff12; --danger: #ef6b5b; }
 }
-body { margin: 0; height: 100vh; display: grid; grid-template: auto 1fr / minmax(280px, 32%) 1fr auto; background: var(--bg); color: var(--fg); }
+body { margin: 0; height: 100vh; display: grid; grid-template: auto 1fr / minmax(260px, 28%) 1fr auto; background: var(--bg); color: var(--fg); }
 button, select, input { font: inherit; color: inherit; }
 button, select, .file, #inspector input:not([type=color]) {
   height: 28px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--control);
@@ -31,7 +32,9 @@ header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-it
 .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .file:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-aside { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--line); min-height: 0; background: var(--panel); }
+aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; border-right: 1px solid var(--line); min-height: 0; background: var(--panel); }
+.pane-title { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 2px 2px; font: 600 12px ui-monospace, monospace; }
+.pane-title .hint { font: 11px system-ui, sans-serif; color: var(--muted); }
 /* The textarea is transparent over a copy of its text in which the last patch's ranges are marked; both share font, padding and scroll. */
 .source { position: relative; flex: 1; min-height: 200px; }
 #src, #marks { position: absolute; inset: 0; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font: 13px/1.45 ui-monospace, monospace; tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; box-sizing: border-box; }

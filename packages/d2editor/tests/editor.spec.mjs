@@ -75,6 +75,9 @@ test.setTimeout(180_000);
 test('built page loads its real worker and wasm and paints the start example', async ({ page }) => {
   await open(page);
   await visible(page, 'api');
+  // The canvas takes the board's painted background, so no sheet edge shows.
+  const paper = await object(page, 'root:background').locator('[data-k="rect"]').evaluate(el => getComputedStyle(el).backgroundColor);
+  await expect(page.locator('#canvas')).toHaveCSS('background-color', paper);
   await type(page, 'fresh: Typed\n');
   await visible(page, 'fresh');
   await expect(object(page, 'api')).toHaveCount(0);
@@ -82,7 +85,7 @@ test('built page loads its real worker and wasm and paints the start example', a
 
 test('the canvas pans by dragging without selecting, zooms with the controls, and a click still selects', async ({ page }) => {
   await open(page);
-  const transform = () => page.locator('#host').evaluate(el => el.style.transform);
+  const scale = () => page.locator('#host').evaluate(el => +el.style.transform.match(/scale\(([\d.]+)\)/)[1]);
   const box = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
   await page.mouse.move(box.x + 5, box.y + 5);
   await page.mouse.down();
@@ -91,13 +94,22 @@ test('the canvas pans by dragging without selecting, zooms with the controls, an
   await expect(page.locator('#inspector')).toBeHidden();
   const moved = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
   expect([Math.round(moved.x - box.x), Math.round(moved.y - box.y)]).toEqual([75, 40]);
-  await page.click('#zoom-in');
-  await expect(page.locator('#zoom')).toHaveText('125%');
-  await expect.poll(transform).toContain('scale(1.25)');
+  // The idle recompile (default seeds) may change the layout's size after load; wait for it, then fit.
+  await expect.poll(() => page.evaluate(() => traffic.results.at(-1)?.echo.seeds)).toEqual([1, 2, 3]);
+  await painted(page);
   await page.click('#fit');
-  await expect(page.locator('#zoom')).toHaveText('100%');
+  const fitted = await page.locator('#zoom').textContent(), k = await scale();
+  await page.click('#zoom-in');
+  await expect.poll(scale).toBeCloseTo(k * 1.25, 4);
+  await expect(page.locator('#zoom')).toHaveText(`${Math.round(k * 125)}%`);
+  await page.click('#fit');
+  await expect(page.locator('#zoom')).toHaveText(fitted);
   await select(page, 'api');
   await expect(page.locator('#selected')).toHaveText('Shape api');
+  // The selection is outlined on the canvas, once, and cleared with Escape.
+  await expect(page.locator('#host .selection')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#host .selection')).toHaveCount(0);
   // Zoomed in and panned away, focusing the lowest object brings its own paint into view, not the scene origin its <svg> wrappers sit at.
   for (let i = 0; i < 5; i++) await page.click('#zoom-in');
   await page.locator('#canvas').dispatchEvent('wheel', { deltaX: 0, deltaY: 5000 });

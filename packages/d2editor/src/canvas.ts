@@ -10,9 +10,9 @@ export function zoomAt(v: View, k: number, px: number, py: number): View {
   return { x: px - (px - v.x) * k / v.k, y: py - (py - v.y) * k / v.k, k };
 }
 
-// Centre a w×h diagram in a W×H viewport, never enlarging past 100%.
+// Centre a w×h diagram in a W×H viewport, enlarging a small one up to 200%.
 export function fit(w: number, h: number, W: number, H: number, pad = 32): View {
-  const k = w && h ? clamp(Math.min(1, (W - 2 * pad) / w, (H - 2 * pad) / h)) : 1;
+  const k = w && h ? clamp(Math.min(2, (W - 2 * pad) / w, (H - 2 * pad) / h)) : 1;
   return { x: (W - w * k) / 2, y: (H - h * k) / 2, k };
 }
 
