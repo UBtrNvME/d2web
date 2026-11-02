@@ -10,8 +10,8 @@ test('zoom keeps the pointer fixed and clamps the scale', () => {
   assert.equal(zoomAt(v, 0, 0, 0).k, MIN);
 });
 
-test('fit centres the diagram and never enlarges it', () => {
-  assert.deepEqual(fit(100, 50, 400, 300), { x: 150, y: 125, k: 1 });
+test('fit centres the diagram and enlarges a small one at most twice', () => {
+  assert.deepEqual(fit(100, 50, 400, 300), { x: 100, y: 100, k: 2 });
   const big = fit(1000, 200, 564, 400);
   assert.equal(big.k, 0.5);
   assert.deepEqual([big.x, big.y], [32, 150]);
