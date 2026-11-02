@@ -153,6 +153,79 @@ wasm.back.scene -> pkg.worker: "result: boards + fonts" {class: call}
 pkg.painter -> dom: markup {class: call}
 dom -> reference.e2e: screenshot {class: feed}
 `,
+  'URL shortener on AWS': String.raw`direction: right
+
+classes: {
+  tier: {style: {font-size: 20; border-radius: 12}}
+  pic: {width: 64; height: 64; style.font-size: 16}
+  call: {style: {stroke-width: 2; font-size: 15}}
+  presigned: {style: {stroke-width: 3; stroke: "#d97706"; font-color: "#b45309"; font-size: 15}}
+  async: {style: {stroke-dash: 4; stroke-width: 2; font-size: 15}}
+}
+
+title: |md
+  # URL shortener on AWS
+  Serverless, with S3 presigned URLs for bulk import and QR codes.
+  Orange lines go straight from the browser to S3.
+|
+
+user: Visitor {shape: person; style.font-size: 18}
+
+edge: Edge {
+  class: tier
+  direction: down
+  r53: "Route 53\nshort.example" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-Route-53.svg"}
+  cf: "CloudFront\ncache redirects" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-CloudFront.svg"}
+  waf: "WAF\nrate limit" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-WAF.svg"}
+  acm: "ACM\nTLS certificate" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-Certificate-Manager.svg"}
+  r53 -> cf: alias {class: call}
+  waf -> cf: protects {class: call}
+  acm -> cf: https {class: call}
+}
+
+web: "S3\nstatic web app" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
+api: "API Gateway\nHTTP API" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-API-Gateway.svg"}
+
+fns: Lambda functions {
+  class: tier
+  direction: down
+  redirect: "redirect\nGET /{slug}" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
+  create: "create\nPOST /links" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
+  presign: "presign\nPOST /uploads" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
+  import: "bulk-import\nS3 event" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
+}
+
+data: Data {
+  class: tier
+  direction: down
+  db: "DynamoDB\nlinks: slug, url, ttl, clicks" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-DynamoDB.svg}
+  bucket: "S3 bucket (private)\nimports/ and qr/" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
+}
+
+cw: "CloudWatch\nlogs, metrics, alarms" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FManagement%20%26%20Governance%2FAmazon-CloudWatch.svg"}
+
+user -> edge.r53: "1 resolve" {class: call}
+user -> edge.cf: "2 GET /abc123 · POST /api/links" {class: call}
+edge.cf -> web: "/ (UI)" {class: call}
+edge.cf -> api: "/api/* and /{slug}" {class: call}
+api -> fns.redirect: GET {class: call}
+api -> fns.create: POST {class: call}
+api -> fns.presign: POST {class: call}
+
+fns.redirect -> data.db: GetItem {class: call}
+fns.create -> data.db: "PutItem (slug must be new)" {class: call}
+fns.create -> data.bucket: "PutObject qr/abc123.png" {class: call}
+fns.import -> data.db: BatchWriteItem {class: call}
+
+fns.presign -> data.bucket: "sign PUT imports/…csv (5 min)\nsign GET qr/…png (1 h)" {class: presigned}
+fns.presign -> user: "presigned URLs" {class: presigned}
+user -> data.bucket: "PUT csv · GET qr (presigned)" {class: presigned}
+data.bucket -> fns.import: ObjectCreated {class: async}
+
+fns.redirect -> user: "302 Location: long URL" {class: call}
+
+fns -> cw: "logs · metrics" {class: async}
+`,
 };
 const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
 const $ = id => document.getElementById(id);
