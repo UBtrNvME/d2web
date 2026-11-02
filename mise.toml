@@ -16,7 +16,7 @@ run = ["node --version", "corepack --version", "pnpm --version", "go version", "
 
 [tasks.check]
 description = "Fast gate (about 20 s): tooling, pinned D2 source, unit tests, typecheck, Node/WASM probes. No browser."
-depends = ["doctor", "reference:fetch", "test:unit", "test:features", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
+depends = ["doctor", "reference:fetch", "test:unit", "test:features", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:images", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
 run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
@@ -192,6 +192,10 @@ run = "pnpm exec playwright test research/browser/shadcn.spec.mjs --reporter=lin
 [tasks."test:research:options"]
 description = "Theme id, dark theme id and sketch reach the built scene identically in native and Node/WASM"
 run = "node --test research/options.test.mjs"
+
+[tasks."test:research:images"]
+description = "ADR 0011 evidence: the compiler lists image links before layout, the list is what the scene builder requests, and supplied bytes reach it without a D2 patch (native and Node/WASM)"
+run = "node --test research/images.test.mjs"
 
 [tasks."test:research:handshake"]
 description = "Measured card sizes fed back as D2 width/height and recompiled with TALA: honoured sizes, re-routed edges, rejected values"

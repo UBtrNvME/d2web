@@ -36,9 +36,11 @@ Consequences:
 - `bundle` costs one more fetch before the first compile, or a second compile if the preflight is not possible. [ADR 0010](0010-web-performance.md) lists a worker-side cache of the laid-out diagram, which would make the second compile cheap.
 
 Open items, to settle with evidence in the spec (accepted as open, not as decided):
-- Can the D2 compiler list the image links before layout, and does the scene builder have or need an asset kind for a link-only image? Unverified here.
-- Native `.pdf`, `.pptx` and `.gif` behaviour, TALA, and the default limits and timeouts (the findings section says what was not established).
-- Whether to offer a strict option that turns an unresolved image into an error, as native SVG does, and what the default is.
-- Binary images that are not links: how a consumer supplies a local image, given that `files` is text only.
+- Settled by evidence on 2 November 2026 ([findings](../research-findings.md#image-links-before-layout-and-consumer-supplied-bytes-adr-0011-open-items-2-november-2026)): the D2 compiler can list the image links before layout, and that list is what the scene builder requests (so the preflight is possible); the scene has no link-only asset kind, so `link` mode carries the link on d2web's association side; native PDF, PPTX and GIF behave like PNG; consumer bytes reach the builder through the resolver's HTTP client with no patch to D2. The decision above is unchanged.
+- Still open, for the spec:
+  - TALA's effect on images (native was probed with dagre), the default limits and timeouts, and arrowhead and table icons (the findings say what was not established).
+  - Whether to offer a strict option that turns an unresolved image into an error, as native SVG does, and what the default is.
+  - Binary images that are not links: how a consumer supplies a local image, given that `files` is text only.
+  - The exact shape of the association entry that carries a link for `link` mode.
 
 Reversal: if a host needs images fetched automatically and accepts the effect, a documented default resolver can be added later without changing these modes.
