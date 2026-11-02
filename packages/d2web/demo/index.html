@@ -8,7 +8,8 @@
   aside { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-right: 1px solid #8884; overflow: auto; }
   textarea { flex: 1; min-height: 200px; font: 13px ui-monospace, monospace; tab-size: 2; }
   label { display: flex; gap: 6px; align-items: center; }
-  main { overflow: auto; padding: 16px; }
+  /* The canvas: the board lives on a surface painted with D2's own background for the chosen theme (set from the scene in run()). */
+  main { overflow: auto; padding: 16px; background: Canvas; transition: background-color .15s; }
   #status { font-size: 12px; opacity: .7; min-height: 1.4em; }
   #errors { color: #c0392b; white-space: pre-wrap; font: 12px ui-monospace, monospace; }
   @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; border-bottom: 1px solid #8884; } }
@@ -47,7 +48,18 @@ const examples = {
 const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
 const $ = id => document.getElementById(id);
 for (const name of Object.keys(examples)) $('example').add(new Option(name));
+// Auto follows the system scheme with D2's own default light and dark themes. The page chrome follows the system on its own (color-scheme);
+// the theme is only what D2 paints, so a manual choice never changes the chrome and the canvas always takes the scene's background.
+const dark = matchMedia('(prefers-color-scheme: dark)');
+$('theme').add(new Option('Auto (follow system)', 'auto'));
 for (const [id, name] of themes) $('theme').add(new Option(`${name} (${id})`, id));
+const themeId = () => ($('theme').value === 'auto' ? (dark.matches ? 200 : 0) : +$('theme').value);
+// D2 paints the board background as the scene's `root:background` rectangle; the canvas reuses that paint rather than inventing a colour.
+const backgroundOf = scene => {
+  const node = (scene?.Root?.Children ?? []).find(c => c.ID === 'root:background');
+  const color = node?.Primitive?.Fill?.$ === 'SolidPaint' ? node.Primitive.Fill.Color : '';
+  return /^rgba\(\d+,\d+,\d+,[\d.]+\)$/.test(color) ? color : '';
+};
 
 const client = createClient({ spawn: spawnWorker() });
 const view = mount($('host'));
@@ -59,7 +71,7 @@ async function run() {
   try {
     last = await client.compile({
       revision: ++revision, files: { 'main.d2': $('src').value }, entry: 'main.d2', boards: 'all',
-      render: { themeId: +$('theme').value, sketch: $('sketch').checked, pad: 40, scale: 1, center: false },
+      render: { themeId: themeId(), sketch: $('sketch').checked, pad: 40, scale: 1, center: false },
       layout: $('layout').value,
     });
   } catch (error) { if (error.name !== 'SupersededError') $('status').textContent = String(error); return; }
@@ -69,13 +81,19 @@ async function run() {
   $('board').replaceChildren(...last.boards.map(b => new Option(b.path || 'root', b.path)));
   $('board').value = last.boards.some(b => b.path === chosen) ? chosen : '';
   await view.update(last, $('board').value);
+  paintCanvas();
   $('status').textContent = `${last.boards.length} board(s), compiled in ${Math.round(performance.now() - started)} ms (${last.millis ?? '?'} ms in D2)`;
 }
 let timer;
 const later = () => { clearTimeout(timer); timer = setTimeout(run, 300); };
 $('src').addEventListener('input', later);
 for (const id of ['theme', 'layout', 'sketch']) $(id).addEventListener('change', run);
-$('board').addEventListener('change', () => last && view.update(last, $('board').value));
+function paintCanvas() {
+  const board = last?.boards.find(b => b.path === $('board').value);
+  document.querySelector('main').style.background = backgroundOf(board?.scene);
+}
+dark.addEventListener('change', () => { if ($('theme').value === 'auto') run(); });
+$('board').addEventListener('change', () => last && view.update(last, $('board').value).then(paintCanvas));
 $('example').addEventListener('change', () => { $('src').value = examples[$('example').value]; run(); });
 $('example').dispatchEvent(new Event('change'));
 </script>
