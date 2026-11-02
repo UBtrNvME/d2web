@@ -20,6 +20,8 @@
   .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center; cursor: default; }
   .zoom button { min-width: 32px; height: 32px; font: inherit; cursor: pointer; }
   .zoom output { min-width: 3.5em; text-align: center; font-size: 12px; opacity: .8; }
+  #identity { display: flex; gap: 4px; align-items: center; }
+  #identity input { flex: 1; min-width: 0; font: 12px ui-monospace, monospace; }
   #status { font-size: 12px; opacity: .7; min-height: 1.4em; }
   #errors { color: #c0392b; white-space: pre-wrap; font: 12px ui-monospace, monospace; }
   @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } aside { border-right: 0; border-bottom: 1px solid #8884; } main { height: 70vh; } }
@@ -27,6 +29,7 @@
 <aside>
   <label>Example <select id="example"></select></label>
   <textarea id="src" spellcheck="false" aria-label="D2 source"></textarea>
+  <label id="identity">Identity <input id="id" readonly aria-label="Diagram identity: the source, deflated and URL-safe base64 encoded, as Kroki expects it" placeholder="(single file only)"><button id="copy" type="button">Copy</button></label>
   <label>Theme <select id="theme"></select></label>
   <label>Layout <select id="layout"><option value="tala">TALA</option><option value="dagre">dagre</option><option value="elk">ELK</option></select></label>
   <label><input type="checkbox" id="sketch"> Sketch</label>
@@ -269,6 +272,8 @@ async function run() {
       layout: $('layout').value,
     });
   } catch (error) { if (error.name !== 'SupersededError') $('status').textContent = String(error); return; }
+  // The compiler names the diagram by its source in Kroki's encoding (zlib, URL-safe base64): the same string works in https://kroki.io/d2/svg/<identity>.
+  $('id').value = last.identity ?? '';
   if (last.error) { $('errors').textContent = last.error.diagnostics?.map(d => `${d.range?.start?.line + 1 ?? '?'}: ${d.message}`).join('\n') || last.error.message; $('status').textContent = 'error'; return; }
   // Warnings (an image that could not be fetched, a character no font covers) go to the console; the panel is for a board that failed to compile.
   $('errors').textContent = '';
@@ -372,6 +377,7 @@ let fitNext = true; // fit on load and when an example is picked, not on every r
 applyCamera();
 dark.addEventListener('change', () => { if ($('theme').value === 'auto') run(); });
 $('board').addEventListener('change', () => last && view.update(last, $('board').value).then(paintCanvas));
+$('copy').addEventListener('click', () => navigator.clipboard?.writeText($('id').value));
 $('example').addEventListener('change', () => { $('src').value = examples[$('example').value]; fitNext = true; run(); });
 $('example').dispatchEvent(new Event('change'));
 </script>

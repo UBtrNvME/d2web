@@ -111,7 +111,9 @@ type Result struct {
 	Fonts       map[string][]byte `json:"fonts,omitempty"` // by asset ID, deduplicated across boards; base64 in JSON
 	Error       *Error            `json:"error,omitempty"`
 	Diagnostics []Diagnostic      `json:"diagnostics"`
-	Echo        struct {
+	// Identity names the diagram by its source, in Kroki's encoding: zlib at level 9, then URL-safe base64. Present when the request has one file.
+	Identity string `json:"identity,omitempty"`
+	Echo     struct {
 		Layout string `json:"layout"`
 		Render Render `json:"render"`
 		Images string `json:"images,omitempty"` // the image mode used, when the request chose one
@@ -140,6 +142,9 @@ func Handle(ctx context.Context, raw []byte) []byte {
 		res.Error = &Error{Code: "internal", Message: "malformed request: " + err.Error(), Diagnostics: []Diagnostic{}}
 	} else {
 		res.ID, res.Revision = req.ID, req.Revision
+		if len(req.Files) == 1 {
+			res.Identity = Identity(req.Files[req.Entry])
+		}
 		res.Echo.Layout, res.Echo.Render = req.Layout, req.Render
 		if req.Images != nil {
 			res.Echo.Images = "bundle"

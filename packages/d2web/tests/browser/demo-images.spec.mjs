@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import zlib from 'node:zlib';
 import { root } from '../../../../tests/examples.mjs';
 
 // Spec 0010 test 15: the built demo page (packages/d2web/dist + demo/index.html) uses the `images` option, not a source rewrite. The icons origin is stubbed.
@@ -50,4 +51,13 @@ test('icons that cannot be fetched are shown as links, with the count in the sta
   const html = await page.evaluate(() => document.querySelector('#host').shadowRoot.innerHTML);
   expect(html).toMatch(/<img [^>]*src="https:\/\/icons\.terrastruct\.com\//);
   await expect.poll(() => iconRequests.some(([type]) => type === 'image')).toBe(true);
+});
+
+test('the compiler names the diagram by its source in Kroki\'s encoding and the editor shows it', async ({ page }) => {
+  test.setTimeout(240_000);
+  await open(page, route => route.abort());
+  await page.fill('#src', 'x -> y: ünï ✓\n');
+  const decoded = async () => { const id = await page.inputValue('#id'); return { id, text: id ? zlib.inflateSync(Buffer.from(id, 'base64url')).toString('utf8') : '' }; };
+  await expect.poll(async () => (await decoded()).text, { timeout: 90_000 }).toBe('x -> y: ünï ✓\n'); // what https://kroki.io/d2/svg/<id> would decode
+  expect((await decoded()).id).toMatch(/^[A-Za-z0-9_=-]+$/);
 });
