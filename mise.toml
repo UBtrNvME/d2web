@@ -16,12 +16,12 @@ run = ["node --version", "corepack --version", "pnpm --version", "go version", "
 
 [tasks.check]
 description = "Fast gate (about 20 s): tooling, pinned D2 source, unit tests, typecheck, Node/WASM probes. No browser."
-depends = ["doctor", "reference:fetch", "test:unit", "test:features", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
+depends = ["doctor", "reference:fetch", "test:unit", "test:features", "test:wasm", "typecheck", "test:native", "test:scene", "test:research:identity", "test:research:join", "test:research:operations", "test:research:handshake", "test:research:options", "test:research:images", "test:research:transaction:node", "test:research:text:node", "test:research:rich:node"]
 run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:demo", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -61,7 +61,7 @@ run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests
 
 [tasks."test:client"]
 description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs packages/d2web/tests/browser/images.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
@@ -193,6 +193,10 @@ run = "pnpm exec playwright test research/browser/shadcn.spec.mjs --reporter=lin
 description = "Theme id, dark theme id and sketch reach the built scene identically in native and Node/WASM"
 run = "node --test research/options.test.mjs"
 
+[tasks."test:research:images"]
+description = "ADR 0011 evidence: the compiler lists image links before layout, the list is what the scene builder requests, and supplied bytes reach it without a D2 patch (native and Node/WASM)"
+run = "node --test research/images.test.mjs"
+
 [tasks."test:research:handshake"]
 description = "Measured card sizes fed back as D2 width/height and recompiled with TALA: honoured sizes, re-routed edges, rejected values"
 run = "node --test research/handshake.test.mjs"
@@ -277,6 +281,11 @@ run = "pnpm exec playwright test tests/features/measure-layout.spec.mjs --report
 description = "Packed tarball loaded by a bundler-free consumer page in Chromium: native ESM, wrong wasm MIME type, restrictive CSP (spec 0003)"
 depends = ["build"]
 run = "pnpm exec playwright test packages/d2web/tests/browser/consumer.spec.mjs --reporter=line --output=artifacts/d2web-consumer/run"
+
+[tasks."test:demo"]
+description = "The built demo page in Chromium: icons fetched by the page and painted as vectors, or shown as links when the fetch fails (spec 0010)"
+depends = ["build"]
+run = "pnpm exec playwright test packages/d2web/tests/browser/demo-images.spec.mjs --reporter=line --output=artifacts/d2web-demo/run"
 
 [tasks."test:features"]
 description = "Feature map, fast half: the catalog covers every keyword, shape, arrowhead, theme and position of the pinned D2 source, and every case compiles (about 3 s)"

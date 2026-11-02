@@ -27,6 +27,10 @@ func init() {
 			})
 			return js.Global().Get("Promise").New(executor)
 		}))
+		// d2webPreflight(requestJSON) -> string JSON: the image links of a source, compiled without layout (spec 0010). Synchronous: it is cheap.
+		js.Global().Set("d2webPreflight", js.FuncOf(func(this js.Value, args []js.Value) any {
+			return string(compile.Preflight([]byte(args[0].String())))
+		}))
 		// d2webSetFonts(names: string[], buffers: Uint8Array[]) -> "" or an error message (spec 0007); bytes are copied, not base64-encoded.
 		js.Global().Set("d2webSetFonts", js.FuncOf(func(this js.Value, args []js.Value) any {
 			names, buffers := args[0], args[1]

@@ -2,6 +2,8 @@ export { createClient, FontError, SupersededError, TimeoutError, VersionError } 
 export { spawnWorker } from './client.ts';
 export type { SpawnWorkerOptions, ClientOptions, CompileInput, WorkerLike } from './client.ts';
 export type { FontSpec } from './protocol.ts';
+export { fetchImages } from './images.ts';
+export type { ImageLimits, ImageResolve, ImageSource, ImagesOption } from './images.ts';
 export { mount, MountError } from './mount.ts';
 export type { Box, D2Event, D2EventType, Mount, MountOptions, UpdateReport } from './mount.ts';
 export { countObjects, getObject, objectsAt } from './association.ts';

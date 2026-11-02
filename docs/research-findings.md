@@ -371,3 +371,61 @@ Next: characterize the specific subset-font discrepancy and richer content/sourc
 
 
 Codex review of the uncommitted work (read-only, six findings) led to: `test:research:shadcn` leaving `check` (it needs the ignored Studio checkout); releasing the per-request Promise executor in `research/loop-serve.go` (it retained every request's source); the shadcn assertions comparing D2 boxes with the hidden measured sizes instead of with themselves; the growth test requiring an observer callback; the lifecycle comparison being calibrated; and the a11y check reporting extra focus stops.
+
+## Images and icons: what native D2 does (2 November 2026)
+
+Evidence for [ADR 0011](adr/0011-images-like-native-d2.md). Native `d2` built from the pinned `imports/d2` checkout (commit d5a5174; its `--version` prints `v0.8.1-HEAD`), `--layout dagre` (no TALA plugin needed to observe image handling), Linux, network available. One run per cell; every cell is the exit code and what ended up in the output. The remote cases fetch `https://icons.terrastruct.com/…`, so this is a manual probe: it needs network and is not part of `check`.
+
+```
+D2=imports/d2 && (cd $D2 && go build -o /tmp/d2 .)      # pinned checkout, repo Go cache
+x: Go {shape: image; icon: https://icons.terrastruct.com/dev%2Fgo.svg}      # remote
+x: Go {shape: image; icon: ./go.svg}                                        # local file
+x: Go {shape: image; icon: "data:image/svg+xml;base64,…"}                   # data URI
+x: Gone {shape: image; icon: https://icons.terrastruct.com/dev%2Fdoes-not-exist.svg}   # 403
+x: Nowhere {shape: image; icon: https://no-such-host.invalid/x.svg}         # unresolvable host
+x: Chrome {shape: image; icon: https://icons.terrastruct.com/dev%2Fchrome.svg}  # gradients outside <defs>
+d2 --layout dagre case.d2 out.svg | out.svg with --bundle=false | out.png
+```
+
+| Case | SVG, default (`--bundle` is **true** by default) | SVG, `--bundle=false` | PNG (the scene and raster path) |
+| --- | --- | --- | --- |
+| remote | fetched at compile time, inlined as a `data:` URI | link kept (`href="https://…"`) | fetched, painted |
+| local file | read from disk, inlined | read from disk, inlined (still) | read from disk, painted |
+| `data:` URI | kept as is | kept as is | painted |
+| 403 / unreachable | exit 1, `failed to bundle … expected status 200 but got 403`, partial output with the link kept | success, link kept (never fetched) | success, placeholder painted (smaller file), no error |
+| remote SVG with gradients outside `<defs>` (Chrome, Safari icons) | success, inlined | success, link kept | **exit 1**: `scene: shape "x" SVG asset: d2svgimport: …: element <linearGradient> must be a direct child of <defs>` |
+| local SVG, same gradients | success, inlined | success, inlined | **exit 1**, same message |
+
+What this establishes:
+- Native D2 has more than one image behaviour, and which one you get depends on the output. SVG output either fetches and inlines remote images (the default) or leaves their link; PNG paints bytes through the same `imageasset` resolver and `d2svgimport` that d2web's scene builder uses.
+- **d2web's present behaviour is the PNG/scene path minus the network and the file system.** Remote and unresolvable images give the placeholder without failing, as in native PNG. The rejection of Chrome and Safari icons is D2's own scene-builder rule, with the same message natively, so it is not a d2web deviation. It is a limit of the scene path that native SVG output does not have.
+- Local files are always resolved natively and never exist in a browser; `data:` URIs behave identically everywhere.
+- A failing remote image is a hard error in default SVG output (with a partial result) and a silent placeholder in PNG. A web runtime has to choose; native does not give one answer.
+- This corrects two statements made earlier in the session: native SVG's default is to inline (not keep the link), and the Chrome-icon failure is not specific to d2web.
+
+Not established here: native `.pdf`, `.pptx` and `.gif` outputs; TALA (no plugin installed), and any effect of the layout engine on images; behaviour behind a proxy or with a slow host; limits (the raster resolver sets byte, pixel and count limits in `d2cli/raster.go`, one-minute timeout).
+
+### Image links before layout, and consumer-supplied bytes (ADR 0011 open items, 2 November 2026)
+
+Probe: [research/images.go](../research/images.go), test `mise run test:research:images` ([test](../research/images.test.mjs)). No network: the "remote" links are fake (`https://i.test/…`) and answered from a map the test supplies. One run, Linux.
+
+- **Native PDF, PPTX and GIF behave like PNG** (same cases as the table above, dagre): remote images are fetched and painted, a 403 or unresolvable host paints a placeholder and succeeds, and the gradient-outside-`<defs>` SVG fails with the same `d2svgimport` message. So native has two image behaviours, not more: the SVG writer (bundle on or off) and the scene exporters (PNG, PDF, PPTX, GIF), which all agree.
+- **The D2 compiler lists image links before layout.** `d2compiler.Compile` returns the graph without laying it out; walking `Objects`, `Edges` and the nested `Layers`, `Scenarios` and `Steps` graphs found every link in a source that brings them in through imports (`...@lib`), `vars` (`${logo}`), `classes`, a glob (`*.icon`), a quoted string, a `shape: image`, an edge icon, layers, scenarios and steps: 33 entries over four boards, 10 distinct http(s) links, plus one `data:` URI. Scenarios and steps inherit the base board's objects, so a link repeats per board.
+- **That list is the set the scene builder asks its resolver for**: the 10 links the builder requested through the resolver's HTTP client were exactly the 10 the preflight listed (a `data:` URI is never requested). A shape with `style.opacity: 0` that is not an image is skipped by the builder (`shapeAssetIsEmitted`), so the preflight can list a link the builder will not request, which is harmless.
+- **Cost**: preflight 0.9 ms against 63 ms for the full layout and build natively (a small diagram, TALA, seed 1); in WASM 27 ms against 732 ms. The preflight returns D2's parse and compile errors without running layout.
+- **Bytes the consumer supplies reach the scene builder without patching D2.** `imageasset.Resolver` is a concrete type, not an interface, but its `HTTPClient` is a public option. A transport that answers from a map made `pic.svg` a real vector asset in the scene (two real assets plus D2's shared `image:unavailable`, against one real asset plus the placeholder when nothing is supplied); links not in the map still paint the placeholder and the build succeeds.
+- **The scene has no link-only asset kind.** `d2scene.Asset` is documented as "a closed set of fully resolved, network-free scene resources": `FontAsset`, `RasterAsset` and `VectorAsset`. Every unavailable image shares one placeholder id, so the scene cannot say which link an image was. A `link` mode therefore has to carry the link on d2web's own side (the association payload keyed by object id), not in D2's scene; patching D2's scene contract is the other route and ADR 0009 allows patches only where D2 leaves no public way.
+- **Native and WASM agree** on the lists, the requested set and the asset ids (checked by hand: the Node/WASM test in this sandbox cannot start, because the Go toolchain here lives inside the repo's module cache where `package.json` makes Go's `wasm_exec_node.js` an ES module; the existing `options` test fails the same way here, so it is an environment quirk, not this probe). The probe binary was run through a CommonJS copy of the launcher and matched.
+
+Not established: arrowhead icons and icons inside `sql_table` and `class` shapes beyond what `shapeAssetIsEmitted` implies; the limits and timeout defaults; behaviour on the final worker protocol (this is the library layer under it); what a consumer does about local binary files.
+
+## Images: what the implementation showed (spec 0010, 2 November 2026)
+
+Measured while building spec 0010 in the authoring sandbox (Linux, headless Chromium, one run each).
+
+- **D2 refuses unsupported image schemes itself.** `javascript:`, `file:`, `ftp:`, `//host/x` and a `data:` URI whose bytes are not an image fail the scene build with D2's own message, in every mode (probed through the worker, native). Only `http(s)` and relative or absolute paths reach the placeholder.
+- **A relative image path failed every browser compile.** D2's resolver stats the file system; `wasm_exec.js` answers every file call with ENOSYS ("not implemented"), which D2 reports as an error, not "file missing" (`stat /relative/icon.png: not implemented on js`). With ENOENT instead, the resolver treats it as unavailable (placeholder). The resolver also accepts an optional `Cache`; one that answers the key `"file:" + absolute path` from consumer bytes makes a supplied relative path a real asset. A `Resource` can only be built by D2's code, so the cache builds each by resolving the bytes through a private resolver whose HTTP client serves only them.
+- **A `shape: image` node is `<id>:image`**, an icon on a shape or connection `<id>:icon` (dumped from the scene).
+- **Playwright's fulfilled cross-origin responses do not enforce CORS**; to model a CORS refusal for a page's `fetch` the test aborts requests of resource type `fetch` and lets image loads through.
+- **Preflight cost on the ecosystem example** (10 icons, 530 elements): 9.7 ms warm and 160 ms cold, against compiles of 1532 ms and 3073 ms (TALA, one board).
+- **Sandbox limits worth knowing:** no `d2` binary on the PATH (the native-comparison Playwright specs `e2e` and `fonts` fail with `spawnSync d2 ENOENT`, as they did before); `client.spec` "a newer request aborts a long compile…" fails with "no reply for 300 ms" before and after these changes; the Node/WASM runner cannot start (`require is not defined` under `"type": "module"`), so WASM output was compared with native by running the same request through a CommonJS copy of the runner with a minimal environment.

@@ -11,7 +11,7 @@ export const beyondPaint = [
   ['D2 JS/wasm bridge (`d2js`)', 'D2\'s own browser entry point.', 'not used', 'd2web has its own worker and protocol (spec 0001).'],
   ['External layout plugins (`d2plugin` exec)', 'Out-of-process layout engines.', 'not possible in the browser', 'TALA, dagre and ELK are linked into the wasm.'],
   ['Custom fonts (`--font-regular` etc.)', 'Replace the bundled font families.', 'consumer-supplied fonts (ADR 0006)', 'Not wired into the request yet.'],
-  ['Image embedding and remote fetch (`--bundle`, icons)', 'D2 fetches and inlines remote images.', 'offline worker today', 'Remote and local images become placeholders in the worker; see the icon and image rows.'],
+  ['Image embedding and remote fetch (`--bundle`, icons)', 'D2 fetches and inlines remote images.', 'consumer-chosen modes (ADR 0011, spec 0010)', 'The worker stays offline. By default an image is D2\'s placeholder; `images: { mode: \'bundle\' }` has the page supply the bytes (native\'s default SVG behaviour), `{ mode: \'link\' }` keeps the link as an image element (`--bundle=false`). Relative paths are links the page supplies; there is no file system.'],
   ['Seeds, timeouts, `--tala-seeds`', 'Layout search effort.', 'seed fixed at 1', 'Budgets are request fields (spec 0001); seeds are not.'],
   ['Link and tooltip behaviour', 'Click-through and hover text.', 'consumer-owned interaction', 'The scene carries the link regions and tooltip text; mount events report object clicks and hovers.'],
 ];

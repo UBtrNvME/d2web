@@ -45,7 +45,21 @@ export interface CompileRequest {
   budgets?: Budgets;
   // Default is the root board only.
   boards?: string[] | 'all';
+  // Spec 0010: image bytes the page resolved, by the link exactly as the preflight reported it. Present (even empty) means bundle mode: the worker
+  // serves these to D2's image resolver and warns about every link it was not given. Absent: nothing is fetched or reported.
+  images?: Record<string, ImageBytes>;
+  // Spec 0010 2.3: also report, per object, the link of every image that was not supplied, so the painter can show it as an image element (link mode, or
+  // bundle with fallback 'link'). Set by the client from its `images` option.
+  linkImages?: boolean;
 }
+
+export interface ImageBytes { type: string; data: Uint8Array }
+
+// Spec 0010: which image links does this source use? Answered without layout. `board` is a compile result path ("" or "/layers/x"), `kind` the
+// D2 role, `source` D2's own string for the link. `error` is a D2 error in the source (no links then; the compile that follows reports it).
+export interface PreflightRequest { v: typeof PROTOCOL_VERSION; type: 'preflight'; id: number; files: Record<string, string>; entry: string }
+export interface ImageLink { board: string; id: string; kind: 'icon' | 'image' | 'edge-icon'; source: string }
+export interface PreflightResult { v: typeof PROTOCOL_VERSION; type: 'images'; id: number; links: ImageLink[]; error?: string }
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
@@ -53,6 +67,8 @@ export interface Diagnostic {
   board?: string;
   file?: string;
   range?: { start: number; end: number };
+  // Machine-readable kind, additive (spec 0010): 'image-unresolved'.
+  code?: 'image-unresolved';
 }
 
 export interface BoardResult {
@@ -77,7 +93,7 @@ export interface CompileResult {
   fonts?: Record<string, Uint8Array | string>;
   error?: { code: ErrorCode; message: string; diagnostics: Diagnostic[] };
   diagnostics: Diagnostic[];
-  echo: { layout: Engine; render: RenderOptions };
+  echo: { layout: Engine; render: RenderOptions; images?: 'bundle' | 'link' };
 }
 
 // Spec 0007: a fallback font the consumer approved (ADR 0006); the client fetches it, checks `sha256` when given and posts the bytes to the worker once.
@@ -86,8 +102,8 @@ export interface FontsMessage { type: 'fonts'; fonts: { name: string; data: Uint
 // The worker's answer to a fonts message: `error` is the reason the wasm refused them (a file that is not a font).
 export interface FontsAck { type: 'fonts'; error: string }
 
-export type HostMessage = CompileRequest | FontsMessage;
-export type WorkerMessage = WorkerReady | CompileResult | FontsAck;
+export type HostMessage = CompileRequest | FontsMessage | PreflightRequest;
+export type WorkerMessage = WorkerReady | CompileResult | FontsAck | PreflightResult;
 
 // Spec 0004. Positions are D2's with UTF-16 positions enabled: line and column 0-based, offset from the start of the file, all in UTF-16 code
 // units, so `offset` is a JS string index. Diagnostic ranges use the same offsets.
@@ -104,5 +120,7 @@ export interface AssociationObject {
   properties: Record<string, { value: string; source: Source | null }>;
   src?: string;
   dst?: string;
+  // Spec 0010: the link of an image the scene could not carry; `node` is the placeholder's scene node (<id>:icon, <id>:image for `shape: image`).
+  image?: { source: string; role: 'icon' | 'image' | 'edge-icon'; node: string };
 }
 export interface Association { objects: AssociationObject[] }
