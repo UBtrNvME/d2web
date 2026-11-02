@@ -2,6 +2,10 @@
 // Posts the ready message once, then answers each compile request with a result object.
 const params = new URL(self.location.href).searchParams;
 importScripts(params.get('exec') ?? new URL('wasm_exec.js', self.location.href).href);
+// A browser has no files. wasm_exec.js answers every file-system call with ENOSYS ("not implemented"), which D2 reports as a failed compile; ENOENT ("no such
+// file") is the truth, and D2's image resolver turns it into the placeholder (spec 0010: a relative image path is a link the page supplies, or an unresolved one).
+for (const name of ['stat', 'lstat']) globalThis.fs[name] = (path, callback) => callback(Object.assign(new Error('no such file or directory'), { code: 'ENOENT' }));
+globalThis.fs.open = (path, flags, mode, callback) => callback(Object.assign(new Error('no such file or directory'), { code: 'ENOENT' }));
 // Image bytes cross the JSON boundary as base64 (Go decodes []byte from it); everything else in the request is already JSON.
 const base64 = bytes => { let text = ''; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(text); };
 const withImagesEncoded = request => {

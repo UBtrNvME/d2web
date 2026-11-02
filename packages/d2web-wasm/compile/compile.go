@@ -301,11 +301,16 @@ func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2ta
 	if store != nil {
 		transport = store
 	}
-	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: transport}, Limits: imageasset.Limits{
+	limits := imageasset.Limits{
 		MaxFetchedBytes: 1 << 22, MaxEncodedBytes: 1 << 22, MaxDecompressedBytes: 1 << 22, MaxSVGBytes: 1 << 20,
 		MaxDecodedWidth: 4096, MaxDecodedHeight: 4096, MaxDecodedPixels: 1 << 24,
 		MaxAssets: 256, MaxCumulativeEncodedBytes: 32 << 20, MaxCumulativeDecodedBytes: 128 << 20,
-	}})
+	}
+	options := imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: transport}, Limits: limits}
+	if store != nil { // a supplied relative path is read from the supplied bytes, not from a file system the browser lacks (spec 0010 decision 4)
+		options.Cache, options.CacheNamespace = store.local(limits), "d2web-supplied"
+	}
+	resolver, err := imageasset.New(options)
 	if err != nil {
 		return nil, err
 	}

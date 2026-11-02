@@ -273,3 +273,30 @@ func TestFallbackLinkOnlyForUnresolvedLinks(t *testing.T) {
 		t.Fatalf("diagnostics = %v", d)
 	}
 }
+
+// Spec 0010 decision 4: a relative path is a link like any other. Supplied, it is an asset; not supplied, a placeholder and a warning (not the
+// file-system error the compile gave before).
+func TestRelativePathIsSuppliedLikeAnyLink(t *testing.T) {
+	source := "a: { icon: ./img/go.svg }\nb: { icon: other/missing.png }\nc: { icon: /abs/go.svg }\n"
+	res := compileImages(t, source, map[string]ImageInput{
+		"./img/go.svg": {Type: "image/svg+xml", Data: []byte(goIcon)},
+		"/abs/go.svg":  {Type: "image/svg+xml", Data: []byte(goIcon)},
+	})
+	if res["error"] != nil {
+		t.Fatalf("compile error: %v", res["error"])
+	}
+	ids := assetIDs(t, res)
+	real := 0
+	for _, id := range ids {
+		if id != "image:unavailable" {
+			real++
+		}
+	}
+	if real != 1 || len(ids) != 2 { // both supplied links are the same bytes, so one asset; the missing one is the placeholder
+		t.Fatalf("assets = %v", ids)
+	}
+	d := res["diagnostics"].([]any)
+	if len(d) != 1 || !strings.Contains(d[0].(map[string]any)["message"].(string), "other/missing.png") {
+		t.Fatalf("diagnostics = %v", d)
+	}
+}

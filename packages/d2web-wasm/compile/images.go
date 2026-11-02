@@ -2,19 +2,23 @@ package compile
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
+	"sync"
 	"testing/fstest"
 
 	"github.com/d2lang/d2/d2compiler"
 	"github.com/d2lang/d2/d2graph"
 	"github.com/d2lang/d2/d2renderers/d2scene"
+	"github.com/d2lang/d2/lib/imageasset"
 )
 
 // Spec 0010: images. The worker never fetches. The page resolves image links (a preflight tells it which) and sends the bytes with the compile
@@ -143,6 +147,15 @@ func requestKey(link string) string {
 type imageStore struct {
 	byKey    map[string]ImageInput
 	rejected map[string]string // by key: why a supplied image was not accepted
+	localC   *localImages
+}
+
+// local is the Cache that answers the resolver for supplied relative paths; one per store, so each is decoded once.
+func (s *imageStore) local(limits imageasset.Limits) *localImages {
+	if s.localC == nil {
+		s.localC = &localImages{store: s, limits: limits}
+	}
+	return s.localC
 }
 
 // newImageStore accepts supplied images in a stable order until a limit is reached; the rest are rejected with a reason.
@@ -257,3 +270,63 @@ func attachLinkedImages(a *Association, doc *d2scene.Document, board string, g *
 		}
 	}
 }
+
+// localImages lets a relative or absolute path be supplied like any link (spec 0010 decision 4). D2's resolver reads such a path from the file system,
+// which a browser does not have (and `files` is text only), so it asks its Cache first: this one answers from the supplied bytes. A Resource can only be
+// made by D2's own code, so each is produced by resolving the bytes through a private resolver whose transport serves just them. The cache key
+// ("file:" + the absolute path) is the resolver's, read from the pinned v0.9.0 source; if it ever changes the path is simply not found and the image is
+// unresolved, never wrong.
+type localImages struct {
+	store  *imageStore
+	limits imageasset.Limits
+	once   sync.Once
+	byKey  map[string]*imageasset.Resource
+}
+
+type oneImage ImageInput
+
+func (o oneImage) RoundTrip(req *http.Request) (*http.Response, error) {
+	header := http.Header{}
+	if o.Type != "" {
+		header.Set("Content-Type", o.Type)
+	}
+	return &http.Response{StatusCode: 200, Status: "200 OK", Header: header, Body: io.NopCloser(bytes.NewReader(o.Data)), ContentLength: int64(len(o.Data)), Request: req}, nil
+}
+
+// isLocalPath reports whether the resolver would read this link from the file system: no scheme, not a network-path reference.
+func isLocalPath(link string) bool {
+	if strings.HasPrefix(link, "//") || strings.HasPrefix(link, "data:") {
+		return false
+	}
+	u, err := url.Parse(link)
+	return err == nil && u.Scheme == ""
+}
+
+func (l *localImages) load(ctx context.Context) {
+	l.once.Do(func() {
+		l.byKey = map[string]*imageasset.Resource{}
+		for key, in := range l.store.byKey {
+			if !isLocalPath(key) {
+				continue
+			}
+			helper, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: oneImage(in)}, Limits: l.limits})
+			if err != nil {
+				continue
+			}
+			if resource, err := helper.Resolve(ctx, "http://supplied.invalid/"+path.Base(key)); err == nil {
+				l.byKey["file:"+path.Clean("/"+key)] = resource
+			}
+		}
+	})
+}
+
+func (l *localImages) Get(key string) (*imageasset.Resource, bool) {
+	l.load(context.Background())
+	if i := strings.Index(key, "file:"); i >= 0 {
+		r, ok := l.byKey[key[i:]]
+		return r, ok
+	}
+	return nil, false
+}
+
+func (l *localImages) Put(string, *imageasset.Resource) {}
