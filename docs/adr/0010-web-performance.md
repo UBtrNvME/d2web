@@ -1,6 +1,6 @@
 # 0010. Web performance is a standing constraint
 
-Status: proposed (written 2 November 2026 at the user's request; not yet accepted).
+Status: accepted (user, 2 November 2026: "Accept merge to main", after the proposal was written the same day).
 
 Context: d2web paints a D2 board as native DOM ([ADR 0001](0001-native-web-foundation.md), [ADR 0009](0009-natural-web-forms.md)), so every cost the browser charges for DOM, style, layout, paint and compositing is ours. [ADR 0009](0009-natural-web-forms.md) made faithfulness a standing rule. Performance has so far been handled one complaint at a time, and the first real complaint ("the diagram is lagging when panning and zooming") found costs that were built in by ordinary-looking choices, not by anything exotic. The evidence, all from one machine and one scripted run each (use orders of magnitude, not digits):
 
