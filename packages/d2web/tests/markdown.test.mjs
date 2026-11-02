@@ -12,8 +12,12 @@ test('flow subset renders blocks, inline text and escaped fence contents', () =>
   assert.equal(render('[bad](javascript:evil)').html, '<p><a>bad</a></p>');
 });
 
+test('underscore emphasis and strikethrough render; intraword underscores do not', () => {
+  assert.equal(render('_em_ and __strong__ and ~~gone~~').html, '<p><em>em</em> and <strong>strong</strong> and <del>gone</del></p>');
+});
+
 test('unsupported or ambiguous syntax rejects the entire object', () => {
-  for (const source of ['- one\n  - nested', '- one\ncontinued', '- one\n\n- loose', '- # heading', '- - -', '- + nested', '> + nested', '> quote  \n> break', 'a*?*b', '~~strike~~', '_em_', '<b>html</b>', '&amp;', '![alt](x)', '[x](url "title")', '[x](a(b)c)', 'a | b\n---|---', 'title\n===', 'title\n---', '```\nopen', '```\nx\n````\ny\n```', '***both***', 'a  \nb', '    indented', '[reference][id]', '\\*escape*', '---\ntrailing\n~~~']) {
+  for (const source of ['- one\n  - nested', '- one\ncontinued', '- one\n\n- loose', '- # heading', '- - -', '- + nested', '> + nested', '> quote  \n> break', 'a*?*b', '~strike~', 'snake_case_name', 'a ~~b~~c', '~~ spaced ~~', '__*mix*__', '<b>html</b>', '&amp;', '![alt](x)', '[x](url "title")', '[x](a(b)c)', 'a | b\n---|---', 'title\n===', 'title\n---', '```\nopen', '```\nx\n````\ny\n```', '***both***', 'a  \nb', '    indented', '[reference][id]', '\\*escape*', '---\ntrailing\n~~~']) {
     assert.equal(render(source), null, source);
   }
 });
@@ -36,7 +40,7 @@ test('flow painting keeps object identity, consumes link overlays, and falls bac
   assert.doesNotMatch(flow, /data-k="(?:text|link)"|clip-path:url/);
   assert.match(flow, /&quot;width&quot;:100,&quot;height&quot;:100/);
   assert.match(flow, /width:100px/);
-  for (const unsupported of ['_plain_', '- outer\n  - nested']) {
+  for (const unsupported of ['snake_case_word', '- outer\n  - nested']) {
     options.association[0].label = unsupported;
     assert.equal(paintScene(scene, { ...options, flow: true }).html, paintScene(scene, options).html);
   }

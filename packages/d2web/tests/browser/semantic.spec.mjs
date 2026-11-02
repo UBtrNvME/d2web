@@ -238,7 +238,7 @@ test('flow markdown: one block with real elements, D2 identity, safe links and o
 });
 
 test('flow markdown: unsupported sources fall back byte for byte; positioned remains the default', async ({ page }) => {
-  for (const text of [markdown, '- outer\n  - nested', '- first\n  continuation', '| a | b |\n|---|---|\n| 1 | 2 |', 'plain ~~strike~~', '```\nunfinished', '_underscore_', '<b>raw HTML</b>']) {
+  for (const text of [markdown, '- outer\n  - nested', '- first\n  continuation', '| a | b |\n|---|---|\n| 1 | 2 |', '~single tilde~', '```\nunfinished', 'snake_case_word', '<b>raw HTML</b>']) {
     await ready(page, text.includes('|') ? 'md: ||md\n' + text + '\n||' : markdownSource(text), { idPrefix: 'same-' });
     const original = await page.locator('#a').evaluate(el => el.shadowRoot.innerHTML);
     const positioned = await page.evaluate(async () => {

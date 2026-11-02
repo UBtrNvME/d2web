@@ -12,13 +12,14 @@ export function renderMarkdown(source, hrefOf) {
         const m = rest.match(/^`([^`\n]+)`(?!`)/);
         if (!m || /^\s|\s$/.test(m[1])) return null;
         out += `<code>${esc(m[1].replace(/[ \t]+/g, ' '))}</code>`; i += m[0].length;
-      } else if (rest[0] === '*') {
-        const mark = rest.startsWith('**') ? '**' : '*', end = rest.indexOf(mark, mark.length);
-        if (end <= mark.length || /^\s|\s$/.test(rest.slice(mark.length, end)) || rest[end + mark.length] === '*') return null;
+      } else if (rest[0] === '*' || rest[0] === '_' || rest.startsWith('~~')) {
+        const c = rest[0], mark = rest.startsWith(c + c) ? c + c : c, end = rest.indexOf(mark, mark.length);
+        if (c === '~' && mark === '~') return null;
+        if (end <= mark.length || /^\s|\s$/.test(rest.slice(mark.length, end)) || rest[end + mark.length] === c) return null;
         if (/[\p{L}\p{N}]/u.test(text[i - 1] ?? '') || /[\p{L}\p{N}]/u.test(rest[end + mark.length] ?? '')) return null;
         const body = inline(rest.slice(mark.length, end), inLink, depth + 1);
-        if (body === null || /<(?:strong|em|code)>/.test(body)) return null;
-        const tag = mark === '**' ? 'strong' : 'em';
+        if (body === null || /<(?:strong|em|code|del)>/.test(body)) return null;
+        const tag = c === '~' ? 'del' : mark.length === 2 ? 'strong' : 'em';
         out += `<${tag}>${body}</${tag}>`; i += end + mark.length;
       } else if (rest[0] === '[') {
         const m = rest.match(/^\[([^\[\]\n]+)\]\(([^\s()<>"\\]+)\)/);
@@ -106,6 +107,7 @@ export const markdownCSS = `
 [data-flow-markdown] h6{font-size:.85em;color:var(--md-muted,inherit)}
 [data-flow-markdown] strong{font-family:var(--md-bold);font-weight:inherit}
 [data-flow-markdown] em{font-family:var(--md-italic);font-style:normal}
+[data-flow-markdown] del{text-decoration:line-through}
 [data-flow-markdown] a{color:var(--md-accent,inherit);text-decoration:none}
 [data-flow-markdown] a:hover{text-decoration:underline}
 [data-flow-markdown] a:not([href]){color:inherit}
