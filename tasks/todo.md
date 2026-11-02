@@ -2,6 +2,15 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
+## Slice: d2editor drag to position (spec 0014, accepted by the user 3 November 2026 with this plan)
+
+Builds [spec 0014](../docs/specs/0014-drag-to-position.md). One commit per task, each with its test passing.
+
+- [ ] 1. Association `top`/`left` (S). `packages/d2web-wasm/compile/association.go` adds `properties.top`/`left` with source when declared, as `shape`; spec 0004 amended. Acceptance: declared values and lines appear, absent otherwise. Verify: `TestTopLeftPropertyAndSource`, `mise run check`.
+- [ ] 2. Position rules (S). `packages/d2editor/src/position.ts`: the new `top`/`left` for a shape, its container's objects and a drag distance, per spec 0014 §3 (four cases, integers, never below 0). Acceptance: unit test of each case. Verify: `position.test.mjs` in `test:unit`.
+- [ ] 3. Drag on the canvas (M). `canvas.ts` hands a press on a shape to the editor (hit from mount `hover` events); `main.ts` previews by translating the shape's outer nodes and on release makes one edit setting `top` and `left`; TALA only, otherwise pan and a status hint; empty space pans. Acceptance: spec 0014 §5 Chromium cases; the existing pan case starts on empty space. Verify: `test:editor`, `mise run check`.
+- [ ] 4. Docs and handoff (S). Spec 0014 status, spec 0013 §10 pointer, this ledger. Verify: `mise run check`.
+
 ## Slice: d2editor first slice (spec 0013, plan approved by the user 2 November 2026, including the `data-id` snap risk; built the same day)
 
 Builds accepted [spec 0013](../docs/specs/0013-d2editor.md) in `packages/d2editor` (native TypeScript and DOM, no dependency beyond the workspace `d2web` and the root esbuild). Each task ends with its test passing; browser tests join `check:browser` through `test:editor`. Order: a page that loads and compiles first, then edits, then polish and deployment.
