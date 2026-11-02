@@ -270,7 +270,9 @@ async function run() {
     });
   } catch (error) { if (error.name !== 'SupersededError') $('status').textContent = String(error); return; }
   if (last.error) { $('errors').textContent = last.error.diagnostics?.map(d => `${d.range?.start?.line + 1 ?? '?'}: ${d.message}`).join('\n') || last.error.message; $('status').textContent = 'error'; return; }
-  $('errors').textContent = last.diagnostics.map(d => d.message).join('\n');
+  // Warnings (an image that could not be fetched, a character no font covers) go to the console; the panel is for a board that failed to compile.
+  $('errors').textContent = '';
+  for (const d of last.diagnostics) (d.severity === 'error' ? console.error : console.warn)(`d2web${d.code ? ` ${d.code}` : ''}: ${d.message}`);
   const unresolved = new Set(last.diagnostics.filter(d => d.code === 'image-unresolved').map(d => d.message)).size;
   const chosen = $('board').value;
   $('board').replaceChildren(...last.boards.map(b => new Option(b.path || 'root', b.path)));
