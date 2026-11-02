@@ -371,3 +371,36 @@ Next: characterize the specific subset-font discrepancy and richer content/sourc
 
 
 Codex review of the uncommitted work (read-only, six findings) led to: `test:research:shadcn` leaving `check` (it needs the ignored Studio checkout); releasing the per-request Promise executor in `research/loop-serve.go` (it retained every request's source); the shadcn assertions comparing D2 boxes with the hidden measured sizes instead of with themselves; the growth test requiring an observer callback; the lifecycle comparison being calibrated; and the a11y check reporting extra focus stops.
+
+## Images and icons: what native D2 does (2 November 2026)
+
+Evidence for [ADR 0011](adr/0011-images-like-native-d2.md). Native `d2` built from the pinned `imports/d2` checkout (commit d5a5174; its `--version` prints `v0.8.1-HEAD`), `--layout dagre` (no TALA plugin needed to observe image handling), Linux, network available. One run per cell; every cell is the exit code and what ended up in the output. The remote cases fetch `https://icons.terrastruct.com/…`, so this is a manual probe: it needs network and is not part of `check`.
+
+```
+D2=imports/d2 && (cd $D2 && go build -o /tmp/d2 .)      # pinned checkout, repo Go cache
+x: Go {shape: image; icon: https://icons.terrastruct.com/dev%2Fgo.svg}      # remote
+x: Go {shape: image; icon: ./go.svg}                                        # local file
+x: Go {shape: image; icon: "data:image/svg+xml;base64,…"}                   # data URI
+x: Gone {shape: image; icon: https://icons.terrastruct.com/dev%2Fdoes-not-exist.svg}   # 403
+x: Nowhere {shape: image; icon: https://no-such-host.invalid/x.svg}         # unresolvable host
+x: Chrome {shape: image; icon: https://icons.terrastruct.com/dev%2Fchrome.svg}  # gradients outside <defs>
+d2 --layout dagre case.d2 out.svg | out.svg with --bundle=false | out.png
+```
+
+| Case | SVG, default (`--bundle` is **true** by default) | SVG, `--bundle=false` | PNG (the scene and raster path) |
+| --- | --- | --- | --- |
+| remote | fetched at compile time, inlined as a `data:` URI | link kept (`href="https://…"`) | fetched, painted |
+| local file | read from disk, inlined | read from disk, inlined (still) | read from disk, painted |
+| `data:` URI | kept as is | kept as is | painted |
+| 403 / unreachable | exit 1, `failed to bundle … expected status 200 but got 403`, partial output with the link kept | success, link kept (never fetched) | success, placeholder painted (smaller file), no error |
+| remote SVG with gradients outside `<defs>` (Chrome, Safari icons) | success, inlined | success, link kept | **exit 1**: `scene: shape "x" SVG asset: d2svgimport: …: element <linearGradient> must be a direct child of <defs>` |
+| local SVG, same gradients | success, inlined | success, inlined | **exit 1**, same message |
+
+What this establishes:
+- Native D2 has more than one image behaviour, and which one you get depends on the output. SVG output either fetches and inlines remote images (the default) or leaves their link; PNG paints bytes through the same `imageasset` resolver and `d2svgimport` that d2web's scene builder uses.
+- **d2web's present behaviour is the PNG/scene path minus the network and the file system.** Remote and unresolvable images give the placeholder without failing, as in native PNG. The rejection of Chrome and Safari icons is D2's own scene-builder rule, with the same message natively, so it is not a d2web deviation. It is a limit of the scene path that native SVG output does not have.
+- Local files are always resolved natively and never exist in a browser; `data:` URIs behave identically everywhere.
+- A failing remote image is a hard error in default SVG output (with a partial result) and a silent placeholder in PNG. A web runtime has to choose; native does not give one answer.
+- This corrects two statements made earlier in the session: native SVG's default is to inline (not keep the link), and the Chrome-icon failure is not specific to d2web.
+
+Not established here: native `.pdf`, `.pptx` and `.gif` outputs; TALA (no plugin installed), and any effect of the layout engine on images; behaviour behind a proxy or with a slow host; limits (the raster resolver sets byte, pixel and count limits in `d2cli/raster.go`, one-minute timeout).
