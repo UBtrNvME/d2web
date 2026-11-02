@@ -1,6 +1,6 @@
 # 0011. Images and icons behave like native D2, adapted to the web
 
-Status: proposed (written 2 November 2026 at the user's request; not yet accepted). Nothing here is implemented; the demo's regex-based inlining is a stopgap this would replace.
+Status: accepted (user, 2 November 2026: "Accept", after the proposal and its evidence were written the same day). The open items at the end are settled in the spec that follows; nothing here is implemented yet, and the demo's regex-based inlining is a stopgap this replaces.
 
 Context: a D2 source names images by link, for example `icon: https://icons.terrastruct.com/dev%2Fgo.svg` or `shape: image`. d2web compiles in a worker with a deliberately offline HTTP client (`packages/d2web-wasm/compile/compile.go`), so a remote image paints D2's placeholder and the consumer has had to "bake" its own images as `data:` URIs. That is clumsy and, until now, it was unclear which native behaviour it should match.
 
@@ -35,7 +35,7 @@ Consequences:
 - `docs/feature-map.md` rows for remote icons change from "web-native, placeholder" to the chosen mode, and the capability matrix gains a row for images.
 - `bundle` costs one more fetch before the first compile, or a second compile if the preflight is not possible. [ADR 0010](0010-web-performance.md) lists a worker-side cache of the laid-out diagram, which would make the second compile cheap.
 
-Open before acceptance (evidence still to gather):
+Open items, to settle with evidence in the spec (accepted as open, not as decided):
 - Can the D2 compiler list the image links before layout, and does the scene builder have or need an asset kind for a link-only image? Unverified here.
 - Native `.pdf`, `.pptx` and `.gif` behaviour, TALA, and the default limits and timeouts (the findings section says what was not established).
 - Whether to offer a strict option that turns an unresolved image into an error, as native SVG does, and what the default is.
