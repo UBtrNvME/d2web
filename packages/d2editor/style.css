@@ -1,0 +1,31 @@
+:root { color-scheme: light dark; font: 14px system-ui, sans-serif; --line: #8884; --mark: #f5c40066; }
+body { margin: 0; height: 100vh; display: grid; grid-template: auto 1fr / minmax(280px, 32%) 1fr auto; }
+header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.tools { display: flex; gap: 4px; }
+button, select, input { font: inherit; }
+button[aria-pressed="true"] { outline: 2px solid Highlight; }
+.file input { max-width: 14em; }
+aside { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-right: 1px solid var(--line); min-height: 0; }
+/* The textarea is transparent over a copy of its text in which the last patch's ranges are marked; both share font, padding and scroll. */
+.source { position: relative; flex: 1; min-height: 200px; }
+#src, #marks { position: absolute; inset: 0; margin: 0; padding: 6px; border: 1px solid var(--line); font: 13px/1.45 ui-monospace, monospace; tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; box-sizing: border-box; }
+#src { background: transparent; color: inherit; resize: none; }
+#marks { color: transparent; pointer-events: none; }
+#marks mark { background: var(--mark); color: transparent; border-radius: 2px; }
+#status { font-size: 12px; min-height: 1.4em; white-space: pre-wrap; }
+#status.error { color: #c0392b; }
+main { overflow: auto; padding: 16px; background: Canvas; }
+#inspector { width: 240px; padding: 8px 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+#inspector[hidden] { display: none; }
+#inspector h2 { font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+#inspector form { display: flex; flex-direction: column; gap: 6px; }
+#inspector label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.sources { font-size: 11px; opacity: .75; margin: 0; white-space: pre-wrap; }
+dialog { max-width: min(720px, 90vw); }
+dialog pre { max-height: 40vh; overflow: auto; border: 1px solid var(--line); padding: 6px; font: 12px ui-monospace, monospace; }
+menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; }
+@media (max-width: 800px) {
+  body { grid-template: auto auto 60vh auto / 1fr; height: auto; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  #inspector { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+}

@@ -8,5 +8,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["packages/d2web/src", "research/geometry"]
+  "include": ["packages/d2web/src", "packages/d2editor/src", "research/geometry"]
 }

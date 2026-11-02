@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "d2web-demo", "runtimeExecutable": "mise", "runtimeArgs": ["run", "demo"], "port": 5280 }
+    { "name": "d2web-demo", "runtimeExecutable": "mise", "runtimeArgs": ["run", "demo"], "port": 5280 },
+    { "name": "d2editor", "runtimeExecutable": "mise", "runtimeArgs": ["run", "editor"], "port": 5281 }
   ]
 }
