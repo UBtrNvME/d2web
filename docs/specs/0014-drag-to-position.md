@@ -1,6 +1,6 @@
 # Spec 0014: d2editor, drag to position
 
-Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change).
+Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: a container with an icon (rule 4's padding), touch input.
 
 ## 1. Objective
 
