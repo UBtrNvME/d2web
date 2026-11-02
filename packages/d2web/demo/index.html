@@ -45,7 +45,7 @@
   </div>
 </main>
 <script type="module">
-import { createClient, spawnWorker, mount } from './index.js';
+import { createClient, fetchImages, spawnWorker, mount } from './index.js';
 
 const examples = {
   'Shapes and connections': 'direction: right\ndb: Database {shape: cylinder}\napi: API {style.fill: "#fff4cc"}\nclient: Browser {shape: person}\nclient -> api: request\napi -> db: query\ndb -> api: rows {style.stroke-dash: 4}\n',
@@ -170,59 +170,32 @@ const backgroundOf = scene => {
   return /^rgba\(\d+,\d+,\d+,[\d.]+\)$/.test(color) ? color : '';
 };
 
-const client = createClient({ spawn: spawnWorker() });
+// Images (spec 0010): D2 names a remote image by its link. The page fetches the links the source uses (only from the origin named here, no credentials) and hands
+// the bytes to the compiler, as `d2 --bundle` does; a link that cannot be fetched (another origin, CORS, offline) is shown as a link instead of D2's placeholder.
+const client = createClient({ spawn: spawnWorker(), images: { mode: 'bundle', resolve: fetchImages({ allow: ['https://icons.terrastruct.com'] }), fallback: 'link' } });
 const view = mount($('host'));
 let last, revision = 0;
-
-// <inline-remote-images> (the demo's unit test reads this block)
-// D2 names a remote image by its link (`icon: https://...`). `d2 --bundle` fetches those links and inlines them; the worker compiles offline and cannot,
-// so the page does the same for the copy it sends to the compiler. The editor keeps D2's own text, links included; nothing else about the source changes.
-const inlined = new Map(); // url -> data URI, or null after a failed fetch
-const imageLinks = /https?:\/\/[^\s"';}\])]+\.(?:svg|png|jpe?g|gif|webp)/gi;
-async function toDataUri(response) {
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return `data:${(response.headers.get('content-type') ?? 'application/octet-stream').split(';')[0]};base64,${btoa(binary)}`;
-}
-async function inlineRemoteImages(source) {
-  const links = [...new Set(source.match(imageLinks) ?? [])];
-  await Promise.all(links.filter(url => !inlined.has(url)).map(async url => {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(String(response.status));
-      inlined.set(url, await toDataUri(response));
-    } catch { inlined.set(url, null); }
-  }));
-  const missing = links.filter(url => !inlined.get(url)).length;
-  // D2 reads an unquoted value only up to 518 characters, so a link that was bare in the source is quoted once it is a data URI.
-  const out = source.replace(imageLinks, (url, at) => { const data = inlined.get(url); return !data ? url : /["']/.test(source[at - 1]) ? data : `"${data}"`; });
-  return { source: out, missing };
-}
-// </inline-remote-images>
 
 async function run() {
   $('status').textContent = 'compiling…';
   const started = performance.now();
-  let missing = 0;
   try {
-    const bundled = await inlineRemoteImages($('src').value);
-    missing = bundled.missing;
     last = await client.compile({
-      revision: ++revision, files: { 'main.d2': bundled.source }, entry: 'main.d2', boards: 'all',
+      revision: ++revision, files: { 'main.d2': $('src').value }, entry: 'main.d2', boards: 'all',
       render: { themeId: themeId(), sketch: $('sketch').checked, pad: 40, scale: 1, center: false },
       layout: $('layout').value,
     });
   } catch (error) { if (error.name !== 'SupersededError') $('status').textContent = String(error); return; }
   if (last.error) { $('errors').textContent = last.error.diagnostics?.map(d => `${d.range?.start?.line + 1 ?? '?'}: ${d.message}`).join('\n') || last.error.message; $('status').textContent = 'error'; return; }
   $('errors').textContent = last.diagnostics.map(d => d.message).join('\n');
+  const unresolved = new Set(last.diagnostics.filter(d => d.code === 'image-unresolved').map(d => d.message)).size;
   const chosen = $('board').value;
   $('board').replaceChildren(...last.boards.map(b => new Option(b.path || 'root', b.path)));
   $('board').value = last.boards.some(b => b.path === chosen) ? chosen : '';
   await view.update(last, $('board').value);
   paintCanvas();
   if (fitNext) { fitNext = false; fit(); }
-  $('status').textContent = `${last.boards.length} board(s), compiled in ${Math.round(performance.now() - started)} ms (${last.millis ?? '?'} ms in D2)${missing ? `; ${missing} image link(s) could not be fetched and show D2's placeholder` : ''}`;
+  $('status').textContent = `${last.boards.length} board(s), compiled in ${Math.round(performance.now() - started)} ms (${last.millis ?? '?'} ms in D2)${unresolved ? `; ${unresolved} image link(s) could not be fetched and are shown as links` : ''}`;
 }
 let timer;
 const later = () => { clearTimeout(timer); timer = setTimeout(run, 300); };
