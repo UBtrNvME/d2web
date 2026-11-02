@@ -93,6 +93,8 @@ export interface CompileResult {
   fonts?: Record<string, Uint8Array | string>;
   error?: { code: ErrorCode; message: string; diagnostics: Diagnostic[] };
   diagnostics: Diagnostic[];
+  // Kroki's encoding of the source (zlib level 9, URL-safe base64), for a request with exactly one file; absent otherwise.
+  identity?: string;
   echo: { layout: Engine; render: RenderOptions; images?: 'bundle' | 'link' };
 }
 
