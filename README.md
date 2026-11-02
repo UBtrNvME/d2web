@@ -23,6 +23,7 @@ The runtime, worker protocol, mount, association, packaging, fonts, animation an
 - [D2 feature map](docs/feature-map.md): every D2 capability, how it reaches the web and whether it paints equal to native (generated)
 - [Writing D2 that lays out well](docs/d2-authoring-guide.md): authoring rules and features to avoid, from rendering the large examples on TALA, ELK and dagre
 - [Browser review: text, clipping and web-native gaps](docs/web-native-audit.md)
+- [Idea: d2editor](docs/ideas/d2editor.md): a shared D2 canvas for you and your agents, with a class palette (refined idea, not accepted; editing stays out of v1)
 - [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)

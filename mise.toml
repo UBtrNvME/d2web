@@ -103,6 +103,10 @@ run = "node --test research/identity.test.mjs"
 description = "Stress the scene/semantic ID join under rename, parallel-edge deletion and structured content"
 run = "node --test research/join.test.mjs"
 
+[tasks."test:research:roundtrip"]
+description = "Does editing through d2oracle keep the author's text? Nine editor edits over the demo diagrams and examples/files, lines changed beyond each edit (docs/ideas/d2editor.md)"
+run = "node --test research/roundtrip.test.mjs"
+
 [tasks."test:research:transaction:node"]
 description = "Node half: copy-on-write edit wrapper over d2oracle in native and Node/WASM"
 run = "node --test research/transaction.test.mjs"
