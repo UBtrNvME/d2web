@@ -86,6 +86,7 @@ host: Host page {
   demo: "Demo app\nGitHub Pages" {class: pic; shape: image; icon: https://icons.terrastruct.com/tech%2Flaptop.svg}
   editor: "d2editor\n(future)" {class: later}
   react: "React binding\n(future)" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Freact.svg; style.opacity: 0.55}
+  icons: "Icon origin\nlinks the source names" {shape: cloud; style.font-size: 16}
   author -> demo: {class: call}
 }
 
@@ -96,12 +97,14 @@ pkg: "@d2web package (TypeScript)" {
   client: "Client\ncreateClient\nlatest request wins" {class: part}
   worker: "Worker\none compile at a time\nrevision echoed" {class: part}
   mount: "Mount\nshadow root · typed events\nsetNodeContent" {class: part; tooltip: "hover, click and focus carry D2 identity: board path and object ID"}
-  painter: "Painter\npaintScene(scene)\nHTML first, SVG where needed" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fhtml5.svg}
+  painter: "Painter\npaintScene(scene)\nHTML first, SVG where needed\nlink mode: <img>" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fhtml5.svg}
+  images: "Images\nfetchImages · resolve · cache\nbundle or link mode" {class: part; tooltip: "The page fetches; the worker never does. Limits: 4 MiB each, 256 images, 15 s, 6 at a time"}
   fonts: "Fonts\nconsumer-listed faces" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fcss3.svg}
   client -> worker: postMessage {class: call}
   client -> mount: "update(result, board)" {class: call}
   mount -> painter: paintScene {class: call}
   fonts -> mount: "@font-face" {class: feed}
+  images -> worker: "preflight, then bytes" {class: call}
 }
 
 wasm: "d2web.wasm (Go, pinned D2 v0.9.0)" {
@@ -114,7 +117,9 @@ wasm: "d2web.wasm (Go, pinned D2 v0.9.0)" {
     parser: "d2parser\ntext → AST" {class: stage}
     ir: "d2ir\nimports · classes\nglobs · vars" {class: stage}
     compiler: "d2compiler\nAST → d2graph" {class: stage}
+    preflight: "Preflight\nimage links, no layout" {class: stage}
     parser -> ir -> compiler: {class: call}
+    compiler -> preflight: {class: feed}
   }
   back: Layout and scene {
     direction: right
@@ -128,8 +133,10 @@ wasm: "d2web.wasm (Go, pinned D2 v0.9.0)" {
     }
     target: "d2target.Diagram\npositions · routes · styles" {class: stage}
     build: "d2scenebuild\nthemes · sketch\nfonts · assets" {class: stage}
+    supplied: "Supplied images\nmap-backed transport\nno network" {class: stage}
     scene: "Scene JSON\nassociation · diagnostics" {shape: page; style.font-size: 18}
     engines -> target -> build -> scene: {class: call}
+    supplied -> build: "bytes by link" {class: call}
   }
   front.compiler -> back.engines: d2graph {class: call}
 }
@@ -145,10 +152,13 @@ reference: Reference and quality {
   e2e -> ci: gates {class: call}
 }
 
+host.icons -> pkg.images: "fetch (allowlist, CORS)" {class: call}
+pkg.worker -> wasm.front.preflight: "preflight" {class: call}
 host.demo -> pkg.client: "compile({files, entry,\nlayout, render})" {class: call}
 host.editor -> pkg.client: {class: feed}
 host.react -> pkg.mount: {class: feed}
 pkg.worker -> wasm.front.parser: run {class: call}
+pkg.worker -> wasm.back.supplied: "images by link" {class: call}
 wasm.back.scene -> pkg.worker: "result: boards + fonts" {class: call}
 pkg.painter -> dom: markup {class: call}
 dom -> reference.e2e: screenshot {class: feed}
