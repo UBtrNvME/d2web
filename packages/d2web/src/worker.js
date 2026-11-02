@@ -30,6 +30,8 @@ const withImagesEncoded = request => {
     }
     // Spec 0010: which image links does this source use? Compiled without layout, so it is cheap.
     if (event.data.type === 'preflight') return postMessage(JSON.parse(self.d2webPreflight(JSON.stringify(event.data))));
+    // Spec 0012: an edit runs no layout, so it is synchronous like the preflight.
+    if (event.data.type === 'edit') return postMessage(JSON.parse(self.d2webEdit(JSON.stringify(event.data))));
     postMessage(JSON.parse(await self.d2webCompile(JSON.stringify(withImagesEncoded(event.data)))));
   };
   postMessage(JSON.parse(self.d2webReady));

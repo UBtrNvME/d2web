@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>d2editor</title>
+<link rel="stylesheet" href="style.css">
+<body>
+<header>
+  <strong>d2editor</strong>
+  <div class="tools" role="toolbar" aria-label="Edit">
+    <button type="button" id="add" title="Add a shape (inside the selected container, if any)">Shape</button>
+    <button type="button" id="connect" aria-pressed="false" title="Connect the selected object to the next one you click">Connect</button>
+    <button type="button" id="undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+    <button type="button" id="redo" title="Redo (Shift+Ctrl/Cmd+Z)">Redo</button>
+  </div>
+  <label>Board <select id="board"><option value="">root</option></select></label>
+  <label>Example <select id="example"></select></label>
+  <label class="file">Open <input type="file" id="open" accept=".d2,text/plain"></label>
+  <button type="button" id="download">Download</button>
+</header>
+<aside aria-label="Source">
+  <div class="source">
+    <div id="marks" aria-hidden="true"></div>
+    <textarea id="src" spellcheck="false" aria-label="D2 source"></textarea>
+  </div>
+  <div id="status" role="status"></div>
+</aside>
+<main aria-label="Diagram canvas: click or Tab to an object to select it, Escape to clear">
+  <div id="host"></div>
+</main>
+<section id="inspector" aria-label="Selected object" hidden>
+  <h2 id="selected"></h2>
+  <form id="props">
+    <label>Label <input name="label" autocomplete="off"></label>
+    <label>Fill <input name="fill" autocomplete="off" placeholder="D2's"></label>
+    <label>Stroke <input name="stroke" autocomplete="off" placeholder="D2's"></label>
+    <label data-shape-only>Shape <select name="shape"></select></label>
+    <p class="sources" id="sources"></p>
+  </form>
+  <form id="rename">
+    <label>Rename to <input name="name" autocomplete="off" required></label>
+    <button>Rename</button>
+  </form>
+  <button type="button" id="delete">Delete</button>
+</section>
+<dialog id="unchecked">
+  <form method="dialog">
+    <h2>D2 cannot apply this edit as a small change</h2>
+    <p id="reason"></p>
+    <ul id="labels"></ul>
+    <p>D2's formatted text with the edit:</p>
+    <pre id="formatted"></pre>
+    <menu><button value="cancel" autofocus>Cancel</button> <button value="use" id="use">Use formatted text</button></menu>
+  </form>
+</dialog>
+<script type="module" src="main.js"></script>
+</body>
+</html>

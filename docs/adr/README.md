@@ -26,8 +26,9 @@ Consequences: what it commits us to, what stays open, what would reverse it
 | [0004](0004-edit-wrapper-and-patches.md) | Copy-on-write edit wrapper; oracle fixes as opt-in patches | accepted |
 | [0005](0005-layout-engine-policy.md) | TALA default; ELK or dagre as an explicit large-board switch | accepted |
 | [0006](0006-font-delivery.md) | Consumer-approved fonts, loadable on demand | accepted |
-| [0007](0007-product-scope-v1.md) | v1 is a read-only render runtime for a generic embedder; Chromium only; editing is v2 | accepted |
+| [0007](0007-product-scope-v1.md) | v1 is a read-only render runtime for a generic embedder; Chromium only; editing is v2 | accepted; editing superseded by 0012 |
 | [0008](0008-repository-layout.md) | Multi-language monorepo: `packages/d2web`, `packages/d2web-wasm`, `research/`, shared `tests/` | accepted |
 | [0009](0009-natural-web-forms.md) | D2 is natural on the web, not a copy of native SVG; web-native status | accepted |
 | [0010](0010-web-performance.md) | Web performance is a standing constraint: rules, measurement method and review checklist | accepted |
 | [0011](0011-images-like-native-d2.md) | Images and icons behave like native D2 as explicit consumer-chosen modes (`bundle`, `link`), with web adaptations | accepted |
+| [0012](0012-editing-in-scope.md) | Editing enters scope: d2web owns a worker edit API that publishes checked patches; one file and its boards | accepted |

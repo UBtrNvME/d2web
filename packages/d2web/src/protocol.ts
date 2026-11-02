@@ -1,7 +1,7 @@
 // Message types for spec 0001 (docs/specs/0001-compile-protocol.md). Types only; the spec is the contract, this file mirrors it.
 import type { SceneDocument } from './scene.ts';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const SCENE_VERSION = 1;
 
 export type Engine = 'tala' | 'dagre' | 'elk';
@@ -33,6 +33,8 @@ export interface WorkerReady {
   sceneVersion: number;
   // True when the wasm was built from a D2 checkout with docs/upstream patches applied.
   patched: boolean;
+  // Spec 0012: the worker serves `edit` requests.
+  edit: boolean;
 }
 
 export interface CompileRequest {
@@ -109,8 +111,30 @@ export interface FontsMessage { type: 'fonts'; fonts: { name: string; data: Uint
 // The worker's answer to a fonts message: `error` is the reason the wasm refused them (a file that is not a font).
 export interface FontsAck { type: 'fonts'; error: string }
 
-export type HostMessage = CompileRequest | FontsMessage | PreflightRequest;
-export type WorkerMessage = WorkerReady | CompileResult | FontsAck | PreflightResult;
+// Spec 0012: D2 edit operations in, a checked patch to the author's text out. `board` is a compile result path; offsets are UTF-16.
+export type EditOp =
+  | { op: 'set'; key: string; value: string | null; tag?: string }
+  | { op: 'create'; key: string }
+  | { op: 'delete'; key: string }
+  | { op: 'rename'; key: string; name: string };
+export interface EditRequest { v: typeof PROTOCOL_VERSION; type: 'edit'; id: number; revision: number; files: Record<string, string>; entry: string; board?: string; ops: EditOp[] }
+export type EditErrorCode = 'compile' | 'edit' | 'panic' | 'recompile' | 'unchecked' | 'internal' | 'stale';
+export interface EditResult {
+  v: typeof PROTOCOL_VERSION;
+  type: 'edited';
+  id: number;
+  revision: number;
+  millis: number;
+  // Absent on failure: nothing is published.
+  patch?: { file: string; edits: { start: number; end: number; text: string }[]; text: string };
+  ids: { created: string[]; renamed: Record<string, string>; deleted: string[] };
+  diagnostics: Diagnostic[];
+  // `formatted` and `reason` only for 'unchecked': D2's formatted whole file, offered for the user to approve, never applied.
+  error?: { code: EditErrorCode; message: string; op?: number; formatted?: string; reason?: 'conflict' | 'inequivalent' | 'label'; labels?: string[] };
+}
+
+export type HostMessage = CompileRequest | FontsMessage | PreflightRequest | EditRequest;
+export type WorkerMessage = WorkerReady | CompileResult | FontsAck | PreflightResult | EditResult;
 
 // Spec 0004. Positions are D2's with UTF-16 positions enabled: line and column 0-based, offset from the start of the file, all in UTF-16 code
 // units, so `offset` is a JS string index. Diagnostic ranges use the same offsets.

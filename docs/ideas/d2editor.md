@@ -1,6 +1,6 @@
 # d2editor: a shared D2 canvas for you and your agents
 
-Status: idea, refined 2 November 2026. Not accepted: [ADR 0007](../adr/0007-product-scope-v1.md) keeps editing out of d2web v1, so building this needs a new ADR from the user. First user: the author, for their own diagrams.
+Status: idea, refined 2 November 2026. The idea itself is not accepted; [ADR 0012](../adr/0012-editing-in-scope.md) (accepted) brings d2web's edit API into scope, and `d2editor` stays a separate consumer. First user: the author, for their own diagrams.
 
 ## Problem Statement
 
@@ -76,8 +76,6 @@ Design consequence for the d2web edit API: compile, run the `d2oracle` edit on a
 ## Next steps
 
 1. ~~The formatting probe~~ and ~~patch publishing~~ done (above).
-2. An ADR from the user lifting "editing is v2".
-3. A spec for the d2web transactional edit API: operations in, a checked patch out (equivalence gate, label guard, crash recovery, stale-revision rejection), multi-board paths.
-4. Report the keyword-lowercasing formatter bug to D2 upstream.
-2. An ADR from the user lifting "editing is v2", if the probe holds.
-3. A spec for the d2web transactional edit API.
+2. An ADR from the user lifting "editing is v2": [ADR 0012](../adr/0012-editing-in-scope.md), accepted 2 November 2026.
+3. A spec for the d2web transactional edit API ([spec 0012](../specs/0012-edit-api.md), accepted 2 November 2026): operations in, a checked patch out (equivalence gate, label guard, crash recovery, stale-revision rejection), multi-board paths.
+4. Report the keyword-lowercasing formatter bug to D2 upstream, and the `d2oracle.Set` glob-filter rewrite found by the product corpus gate ([spec 0012](../specs/0012-edit-api.md) §4.3a).

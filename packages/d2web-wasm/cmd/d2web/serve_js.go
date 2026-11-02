@@ -7,6 +7,7 @@ import (
 	"syscall/js"
 
 	"d2web.local/wasm/compile"
+	"d2web.local/wasm/edit"
 )
 
 // Exposes globalThis.d2webReady (the ready message) and d2webCompile(requestJSON) -> Promise<string JSON>. Work runs in a goroutine
@@ -30,6 +31,10 @@ func init() {
 		// d2webPreflight(requestJSON) -> string JSON: the image links of a source, compiled without layout (spec 0010). Synchronous: it is cheap.
 		js.Global().Set("d2webPreflight", js.FuncOf(func(this js.Value, args []js.Value) any {
 			return string(compile.Preflight([]byte(args[0].String())))
+		}))
+		// d2webEdit(requestJSON) -> string JSON: a checked patch or an error (spec 0012). Synchronous: no layout runs.
+		js.Global().Set("d2webEdit", js.FuncOf(func(this js.Value, args []js.Value) any {
+			return string(edit.Handle([]byte(args[0].String()), compile.ProtocolVersion))
 		}))
 		// d2webSetFonts(names: string[], buffers: Uint8Array[]) -> "" or an error message (spec 0007); bytes are copied, not base64-encoded.
 		js.Global().Set("d2webSetFonts", js.FuncOf(func(this js.Value, args []js.Value) any {

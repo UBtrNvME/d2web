@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { DEFAULT_BUDGETS, ProtocolError, ROOT_BOARD, normalizeCompileRequest } from '../src/request.ts';
 
 const request = (patch = {}) => ({
-  v: 1, type: 'compile', id: 1, revision: 7, files: { 'main.d2': 'a -> b' }, entry: 'main.d2',
+  v: 2, type: 'compile', id: 1, revision: 7, files: { 'main.d2': 'a -> b' }, entry: 'main.d2',
   render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false }, ...patch,
 });
 const rejects = (patch, pattern) => assert.throws(() => normalizeCompileRequest(request(patch)), error => error instanceof ProtocolError && pattern.test(error.message));
@@ -41,7 +41,7 @@ test('boards: all, explicit list (deduplicated); empty or non-string lists rejec
 });
 
 test('envelope: version, type, ids, files and entry', () => {
-  rejects({ v: 2 }, /protocol version/);
+  rejects({ v: 1 }, /protocol version/);
   rejects({ type: 'cancel' }, /message type/);
   rejects({ id: -1 }, /id/);
   rejects({ revision: 1.2 }, /revision/);
@@ -83,4 +83,14 @@ test('seeds: default is the d2 CLI default, a request may choose its own (dedupl
   rejects({ seeds: 1 }, /seeds/);
   rejects({ seeds: [2 ** 53] }, /seeds/);
   rejects({ seeds: Array.from({ length: 17 }, (_, i) => i) }, /at most 16/);
+});
+
+test('edit requests: shape checked, board defaults to the root', async () => {
+  const { normalizeEditRequest } = await import('../src/request.ts');
+  const base = { v: 2, type: 'edit', id: 1, revision: 2, files: { 'main.d2': 'a' }, entry: 'main.d2', ops: [{ op: 'set', key: 'a.style.fill', value: null }] };
+  assert.equal(normalizeEditRequest(base).board, '');
+  for (const [patch, message] of [[{ v: 1 }, /protocol version/], [{ entry: 'x.d2' }, /entry/], [{ ops: [] }, /1 to 256/], [{ ops: [{ op: 'rename', key: 'a' }] }, /name/],
+    [{ ops: [{ op: 'set', key: 'a', value: 3 }] }, /value/], [{ ops: [{ key: 'a' }] }, /unknown operation/], [{ board: 1 }, /board/]]) {
+    assert.throws(() => normalizeEditRequest({ ...base, ...patch }), message);
+  }
 });

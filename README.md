@@ -10,7 +10,7 @@ The full target is D2 on the web: every D2 element and its content, styling, the
 
 D2 Architecture Studio is a future consumer of d2web. Editor panels, toolbars, application state and persistence belong to consuming applications. The imported Studio is reference material; its UI and framework do not define the library's architecture or dependencies.
 
-Applications such as a future `d2editor` should integrate through documented runtime/data contracts, stable D2 identities and source references, React components/events and characterized native operations. These integration boundaries remain to be specified as capabilities are proved; no generic plugin framework is assumed.
+The separate [d2editor](docs/specs/0013-d2editor.md) application consumes `client.edit`, typed events and association data: canvas actions publish checked patches to its D2 source. Run `mise run editor` and open `http://localhost:5281`; its static build is staged at `/editor/` beside the demo by the Pages workflow (available after merge and deployment). Browser acceptance for this first slice is recorded in the [task handoff](tasks/todo.md).
 
 The runtime, worker protocol, mount, association, packaging, fonts, animation and image paths exist. Rich content has semantic wrappers and opt-in markdown flow; full web-native semantics and presentation replacement remain incomplete. The imported Studio is a prototype, not the specification or a certified renderer.
 
@@ -23,7 +23,7 @@ The runtime, worker protocol, mount, association, packaging, fonts, animation an
 - [D2 feature map](docs/feature-map.md): every D2 capability, how it reaches the web and whether it paints equal to native (generated)
 - [Writing D2 that lays out well](docs/d2-authoring-guide.md): authoring rules and features to avoid, from rendering the large examples on TALA, ELK and dagre
 - [Browser review: text, clipping and web-native gaps](docs/web-native-audit.md)
-- [Idea: d2editor](docs/ideas/d2editor.md): a shared D2 canvas for you and your agents, with a class palette (refined idea, not accepted; editing stays out of v1)
+- [d2editor first slice](docs/specs/0013-d2editor.md): source and canvas editing, local files, exact-text undo and checked patches; agents and a class palette remain later slices
 - [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
@@ -39,6 +39,7 @@ The runtime, worker protocol, mount, association, packaging, fonts, animation an
 | `tests/` | Node assertions and Playwright comparisons; no second examples tree |
 | `packages/d2web/` | Product client, protocol and association types, mount, painter and browser tests |
 | `packages/d2web-wasm/` | Product Go compiler/scene bridge and worker entry point |
+| `packages/d2editor/` | Separate source/canvas editor consumer, static site at `/editor/` |
 | `research/` | Research probes, Playwright specs (`research/browser/`) and the earlier React geometry adapter (`research/geometry/`) |
 | `scripts/` | Repository maintenance commands |
 | `imports/` | Historical evidence and local external source copies; D2 source is in `imports/d2/`, Studio in `imports/d2-architecture-studio/` |
@@ -76,6 +77,9 @@ The imported Studio stays in its independent Git checkout at the user's request.
 | `mise run browser:install` | Install Playwright Chromium and required OS packages |
 | `mise run doctor` | Print resolved tool versions |
 | `mise run build` | Build `packages/d2web/dist` (wasm, worker, ESM, types, notices) |
+| `mise run editor` | Build and serve d2editor on loopback port 5281 (`localhost`, IPv4 and IPv6) |
+| `mise run editor:build` | Bundle the static editor site and d2web worker into `packages/d2editor/dist` |
+| `mise run test:editor` | Built-site response checks and Chromium editor acceptance tests with the real worker/WASM |
 | `mise run test:dist` | Build, then check dist contents and the size budget |
 | `mise run test:consumer` | Build, pack, and load the tarball in a bundler-free Chromium page, including under a strict CSP |
 | `mise run check:browser` | Every Chromium/Playwright suite (about 3 min) |

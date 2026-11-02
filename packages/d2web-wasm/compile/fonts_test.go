@@ -14,7 +14,7 @@ import (
 // Spec 0007: consumer fonts reach the scene as per-glyph assets, and uncovered characters are reported.
 func request(source string) []byte {
 	raw, _ := json.Marshal(map[string]any{
-		"v": 1, "type": "compile", "id": 1, "revision": 1, "files": map[string]string{"main.d2": source}, "entry": "main.d2", "layout": "dagre",
+		"v": 2, "type": "compile", "id": 1, "revision": 1, "files": map[string]string{"main.d2": source}, "entry": "main.d2", "layout": "dagre",
 		"render":  map[string]any{"themeId": 0, "sketch": false, "pad": 0, "scale": 1, "center": false},
 		"budgets": map[string]any{"maxNodes": 100000, "maxPathCommands": 1000000, "sketch": map[string]int{"maxOperationSets": 100000, "maxOperations": 1000000, "maxPathCommands": 1000000}, "links": map[string]int{"maxRegions": 1000, "maxStringBytes": 100000}, "svgImport": map[string]int{}},
 		"boards":  []string{""},

@@ -21,7 +21,7 @@ run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:demo", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:demo", "test:editor", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs packages/d2web/tests/render.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs packages/d2web/tests/render.test.mjs packages/d2editor/tests/history.test.mjs packages/d2editor/tests/snap.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -60,8 +60,8 @@ env = { GOCACHE = "{{config_root}}/.cache/go-build", GOMODCACHE = "{{config_root
 run = ["go test -mod=readonly ./...", "node --test tests/protocol.test.mjs tests/equivalence.test.mjs tests/association.test.mjs tests/stack.test.mjs"]
 
 [tasks."test:client"]
-description = "Host client and end to end in Chromium with the real worker and wasm: latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
-run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs packages/d2web/tests/browser/images.spec.mjs packages/d2web/tests/browser/regressions.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
+description = "Host client and end to end in Chromium with the real worker and wasm: edits (spec 0012), latest-wins, abort by respawn, silent-worker timeout, source to pixels in light and dark against native D2"
+run = "pnpm exec playwright test packages/d2web/tests/browser/client.spec.mjs packages/d2web/tests/browser/e2e.spec.mjs packages/d2web/tests/browser/mount.spec.mjs packages/d2web/tests/browser/links.spec.mjs packages/d2web/tests/browser/interaction.spec.mjs packages/d2web/tests/browser/animation.spec.mjs packages/d2web/tests/browser/a11y.spec.mjs packages/d2web/tests/browser/semantic.spec.mjs packages/d2web/tests/browser/fallback-fonts.spec.mjs packages/d2web/tests/browser/text-scripts.spec.mjs packages/d2web/tests/browser/emoji.spec.mjs packages/d2web/tests/browser/events.spec.mjs packages/d2web/tests/browser/content.spec.mjs packages/d2web/tests/browser/fonts.spec.mjs packages/d2web/tests/browser/association.spec.mjs packages/d2web/tests/browser/images.spec.mjs packages/d2web/tests/browser/regressions.spec.mjs packages/d2web/tests/browser/edit.spec.mjs --reporter=line --output=artifacts/d2web-client/run"
 
 [tasks."test:watch"]
 description = "Re-run the repository unit tests on every change (the fast inner loop)"
@@ -276,6 +276,21 @@ run = "node --test packages/d2web/tests/dist.test.mjs"
 description = "Serve the d2web demo page on http://127.0.0.1:5280 (builds the package first)"
 depends = ["build"]
 run = "node packages/d2web/demo/serve.mjs"
+
+[tasks."editor:build"]
+description = "Build the d2editor site into packages/d2editor/dist (spec 0013): page, bundle and d2web's worker and wasm"
+depends = ["build"]
+run = "node packages/d2editor/build.mjs"
+
+[tasks.editor]
+description = "Serve the d2editor site on http://127.0.0.1:5281 (builds it first)"
+depends = ["editor:build"]
+run = "node packages/d2editor/serve.mjs"
+
+[tasks."test:editor"]
+description = "d2editor in Chromium against the built site with the real worker: canvas edits land as checked patches (spec 0013)"
+depends = ["editor:build"]
+run = ["node --test packages/d2editor/tests/serve.test.mjs", "pnpm exec playwright test packages/d2editor/tests/editor.spec.mjs --reporter=line --output=artifacts/d2editor/run"]
 
 [tasks."measure:layout"]
 description = "Measure layout time per engine in Chromium and write docs/layout-limits.md (spec 0008; takes minutes, not part of check)"

@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type Engine, type FontSpec, type ImageBytes, type RenderOptions } from './protocol.ts';
+import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type EditOp, type EditRequest, type Engine, type FontSpec, type ImageBytes, type RenderOptions } from './protocol.ts';
 
 const ENGINES: readonly Engine[] = ['tala', 'dagre', 'elk'];
 
@@ -123,5 +123,30 @@ export function normalizeCompileRequest(input: unknown): NormalizedRequest {
     files: files as Record<string, string>, entry: entry as string, layout: (layout as Engine | undefined) ?? 'tala', seeds: seeds(input.seeds),
     render: render(input.render), budgets: overlay(DEFAULT_BUDGETS, input.budgets as Budgets | undefined, 'budgets'), boards: boards(input.boards),
     ...(input.images === undefined ? {} : { images: images(input.images) }),
+  };
+}
+
+const MAX_OPS = 256;
+
+// Spec 0012: validates an edit request; the worker refuses what d2oracle refuses, this only checks the shape.
+export function normalizeEditRequest(input: unknown): EditRequest {
+  if (!isObject(input)) return fail('request must be an object');
+  if (input.v !== PROTOCOL_VERSION) fail(`unsupported protocol version ${String(input.v)}`);
+  if (input.type !== 'edit') fail(`unexpected message type ${String(input.type)}`);
+  const { files, entry, board = '', ops } = input;
+  if (!isObject(files) || !Object.values(files).every(f => typeof f === 'string')) fail('files must map paths to text');
+  if (typeof entry !== 'string' || !Object.hasOwn(files as object, entry)) fail('entry must name one of the files');
+  if (typeof board !== 'string') fail('board must be a compile result path');
+  if (!Array.isArray(ops) || ops.length < 1 || ops.length > MAX_OPS) fail(`ops must hold 1 to ${MAX_OPS} operations`);
+  (ops as unknown[]).forEach((op, i) => {
+    const bad = (what: string) => fail(`ops[${i}]: ${what}`);
+    if (!isObject(op) || typeof op.key !== 'string') return bad('needs a string key');
+    if (op.op === 'set') { if (op.value !== null && typeof op.value !== 'string') bad('set needs a string or null value'); if (op.tag !== undefined && typeof op.tag !== 'string') bad('tag must be a string'); }
+    else if (op.op === 'rename') { if (typeof op.name !== 'string') bad('rename needs a string name'); }
+    else if (op.op !== 'create' && op.op !== 'delete') bad(`unknown operation ${String(op.op)}`);
+  });
+  return {
+    v: PROTOCOL_VERSION, type: 'edit', id: integer(input.id, 'id', 0), revision: integer(input.revision, 'revision', 0),
+    files: files as Record<string, string>, entry: entry as string, board: board as string, ops: ops as EditOp[],
   };
 }

@@ -1,0 +1,8 @@
+{
+  "name": "d2editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Canvas editing of D2 text through d2web's edit API (spec 0013); a static site, not a library",
+  "license": "MPL-2.0"
+}

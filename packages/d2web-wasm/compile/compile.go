@@ -31,7 +31,7 @@ import (
 	"d2web.local/wasm/scenejson"
 )
 
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 
 type Render struct {
 	ThemeID        int64                    `json:"themeId"`
@@ -127,7 +127,7 @@ var Patched string
 
 // Ready is the worker's first message.
 func Ready() []byte {
-	out, _ := json.Marshal(map[string]any{"v": ProtocolVersion, "type": "ready", "d2": "0.9.0", "engines": []string{"tala", "dagre", "elk"}, "sceneVersion": scenejson.Version, "patched": Patched == "true"})
+	out, _ := json.Marshal(map[string]any{"v": ProtocolVersion, "type": "ready", "d2": "0.9.0", "engines": []string{"tala", "dagre", "elk"}, "sceneVersion": scenejson.Version, "patched": Patched == "true", "edit": true})
 	return out
 }
 

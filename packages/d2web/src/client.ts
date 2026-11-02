@@ -1,6 +1,6 @@
 import { createImageResolver, normalizeImages, type ImagesOption } from './images.ts';
-import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type FontSpec, type FontsMessage, type ImageBytes, type PreflightResult, type WorkerMessage, type WorkerReady } from './protocol.ts';
-import { normalizeCompileRequest, normalizeFonts } from './request.ts';
+import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type EditRequest, type EditResult, type FontSpec, type FontsMessage, type ImageBytes, type PreflightResult, type WorkerMessage, type WorkerReady } from './protocol.ts';
+import { normalizeCompileRequest, normalizeEditRequest, normalizeFonts } from './request.ts';
 
 // Minimal Worker surface so tests can script one; a real `Worker` fits.
 export interface WorkerLike {
@@ -32,6 +32,7 @@ export interface ClientOptions {
 }
 
 export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id' | 'images' | 'linkImages'>;
+export type EditInput = Omit<EditRequest, 'v' | 'type' | 'id'>;
 
 export class SupersededError extends Error {}
 // `code: 'budget'` marks a compile aborted by budgets.maxLayoutMillis (spec 0008); other timeouts have no code.
@@ -47,7 +48,16 @@ interface Job {
   imagePhase?: { controller: AbortController; preflight?: (r: PreflightResult) => void };
 }
 
+interface EditJob { request: EditRequest; resolve: (r: EditResult) => void; reject: (e: unknown) => void; timer?: ReturnType<typeof setTimeout> }
+
+// Spec 0012 section 5: a patch made from an older revision than the consumer has since sent is dropped, never published.
+const stale = (request: EditRequest, newest: number): EditResult => ({
+  v: PROTOCOL_VERSION, type: 'edited', id: request.id, revision: request.revision, millis: 0, ids: { created: [], renamed: {}, deleted: [] }, diagnostics: [],
+  error: { code: 'stale', message: `revision ${request.revision} is older than revision ${newest}` },
+});
+
 // Spec 0001 section 3.4: one compile at a time, latest request wins, no cooperative cancel (abort = terminate and respawn).
+// Spec 0012: edits are never coalesced; they run first in, first out, ahead of a waiting compile, one job on the worker at a time.
 export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, emoji, fetch: fetchFont = u => fetch(u), images }: ClientOptions) {
   const imageOption = images === undefined ? undefined : normalizeImages(images);
   const resolveImages = imageOption?.mode === 'bundle' ? createImageResolver(imageOption) : undefined;
@@ -73,6 +83,9 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
   let ready: Promise<WorkerReady>;
   let running: Job | null = null;
   let waiting: Job | null = null;
+  const edits: EditJob[] = [];
+  let editing: EditJob | null = null;
+  let newest = -Infinity;
   let nextId = 0;
   let disposed = false;
 
@@ -85,6 +98,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         else if (data.type === 'fonts') { if (data.error && running) { const job = running; settle(job); job.reject(new FontError(`worker refused the fonts: ${data.error}`)); pump(); } }
         else if (data.type === 'images') { if (running && data.id === running.request.id) running.imagePhase?.preflight?.(data); }
         else if (running && data.type === 'result' && data.id === running.request.id) finish(data);
+        else if (editing && data.type === 'edited' && data.id === editing.request.id) finishEdit(data);
       };
     });
     mine.onerror = event => { if (mine === worker) abort(new Error(event.message ?? 'worker error')); };
@@ -100,17 +114,46 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
     pump();
   }
 
-  // Replace the worker and fail the running compile.
-  function abort(error: unknown) {
-    const job = running;
-    worker.terminate();
-    start();
-    if (job) { settle(job); job.reject(error); }
+  function finishEdit(result: EditResult) {
+    const job = editing!;
+    clearTimeout(job.timer);
+    editing = null;
+    job.resolve(result.revision < newest ? stale(job.request, newest) : result);
     pump();
   }
 
+  // Replace the worker and fail the running compile or edit.
+  function abort(error: unknown) {
+    const job = running, edit = editing;
+    worker.terminate();
+    start();
+    if (job) { settle(job); job.reject(error); }
+    if (edit) { clearTimeout(edit.timer); editing = null; edit.reject(error); }
+    pump();
+  }
+
+  function pumpEdit() {
+    const job = (editing = edits.shift()!);
+    const timeout = (ms: number, what: string) => setTimeout(() => { if (editing === job) abort(new TimeoutError(`${what} for ${ms} ms`)); }, ms);
+    job.timer = timeout(startupTimeoutMs, 'worker not ready');
+    const mine = worker;
+    ready.then(hello => {
+      if (editing !== job || mine !== worker) return;
+      clearTimeout(job.timer);
+      if (hello.v !== PROTOCOL_VERSION) {
+        editing = null;
+        job.reject(new VersionError(`worker speaks protocol ${hello.v}; client expects ${PROTOCOL_VERSION}`));
+        return pump();
+      }
+      job.timer = timeout(silentTimeoutMs, 'no reply');
+      mine.postMessage(job.request);
+    });
+  }
+
   function pump() {
-    if (running || !waiting || disposed) return;
+    if (running || editing || disposed) return;
+    if (edits.length) return pumpEdit();
+    if (!waiting) return;
     const job = (running = waiting);
     waiting = null;
     job.started = Date.now();
@@ -172,6 +215,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       if (disposed) return Promise.reject(new Error('client is disposed'));
       let request: CompileRequest;
       try { request = normalizeCompileRequest({ v: PROTOCOL_VERSION, type: 'compile', id: nextId++, ...input }); } catch (error) { return Promise.reject(error); }
+      newest = Math.max(newest, request.revision);
       return new Promise((resolve, reject) => {
         waiting?.reject(new SupersededError(`revision ${waiting.request.revision} was superseded`));
         waiting = { request, resolve, reject, started: 0 };
@@ -185,11 +229,22 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         } else pump();
       });
     },
+    // Spec 0012: D2 edit operations in, a checked patch to `files[entry]` out (or `error`, with nothing published). Resolves with `error.code: 'stale'` when
+    // a compile or edit of a newer revision was sent before or while this one ran.
+    edit(input: EditInput): Promise<EditResult> {
+      if (disposed) return Promise.reject(new Error('client is disposed'));
+      let request: EditRequest;
+      try { request = normalizeEditRequest({ v: PROTOCOL_VERSION, type: 'edit', id: nextId++, ...input }); } catch (error) { return Promise.reject(error); }
+      if (request.revision < newest) return Promise.resolve(stale(request, newest));
+      newest = request.revision;
+      return new Promise((resolve, reject) => { edits.push({ request, resolve, reject }); pump(); });
+    },
     dispose() {
       disposed = true;
       worker.terminate();
-      for (const job of [running, waiting]) { if (job) { clearTimeout(job.timer); job.reject(new Error('client is disposed')); } }
-      running = waiting = null;
+      for (const job of [running, waiting, editing, ...edits]) { if (job) { clearTimeout(job.timer); job.reject(new Error('client is disposed')); } }
+      running = waiting = editing = null;
+      edits.length = 0;
     },
   };
 }
