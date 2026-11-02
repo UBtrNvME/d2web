@@ -90,7 +90,8 @@ export function createDomView(board: RenderBoard, options: DomOptions): DomView 
       // WebKit retargets shadow-root copy events to the host.
       shadow.host.addEventListener('copy', onCopy as EventListener);
       shadow.host.addEventListener('keydown', onKey as EventListener);
-      shadow.host.addEventListener('focusout', onFocusOut);
+      // On the root, not the host: a focus move between two objects retargets to the host on both sides, so the host never sees it.
+      shadow.addEventListener('focusout', onFocusOut);
       for (const { target, spec } of targets) running.push(target.animate(spec.keyframes as Keyframe[], spec.options));
       calibrate();
       for (const el of flow) {
@@ -126,7 +127,7 @@ export function createDomView(board: RenderBoard, options: DomOptions): DomView 
     dispose() {
       shadow?.host.removeEventListener('copy', onCopy as EventListener);
       shadow?.host.removeEventListener('keydown', onKey as EventListener);
-      shadow?.host.removeEventListener('focusout', onFocusOut);
+      shadow?.removeEventListener('focusout', onFocusOut);
       for (const a of running) a.cancel();
       for (const entry of originals.values()) entry.element.remove();
       originals.clear();
