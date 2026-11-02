@@ -178,29 +178,43 @@ test('a nested shape beside a fixed sibling lands where dropped; empty space pan
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
 });
 
-test('in a circle container a reachable drop lands at the drop point, an unreachable one at the nearest position D2 allows; one Undo each', async ({ page }) => {
-  await open(page);
-  // Pinning the first child moves a circle's origin (TALA grows the circle around it), so the editor measures and corrects instead of assuming.
-  const text = 'c: {\n  shape: circle\n  d\n  e\n}\n';
-  await type(page, text);
-  await select(page, 'c.d');
-  const before = await outline(page), k = await zoom(page);
-  await drag(page, 'c.d', 40, 120);
+// A nested shape's place relative to its container's painted corner, before and after a drag of (dx, dy) screen pixels: the miss in diagram units.
+async function nestedMiss(page, container, id, dx, dy) {
+  await select(page, container); const c0 = await outline(page);
+  await select(page, id); const b0 = await outline(page), k = await zoom(page);
+  await drag(page, id, dx, dy);
+  let miss;
   await expect.poll(async () => {
-    const at = await outline(page).catch(() => undefined);
-    return at && Math.max(Math.abs(at.X - (before.X + 40 / k)), Math.abs(at.Y - (before.Y + 120 / k)));
-  // top/left are integers and one unit can move a shape in a circle by more than a pixel (about 1.2 here), so within 2 px.
+    await painted(page);
+    await select(page, container); const c1 = await outline(page);
+    await select(page, id); const b1 = await outline(page);
+    miss = Math.max(Math.abs((b1.X - c1.X) - (b0.X - c0.X) - dx / k), Math.abs((b1.Y - c1.Y) - (b0.Y - c0.Y) - dy / k));
+    return miss;
   }, { timeout: 20_000 }).toBeLessThanOrEqual(2);
-  await painted(page);
+  return miss;
+}
+
+test('nested drops land at the drop point inside their container (a circle; a container TALA moves); unreachable ones at D2\'s nearest; one Undo each', async ({ page }) => {
+  await open(page);
+  // Pinning a child moves a circle's origin (TALA grows the circle), and a connection into the container can move the whole container:
+  // the editor measures against the container's corner and steps toward the drop point. Integer top/left can move a shape more than 1 px per unit.
+  const circle = 'c: {\n  shape: circle\n  d\n  e\n}\n';
+  await type(page, circle);
+  await nestedMiss(page, 'c', 'c.d', 150, 60);
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expect(page.locator('#src')).toHaveValue(circle);
   await painted(page);
   // Above the origin there is no non-negative top: the shape ends at top 0, D2's nearest.
   await drag(page, 'c.d', 0, -60);
   await expect(page.locator('#src')).toHaveValue(/top: 0\b/, { timeout: 20_000 });
   await painted(page);
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expect(page.locator('#src')).toHaveValue(circle);
+  const moving = 'c: Container {\n  d\n  e\n}\nx -> c.d\n';
+  await type(page, moving);
+  await nestedMiss(page, 'c', 'c.e', 150, 60);
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue(moving);
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {

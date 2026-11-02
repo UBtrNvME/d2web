@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { place } from '../src/position.ts';
+import { place, step } from '../src/position.ts';
 
 const shape = (id, X, Y, extra = {}) => ({ id, kind: 'shape', nodes: [id], properties: {}, box: { X, Y, Width: 50, Height: 60 }, ...extra });
 const fixed = (top, left) => ({ properties: { top: { value: String(top) }, left: { value: String(left) } } });
@@ -31,4 +31,14 @@ test('connections, unknown ids and shapes without a box are not placed', () => {
   assert.equal(place([{ id: 'x', kind: 'connection', nodes: [], properties: {} }], 'x', 1, 1), undefined);
   assert.equal(place([shape('a', 0, 0)], 'b', 1, 1), undefined);
   assert.equal(place([{ ...shape('a', 0, 0), box: undefined }], 'a', 1, 1), undefined);
+});
+
+test('a correction step uses the slope measured from the previous attempt, else moves by the miss', () => {
+  // First attempt: no history, so move by the miss.
+  assert.equal(step(100, 90, 120), 130);
+  // painted = 2 x written: from (100 -> 90) and (130 -> 150), the secant lands the target exactly.
+  assert.equal(step(130, 150, 120, { written: 100, painted: 90 }), 115);
+  // A slope outside 0.2..5 (a layout jump) falls back to the miss; never below 0.
+  assert.equal(step(10, 500, 20, { written: 9, painted: 0 }), 0);
+  assert.equal(step(10, 20, 30, { written: 9, painted: 20 }), 20);
 });

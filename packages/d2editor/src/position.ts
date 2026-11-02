@@ -28,3 +28,10 @@ export function place(objects: readonly AssocObject[], id: string, dx: number, d
   }
   return { top: Math.max(0, Math.round(y)), left: Math.max(0, Math.round(x)), exact: object.parent === undefined };
 }
+
+// One correction of a nested shape's top or left toward `target` (spec 0014 §3): written units per painted pixel as measured from the previous
+// attempt (a secant step), else 1. A slope outside 0.2..5 means the layout jumped rather than slid, so the step falls back to the miss.
+export function step(written: number, painted: number, target: number, prev?: { written: number; painted: number }): number {
+  const slope = prev && painted !== prev.painted ? (written - prev.written) / (painted - prev.painted) : 1;
+  return Math.max(0, Math.round(written + (target - painted) * (slope > 0.2 && slope < 5 ? slope : 1)));
+}

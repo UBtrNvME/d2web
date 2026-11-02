@@ -1,6 +1,6 @@
 # Spec 0014: d2editor, drag to position
 
-Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: a container with an icon or an inside label (handled by the same measurement, not tested), touch input.
+Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: touch input; icon containers were measured by hand (within 1 px) but have no test.
 
 ## 1. Objective
 
@@ -23,7 +23,7 @@ The author drags a shape on the canvas and it stays where they drop it. The posi
   3. else top level: origin (0, 0) (exact);
   4. else (nested, first fixed shape in its container): the container's box corner + 60, an estimate.
 
-  Only the top level is exact by arithmetic. Inside a container the origin moves with the container: TALA's padding depends on the container's shape (a quarter for circles), icons, inside labels and size, and pinning a child can grow or move the container (in a circle, one unit of `left` moved the shape about 1.17 px). So after a nested drop the editor measures where TALA painted the shape and corrects `top`/`left` by the difference, up to three times. A drag and its corrections compile with the default seeds at once (the one-seed pass can lay the container out differently) and are one Undo step. A reachable drop lands within 2 px (integers times that slope); a drop above or left of the origin ends at `top`/`left` 0, the nearest D2 allows. Found by review after the first build, which estimated once.
+  Only the top level is exact by arithmetic. Inside a container the origin moves with the container: TALA's padding depends on the container's shape (a quarter for circles), icons, inside labels and size, and pinning a child can grow or move the container (in a circle, one unit of `left` moved the shape about 1.17 px). A connection into a container can also make TALA move the whole container. So after a nested drop the editor measures where TALA painted the shape **relative to its container's painted corner** (the container may move; the child should stay where it was put inside it) and steps `top`/`left` toward the drop point, using the slope measured from the previous attempt (a secant step, `step` in `position.ts`), up to five times, stopping within 1 px. A drag and its corrections compile with the default seeds at once (the one-seed pass can lay the container out differently) and are one Undo step. A reachable drop lands within 2 px (measured: within 1 px for circle, oval, icon and connected containers); a drop above or left of the origin ends at `top`/`left` 0, the nearest D2 allows. Found by two reviews after the first build: one estimate missed by about 59 px in a circle, and a full-miss correction left 3 to 30 px in circles and ovals and about 160 px when the container moved.
 - Distances are in diagram units: screen pixels divided by the zoom.
 - Undo restores the text before the drag (each drag is one history step). Removing a position is a text edit (or Undo).
 
@@ -35,7 +35,7 @@ The association (spec 0004) gains `properties.top` and `properties.left` with th
 
 - Go: `top`/`left` appear with source when declared and are absent otherwise.
 - Node: the position rules (each of the four cases, clamping at 0, rounding, zoom).
-- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; in a circle container a reachable drop lands within 2 px and an unreachable one ends at `top: 0`, each one Undo step; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
+- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; in a circle container and in a container TALA moves, a reachable drop lands within 2 px of the drop point relative to the container and an unreachable one ends at `top: 0`, each one Undo step; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
 
 ## 6. Boundaries
 
