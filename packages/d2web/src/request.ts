@@ -6,6 +6,10 @@ const ENGINES: readonly Engine[] = ['tala', 'dagre', 'elk'];
 export const ROOT_BOARD = '';
 
 // shortcut: placeholder ceilings copied from the research probes (research/census.go); replace with measured defaults when the worker exists.
+// The d2 CLI default for --tala-seeds; D2 accepts at most 16 distinct seeds.
+export const DEFAULT_SEEDS = [1, 2, 3];
+const MAX_SEEDS = 16;
+
 export const DEFAULT_BUDGETS = {
   maxNodes: 100_000,
   // Client side (spec 0008): a compile running longer than this is aborted by terminating the worker; the wasm never sees it.
@@ -23,6 +27,7 @@ export type ResolvedBudgets = typeof DEFAULT_BUDGETS;
 
 export interface NormalizedRequest extends CompileRequest {
   layout: Engine;
+  seeds: number[];
   budgets: ResolvedBudgets;
   boards: string[] | 'all';
 }
@@ -84,6 +89,14 @@ function boards(value: unknown): string[] | 'all' {
   return [...new Set(value as string[])];
 }
 
+function seeds(value: unknown): number[] {
+  if (value === undefined) return [...DEFAULT_SEEDS];
+  if (!Array.isArray(value) || value.length === 0 || !value.every(Number.isSafeInteger)) return fail('seeds must be a non-empty array of integers');
+  const unique = [...new Set(value as number[])];
+  if (unique.length > MAX_SEEDS) fail(`seeds allows at most ${MAX_SEEDS} distinct values`);
+  return unique;
+}
+
 // Spec 0010: supplied image bytes, by link. Values are checked here so the worker only ever sees bytes with a content type.
 function images(value: unknown): Record<string, ImageBytes> | undefined {
   if (value === undefined) return undefined;
@@ -107,7 +120,7 @@ export function normalizeCompileRequest(input: unknown): NormalizedRequest {
   if (layout !== undefined && !ENGINES.includes(layout as Engine)) fail(`unknown layout engine ${String(layout)}`);
   return {
     v: PROTOCOL_VERSION, type: 'compile', id: integer(input.id, 'id', 0), revision: integer(input.revision, 'revision', 0),
-    files: files as Record<string, string>, entry: entry as string, layout: (layout as Engine | undefined) ?? 'tala',
+    files: files as Record<string, string>, entry: entry as string, layout: (layout as Engine | undefined) ?? 'tala', seeds: seeds(input.seeds),
     render: render(input.render), budgets: overlay(DEFAULT_BUDGETS, input.budgets as Budgets | undefined, 'budgets'), boards: boards(input.boards),
     ...(input.images === undefined ? {} : { images: images(input.images) }),
   };

@@ -27,12 +27,14 @@ All messages are structured-clone JSON-like objects with `v` (protocol version, 
   files: { '<path>': '<text>' },      // virtual filesystem; entry is a key
   entry: 'main.d2',
   layout: 'tala' | 'dagre' | 'elk',   // default tala; ADR 0005
+  seeds: [1, 2, 3],                   // TALA attempts, as d2 --tala-seeds; default [1, 2, 3]
   render: { themeId, themeOverrides?, sketch, pad, scale, center },
   budgets: { maxNodes, maxPathCommands, sketch: {...}, links: {...}, svgImport: {...} },
   boards: ['<board path>', ...] }     // default: root board only; 'all' is allowed
 ```
 - `id` correlates replies; `revision` is the host's document revision and is echoed untouched.
 - Render options are part of the request because they change the scene (section 5).
+- `seeds` are the TALA attempts, the same as `d2 --tala-seeds`: TALA lays the diagram out once per seed, one after another (the wasm is single-threaded), and keeps the best. The default is the d2 CLI's `[1, 2, 3]`, so results match `d2` without flags. A consumer may ask for fewer, for example `[1]` while the user is typing and the default once they stop; fewer seeds are faster but the layout can differ from native. A diagram's own `vars.d2-config.data.tala-seeds` takes precedence, as natively. dagre and ELK ignore the field. At most 16 distinct integers (D2's limit). Decided 2 November 2026.
 - Budgets are required by the builder (section 5). The worker supplies defaults; the request may lower or raise them (decided 31 October 2026).
 - `boards` defaults to the root board only; other boards are requested by path or with `'all'` (decided 31 October 2026). The result lists which boards exist, so a consumer knows what it can ask for.
 
@@ -42,7 +44,7 @@ All messages are structured-clone JSON-like objects with `v` (protocol version, 
   boards: [ { path, scene, association } ],
   diagnostics: [ { severity, message, board?, file?, range? } ],   // range is UTF-16 offsets within `file` (changed with spec 0004; were bytes)
   fonts: { '<asset id>': <bytes> },      // beside the scenes, deduplicated; never inside them
-  echo: { layout, render } }
+  echo: { layout, seeds, render } }
 ```
 - Success carries one entry per requested board. Failure carries `error: { code, message, diagnostics }` and **no** `boards`; a failed compile never returns partial scenes (matches the copy-on-write rule of ADR 0004).
 - `echo` repeats the options actually used, so the host can detect a mismatch (a past bug silently dropped theme overrides and sketch).

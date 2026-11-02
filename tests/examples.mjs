@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 
 // Every native reference uses these settings so references and probe output stay comparable.
-export const nativeArgs = ['--layout=tala', '--tala-seeds=1', '--theme=0', '--dark-theme=-1', '--pad=0', '--scale=1', '--sketch=false', '--center=false', '--bundle=true', '--force-appendix=false', '--animate-interval=0', '--target=*', '--timeout=30'];
+export const nativeArgs = ['--layout=tala', '--tala-seeds=1,2,3', '--theme=0', '--dark-theme=-1', '--pad=0', '--scale=1', '--sketch=false', '--center=false', '--bundle=true', '--force-appendix=false', '--animate-interval=0', '--target=*', '--timeout=30'];
 
 export function examples(full = false) {
   const cases = JSON.parse(readFileSync(join(root, 'examples/cases.json'), 'utf8'));
