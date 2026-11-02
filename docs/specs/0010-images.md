@@ -1,6 +1,6 @@
 # Spec 0010: images and icons
 
-Status: **proposed** (drafted 2 November 2026 after [ADR 0011](../adr/0011-images-like-native-d2.md) was accepted; nothing in it is built, and nothing here is accepted until the user says so). Implements ADR 0011's decision on top of [spec 0001](0001-compile-protocol.md) (protocol and scene), [spec 0004](0004-association.md) (association), [spec 0007](0007-fonts-and-text.md) (the page fetches, the worker stays offline) and the rules of [ADR 0009](../adr/0009-natural-web-forms.md) and [ADR 0010](../adr/0010-web-performance.md).
+Status: **accepted with the recommended answers to questions 1-6** (user, 2 November 2026: "Use the options which are provided"; section 4 records them). Drafted the same day after [ADR 0011](../adr/0011-images-like-native-d2.md) was accepted. Nothing in it is built yet. Implements ADR 0011's decision on top of [spec 0001](0001-compile-protocol.md) (protocol and scene), [spec 0004](0004-association.md) (association), [spec 0007](0007-fonts-and-text.md) (the page fetches, the worker stays offline) and the rules of [ADR 0009](../adr/0009-natural-web-forms.md) and [ADR 0010](../adr/0010-web-performance.md).
 
 ## 1. What is known
 
@@ -12,7 +12,7 @@ All of it from the [findings](../research-findings.md#images-and-icons-what-nati
 - The scene's asset set is closed (`FontAsset`, `RasterAsset`, `VectorAsset`), and every unavailable image shares one placeholder asset, so a scene cannot say which link an image was. The icon of a shape or connection is the scene node `<object id>:icon`.
 - The painter reads raster and vector assets only; an unresolved image is the vector placeholder today.
 
-## 2. Proposal
+## 2. Design (accepted)
 
 ### 2.1 The consumer chooses a mode
 
@@ -22,18 +22,26 @@ All of it from the [findings](../research-findings.md#images-and-icons-what-nati
 images?:
   | { mode: 'bundle'; resolve: (source: string, ctx: { signal: AbortSignal }) => Promise<Blob | ArrayBuffer | Uint8Array | null>;
       supplied?: Record<string, Blob | ArrayBuffer | Uint8Array>;   // known bytes by link, tried before `resolve`
+      fallback?: 'link';                                             // links that stay unresolved are shown as links (2.3); default: placeholder
       limits?: { bytes?: number; count?: number; timeoutMs?: number; concurrency?: number } }
   | { mode: 'link' };
 ```
 
+A small helper covers the common case so most consumers do not write `resolve` by hand; it is never the default:
+
+```ts
+fetchImages({ allow: string[] /* origins, e.g. 'https://icons.terrastruct.com' */, credentials?: 'omit' | 'same-origin' | 'include' /* default 'omit' */, fetch?: typeof fetch })
+  // returns a `resolve`: a link whose origin is not in `allow` resolves to null (unresolved); otherwise the response body as a Blob, or null on a non-2xx or network failure
+```
+
 - `bundle` is native's default SVG behaviour (fetch at compile time, bytes inside the scene), with the page doing the fetching: the consumer's `resolve` is where origins, credentials, caching and CORS are decided. `resolve` returning `null`, throwing, timing out or exceeding a limit leaves that link unresolved (2.4).
 - `link` is native's `--bundle=false`: the link is kept and the browser loads it.
-- The two modes are exclusive in v1. A `fallback: 'link'` for links `resolve` cannot supply (a CORS failure does not stop an `<img>`) is open question 1.
+- `fallback: 'link'` (decision 1) makes a link that `bundle` could not resolve (a CORS failure, an unsupplied origin) show as a link per 2.3, because an `<img>` needs no CORS. Without it an unresolved link is the placeholder. `mode: 'link'` and `mode: 'bundle'` are otherwise exclusive.
 
 ### 2.2 Bundle flow
 
 1. **Preflight.** The client sends `{ type: 'preflight', id, files, entry }`. The worker parses and compiles without layout and answers `{ type: 'images', id, links: [{ board, id, kind, source }], error? }` where `kind` is `icon`, `image` (a `shape: image`) or `edge-icon`, `id` is the D2 object or connection id, `board` is `''` or `layers.x`, `scenarios.x`, `steps.x`, and `source` is D2's own string for the link. A D2 error in the source is returned as `error` and the client skips the fetch: the normal compile that follows returns the same error.
-2. **Select.** The client keeps only links the builder will request: `http:` and `https:` links, and anything else that is not a `data:` URI (relative paths and other schemes go to `resolve` as written, since a browser has no file system; the consumer may supply bytes or return `null`). A `data:` URI is never fetched. Distinct links are fetched once; the fragment is ignored when deciding what is distinct.
+2. **Select.** The client keeps only links the builder will request: `http:` and `https:` links, and anything else that is not a `data:` URI (relative paths and other schemes go to `resolve` as written, since a browser has no file system and `files` stays text only, decision 4; the consumer may supply bytes or return `null`). A `data:` URI is never fetched. Distinct links are fetched once; the fragment is ignored when deciding what is distinct.
 3. **Resolve.** For each missing link the client calls `supplied[source]` then `resolve(source, { signal })`, with the concurrency, byte, count and time limits in 2.5, an in-memory cache keyed by link (capped by the same limits) so a later compile with the same links makes no call, and the signal aborted when a newer compile supersedes this one (spec 0001 §3.4).
 4. **Compile.** The compile request carries `images: Record<string, { type: string; data: Uint8Array }>` keyed by the link exactly as the preflight reported it. The worker serves them through the resolver's HTTP client: a request is answered from the entry whose key, **with its fragment removed**, equals the request URL; everything else gets an error, which D2 maps to its placeholder. `type` is the response's content type (`image/svg+xml`, `image/png`...); D2 sniffs the bytes as it does natively.
 5. **Result.** SVG bytes come back as drawing primitives (D2's `d2svgimport`), raster bytes as embedded raster assets, both through the existing asset painting. `echo.images` repeats the mode used.
@@ -42,11 +50,11 @@ The preflight is skipped when the options give nothing to resolve (`supplied` co
 
 ### 2.3 Link flow
 
-No preflight and no fetch by the library. The compile paints D2's placeholder as today, and the worker adds, per object whose icon is a link the painter may show, an entry to the association payload (spec 0004): `AssociationObject.image?: { source: string; role: 'icon' | 'image' | 'edge-icon'; node: string }`, where `node` is the scene node (`<id>:icon`). The painter replaces that node's placeholder with `<img src="…" alt="" referrerpolicy="no-referrer" decoding="async">` positioned in the box D2 computed, `object-fit` from D2's aspect. Only `http:`, `https:` and `data:image/*` links produce an element (the allowlist of ADR 0009's link-safety rule); `javascript:`, `file:`, relative paths and anything else keep the placeholder. Loading is governed by the host page's own CSP `img-src`. A link that fails to load shows the browser's broken-image state inside D2's box: D2 has no say after layout, as in native SVG.
+In `mode: 'link'` there is no preflight and no fetch by the library; with `bundle` and `fallback: 'link'` the same applies to the links that stayed unresolved, and the worker reports only those. The compile paints D2's placeholder as today, and the worker adds, per object whose icon is a link the painter may show, an entry to the association payload (spec 0004): `AssociationObject.image?: { source: string; role: 'icon' | 'image' | 'edge-icon'; node: string }`, where `node` is the scene node (`<id>:icon`). The painter replaces that node's placeholder with `<img src="…" alt="" referrerpolicy="no-referrer" decoding="async">` positioned in the box D2 computed, `object-fit` from D2's aspect. Only `http:`, `https:` and `data:image/*` links produce an element (the allowlist of ADR 0009's link-safety rule); `javascript:`, `file:`, relative paths and anything else keep the placeholder. Loading is governed by the host page's own CSP `img-src`. A link that fails to load shows the browser's broken-image state inside D2's box: D2 has no say after layout, as in native SVG.
 
 ### 2.4 Unresolved images are a warning, not a failed board
 
-A link that was requested but not supplied (or whose fetch failed, timed out, was too large or over the count) paints D2's placeholder, and the result's `diagnostics` gets a `warning` per link naming the link, the board and the object ids that use it (from the preflight). The diagnostic gains an optional `code` (`'image-unresolved'`, additive, protocol `v` stays 1). D2's own rejections, such as the gradients outside `<defs>` error, stay **errors** with D2's message, because that is what native does and a failed compile returns no board (spec 0001 §3.3). A strict option is open question 2.
+A link that was requested but not supplied (or whose fetch failed, timed out, was too large or over the count) paints D2's placeholder, and the result's `diagnostics` gets a `warning` per link naming the link, the board and the object ids that use it (from the preflight). The diagnostic gains an optional `code` (`'image-unresolved'`, additive, protocol `v` stays 1; decision 6). With `fallback: 'link'` the warning is still reported, with the message saying the link is shown instead. D2's own rejections, such as the gradients outside `<defs>` error, stay **errors** with D2's message, because that is what native does and a failed compile returns no board (spec 0001 §3.3). There is no strict option in v1 (decision 2): a consumer who wants native SVG's failure can turn `code: 'image-unresolved'` diagnostics into its own error.
 
 ### 2.5 Limits
 
@@ -57,7 +65,7 @@ Defaults follow D2's raster resolver (`d2cli/raster.go`) where it has one, and a
 | Bytes per image (encoded) | 4 MiB | the worker's existing `MaxFetchedBytes` |
 | Images per compile | 256 | the worker's `MaxAssets` |
 | Cumulative encoded bytes | 32 MiB | the worker's `MaxCumulativeEncodedBytes` |
-| Time per `resolve` call | 15 s | proposed (D2's CLI uses one minute; a page should not wait that long) |
+| Time per `resolve` call | 15 s | decision 3 (D2's CLI uses one minute; a page should not wait that long) |
 | Concurrent `resolve` calls | 6 | proposed (browser per-host connection limit) |
 
 The worker enforces the byte, count and cumulative limits again on what it receives. Exceeding one makes that image unresolved (2.4); it never fails the board.
@@ -84,17 +92,21 @@ The worker enforces the byte, count and cumulative limits again on what it recei
 12. Browser, hostile bytes supplied by `resolve` (an SVG with `<script>`, `onload`, `foreignObject`, an external `href`, a billion-laughs style `use` chain): either D2 rejects it or the painted DOM contains none of them, and nothing executes.
 13. Association: in `link` mode each object with an allowed link has `image.source` and `image.node`, and the node exists in the board's scene (`<id>:icon`, shape, image shape and edge).
 14. Performance (ADR 0010): on the ecosystem demo example the preflight is under 5% of the compile; the compile count is unchanged; the camera-path measurements of ADR 0010 are unaffected.
-15. Demo: the regex `inlineRemoteImages` and its test are removed and the demo uses `images: { mode: 'bundle', resolve }`.
-16. Docs: `docs/feature-map.md` and the capability matrix change the image rows; spec 0001 §4 "Self-contained" is amended to say links may be carried on the association side.
+15. Demo: the regex `inlineRemoteImages` and its test are removed and the demo uses `images: { mode: 'bundle', resolve: fetchImages({ allow: ['https://icons.terrastruct.com'] }), fallback: 'link' }`.
+16. Unit: `fetchImages` resolves allowed origins with `credentials: 'omit'` by default, returns `null` for an origin outside `allow`, for a non-2xx and for a network failure, and never throws.
+17. Browser: with `fallback: 'link'`, a link `resolve` returned `null` for is painted as an `<img>` by 2.3 (and still produces the `image-unresolved` warning), while a link that resolved is real vectors; without `fallback` it is the placeholder.
+18. Docs: `docs/feature-map.md` and the capability matrix change the image rows; spec 0001 §4 "Self-contained" is amended to say links may be carried on the association side.
 
-## 4. Open questions for the user
+## 4. Decisions taken in review (user, 2 November 2026: "Use the options which are provided", that is, the recommended answers)
 
-1. **Fallback to link.** Recommended: add `fallback: 'link'` to `bundle` (default off), so a link the consumer cannot supply because of CORS still loads in an `<img>`, which needs no CORS. Alternative: keep the two modes strictly exclusive.
-2. **Strictness.** Recommended: no strict option in v1; an unresolved image is a warning, and consumers can turn warnings into failures themselves. Alternative: `strict: true` to fail the compile like native's default SVG.
-3. **Timeout default.** Recommended: 15 s per `resolve` call. Alternative: D2's one minute.
-4. **Local binary images.** Recommended: no file system; a relative path is a link like any other and goes to `resolve` or `supplied`. Alternative: extend `files` to carry binary values.
-5. **A helper for the common case.** Recommended: ship a small `fetchImages({ allow: [origins], credentials: 'omit' })` in the package so most consumers do not write `resolve` by hand, but not as the default. Alternative: documentation only.
-6. **`code` on diagnostics.** Recommended: add an optional `code` field now (additive). Alternative: message text only.
+1. **Fallback to link: yes**, as `fallback: 'link'` on `bundle`, default off.
+2. **Strictness: no strict option in v1.** An unresolved image is a warning; consumers can escalate it themselves.
+3. **Timeout default: 15 s** per `resolve` call.
+4. **Local binary images: no file system.** A relative path is a link like any other and goes to `resolve` or `supplied`; `files` stays text only.
+5. **Helper: yes**, `fetchImages({ allow, credentials, fetch })`, not the default.
+6. **`code` on diagnostics: yes**, optional and additive.
+
+Still unknown, to be settled by the tests below and recorded here: the association entry's exact fields once `link` mode is built, TALA's effect on images, arrowhead and table icons, and Firefox and WebKit behaviour.
 
 ## 5. Verified, proposed, unknown
 
@@ -107,7 +119,7 @@ The worker enforces the byte, count and cumulative limits again on what it recei
 | The scene has no link-only asset; unavailable images share one placeholder | verified: `d2scene` source |
 | The icon node is `<id>:icon` for shapes and connections | read from `d2scenebuild/assets.go`; for `shape: image` to be confirmed by test 13 |
 | Native PDF, PPTX and GIF match PNG | measured once, dagre |
-| The preflight in the worker protocol, the `images` field, the client modes and the diagnostics | proposed |
+| The preflight in the worker protocol, the `images` field, the client modes, `fetchImages`, the fallback and the diagnostics | accepted design, not built |
 | The painter's `<img>` in `link` mode matches D2's icon box | proposed (test 11) |
 | TALA changes nothing about images; arrowhead and table icons | unknown |
 | Firefox and WebKit behaviour of any of it | unknown |
