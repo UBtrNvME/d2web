@@ -104,11 +104,18 @@ let timer;
 const later = () => { clearTimeout(timer); timer = setTimeout(run, 300); };
 $('src').addEventListener('input', later);
 for (const id of ['theme', 'layout', 'sketch']) $(id).addEventListener('change', run);
+const sheet = new CSSStyleSheet();
 function paintCanvas() {
   const board = last?.boards.find(b => b.path === $('board').value), color = backgroundOf(board?.scene), canvas = document.querySelector('main');
   canvas.style.backgroundColor = color;
   // Dots are black or white ink at low alpha, whichever contrasts with the scene's background; with no solid background the system text colour is used.
   const [r, g, b] = color ? color.match(/\d+/g).map(Number) : [];
+  // D2 paints the board background as an opaque rectangle, which would hide the dots and make the board read as a picture pasted on the canvas.
+  // The canvas already carries that same solid colour, so the rectangle is hidden and the dots show through; the colour D2 chose is unchanged.
+  // A gradient or pattern background has no single colour to hand to the canvas, so there the rectangle stays.
+  const root = $('host').shadowRoot;
+  if (root && !root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+  sheet.replaceSync(color ? '[data-id="root:background"] { display: none; }' : '');
   canvas.style.setProperty('--dot', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.25)') : '');
 }
 
