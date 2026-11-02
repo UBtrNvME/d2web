@@ -322,6 +322,38 @@ test('theme and layout menus reach the compile, are restored on reload, and othe
   expect((await last()).layout).toBe('dagre');
 });
 
+test('a ?script= link opens on top of the saved text, a bad link keeps it, and Share copies a link that reopens the diagram', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page);
+  await type(page, 'mine: My saved text\n');
+  // D2's own encoding (lib/urlenc) of a small script, as Go produces it.
+  const script = 'x -> y\nI just forgot my whole philosophy of life!!!: {\n  s: TV is chewing gum for the eyes\n}\n';
+  await page.goto('http://localhost:5281/?script=FMvBDcIwDEDRe6b4GYAFeuDOHbEAcmKjFFc4VbEQuyMGeG9OZ7JceOwxaf7qPlmTQ30Im9rw8E0TbwxrUmtd-BSIhesNC-4qhz07fV__nqmCpET5lt8A&layout=dagre');
+  await painted(page);
+  await expect(page.locator('#src')).toHaveValue(script);
+  await expect(page.locator('#layout')).toHaveValue('dagre');
+  expect(new URL(page.url()).search).toBe('');
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+  await page.goto('http://localhost:5281/?script=broken!!');
+  // The error outlasts the startup compiles (seeds [1], then the idle default seeds).
+  await expect.poll(() => page.evaluate(() => traffic.results.filter(r => !r.error).length)).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('#status.error')).toContainText('shared link could not be opened');
+  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+  // A link's layout and theme apply to that visit only; the menus are the saved choice.
+  await expect(page.locator('#layout')).toHaveValue('tala');
+  await page.selectOption('#layout', 'elk');
+  await painted(page);
+  await page.click('#share');
+  await expect(page.locator('#status')).toContainText('Link copied');
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(new URL(link).searchParams.get('layout')).toBe('elk');
+  await type(page, 'other: text\n');
+  await page.goto(link);
+  await painted(page);
+  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+});
+
 test('opening, downloading, restore and editing/idle seeds work at /editor/', async ({ page }) => {
   await open(page, '/editor/');
   // No example menu (user, 2 November 2026): files come from Open or the source pane.
