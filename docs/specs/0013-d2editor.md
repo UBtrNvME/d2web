@@ -1,6 +1,6 @@
 # Spec 0013: d2editor, first slice (canvas editing on GitHub Pages)
 
-Status: **accepted** (user, 2 November 2026: "Approve", with the recommended answer to each question in section 9). Nothing is built. Idea: [d2editor](../ideas/d2editor.md). Consumer of the [edit API](0012-edit-api.md) under [ADR 0012](../adr/0012-editing-in-scope.md); a new directory under `packages/` as [ADR 0008](../adr/0008-repository-layout.md) foresees. d2editor is an application; d2web stays a library and gains nothing from this spec.
+Status: **accepted** (user, 2 November 2026, with the recommended section 9 answers); **built** 2 November 2026: `mise run check` and `mise run check:browser` pass, including 12 Chromium editor cases (section 10). Not yet deployed: Pages publishes `/editor/` after merge to `main`. Idea: [d2editor](../ideas/d2editor.md). Consumer of the [edit API](0012-edit-api.md) under [ADR 0012](../adr/0012-editing-in-scope.md); a new directory under `packages/` as [ADR 0008](../adr/0008-repository-layout.md) foresees. d2editor is an application; d2web stays a library and gains nothing from this spec.
 
 ## 1. Objective
 
@@ -80,3 +80,15 @@ Answered 2 November 2026 with the recommendations: seeds `[1]` while editing and
 2. **New object names:** D2's free key (`probe_new` style, `create` picks it) then an inline rename prompt, or ask for a name first? Recommended: create, then focus the rename field.
 3. **Source pane:** a plain `<textarea>` with patch highlights drawn beside it, or a code editor dependency (CodeMirror)? Recommended: textarea now; an editor dependency is an "ask first".
 4. **Pages path:** `/editor/` beside the demo, or make the editor the site root and move the demo? Recommended: `/editor/`.
+
+## 10. Implementation and remaining acceptance
+
+The page, checked edit flow, whole-text history, layout snap, files/storage, editing/idle seeds, Pages staging and 12 Chromium acceptance cases are present in `packages/d2editor`. Snap pairing and built-file response checks pass in Node. Gate results are in the [handoff](../../tasks/todo.md#d2editor-handoff-2-november-2026). Browser-verified in Chromium; not deployed until merge.
+
+Differences and open items:
+
+- The accepted continuation deliberately imports `../../d2web/src/index.ts`; there is no new private package/workspace dependency or lockfile change. The root TypeScript configuration already includes the editor. Page wiring remains in `main.ts`, with separate `history.ts` and `snap.ts`.
+- Association `properties` now carries a declared `shape` with its source (user: "Yes, add shape", 2 November 2026; spec 0004 amended, `TestShapePropertyAndSource`). The inspector shows it; an undeclared shape shows as D2's default.
+- The editor now uses the demo's `spawnWorker()` defaults, resolving dependencies beside the bundle, and the dev server listens on IPv4 and IPv6 loopback. Static dependency responses are tested. The original localhost `importScripts` failure was `localhost` resolving to `::1` while the server listened on `127.0.0.1` only; with both, the page loads its worker and wasm (checked by hand in the browser pane).
+- The Pages test assembles the actual demo/editor files into an ignored `_site` directory and serves those files through `page.route`. Keyboard behaviour and the snap are covered by the Chromium cases; a locally listening `_site` server and live Pages are not tested.
+- Found by the keyboard case and fixed in d2web's edit API: deleting a file's only object returned a single blank line instead of an empty file (`TestDeletingEverythingLeavesAnEmptyFile`).

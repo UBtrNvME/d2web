@@ -29,10 +29,12 @@ jobs:
       - uses: jdx/mise-action@v5
       - run: mise run setup
       - run: mise run build
+      - run: mise run editor:build
       - run: |
           mkdir _site
           cp packages/d2web/dist/{index.js,worker.js,wasm_exec.js,d2web.wasm,NOTICE.txt} _site/
           cp packages/d2web/demo/index.html _site/
+          cp -R packages/d2editor/dist _site/editor
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

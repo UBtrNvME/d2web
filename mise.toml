@@ -21,7 +21,7 @@ run = ["mise tasks validate", "git diff --check", "git diff --cached --check"]
 
 [tasks."check:browser"]
 description = "Slow gate (about 3 min): every Chromium/Playwright suite. Run before handoff, not on every edit."
-depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:demo", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
+depends = ["test:comparison", "test:client", "test:features:paint", "test:dist", "test:consumer", "test:demo", "test:editor", "test:research:transaction", "test:research:text", "test:research:rich", "test:research:census", "test:research:lifecycle", "test:research:content", "test:research:a11y", "test:research:loop", "test:research:connections", "test:research:composition"]
 
 [tasks."check:full"]
 description = "Everything CI runs on a pull request: check plus check:browser"
@@ -50,7 +50,7 @@ run = "node --test tests/native-render.test.mjs"
 
 [tasks."test:unit"]
 description = "Check example inventory, safe cleanup, and complete board pairing"
-run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs packages/d2web/tests/render.test.mjs packages/d2editor/tests/history.test.mjs"
+run = "node --test tests/clean.test.mjs tests/examples.test.mjs tests/outputs.test.mjs tests/upstream-patches.test.mjs packages/d2web/tests/request.test.mjs packages/d2web/tests/client.test.mjs packages/d2web/tests/association.test.mjs packages/d2web/tests/animation.test.mjs packages/d2web/tests/markdown.test.mjs packages/d2web/tests/paint-mask.test.mjs packages/d2web/tests/images.test.mjs packages/d2web/tests/paint-image-link.test.mjs packages/d2web/tests/render.test.mjs packages/d2editor/tests/history.test.mjs packages/d2editor/tests/snap.test.mjs"
 
 [tasks."test:wasm"]
 description = "Go tests for the product module (packages/d2web-wasm): scene encoder over the example corpus, native build only"
@@ -290,7 +290,7 @@ run = "node packages/d2editor/serve.mjs"
 [tasks."test:editor"]
 description = "d2editor in Chromium against the built site with the real worker: canvas edits land as checked patches (spec 0013)"
 depends = ["editor:build"]
-run = "pnpm exec playwright test packages/d2editor/tests/editor.spec.mjs --reporter=line --output=artifacts/d2editor/run"
+run = ["node --test packages/d2editor/tests/serve.test.mjs", "pnpm exec playwright test packages/d2editor/tests/editor.spec.mjs --reporter=line --output=artifacts/d2editor/run"]
 
 [tasks."measure:layout"]
 description = "Measure layout time per engine in Chromium and write docs/layout-limits.md (spec 0008; takes minutes, not part of check)"

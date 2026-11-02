@@ -7,12 +7,12 @@ import (
 
 func TestMarkdownHTMLKeepsD2ElementsAndOnlyTheAttributesD2Reads(t *testing.T) {
 	for source, want := range map[string]string{
-		"# T\n\n- a\n  - b\n\n3. c\n\n| x | y |\n|:-:|--:|\n| 1 | 2 |": "<h1>T</h1>\n<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n<ol start=\"3\">\n<li>c</li>\n</ol>\n<table>\n<thead>\n<tr>\n<th align=\"center\">x</th>\n<th align=\"right\">y</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"center\">1</td>\n<td align=\"right\">2</td>\n</tr>\n</tbody>\n</table>\n",
+		"# T\n\n- a\n  - b\n\n3. c\n\n| x | y |\n|:-:|--:|\n| 1 | 2 |":                                      "<h1>T</h1>\n<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n<ol start=\"3\">\n<li>c</li>\n</ol>\n<table>\n<thead>\n<tr>\n<th align=\"center\">x</th>\n<th align=\"right\">y</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"center\">1</td>\n<td align=\"right\">2</td>\n</tr>\n</tbody>\n</table>\n",
 		`<p onclick="x()" style="color:red">hi <!-- c --></p> <a href="javascript:x" onmouseover="y">j</a>`: `<p>hi </p> <a href="javascript:x">j</a>`,
 		`[l](https://x.test "t")`: `<p><a href="https://x.test" title="t">l</a></p>` + "\n",
-		"```\n<&>\n```": "<pre><code>&lt;&amp;&gt;\n</code></pre>\n",
-		"![i](x.png)": "",
-		"<span>x</span>": "",
+		"```\n<&>\n```":           "<pre><code>&lt;&amp;&gt;\n</code></pre>\n",
+		"![i](x.png)":             "",
+		"<span>x</span>":          "",
 		`<a title="t" href="https://y.test" href="javascript:x">y</a>`: `<p><a href="https://y.test" title="t">y</a></p>` + "\n",
 	} {
 		if got := markdownHTML(source); got != want {
@@ -80,5 +80,27 @@ func TestShapeBoxIsD2sBox(t *testing.T) {
 	}
 	if plain, animated := boxOf("a <-> b\n"), boxOf("a <-> b: { style.animated: true }\n"); plain != animated || plain[1] == 0 {
 		t.Errorf("animated route box %v, plain %v", animated, plain)
+	}
+}
+
+// Spec 0004 amendment (2 November 2026, for the d2editor inspector): a declared shape and its declaration; D2's default rectangle is absent.
+func TestShapePropertyAndSource(t *testing.T) {
+	res := compileText(t, "classes: {db: {shape: cylinder}}\na: {shape: person}\nb.class: db\nc\n")
+	props := map[string]map[string]any{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		props[obj["id"].(string)] = obj["properties"].(map[string]any)
+	}
+	for id, want := range map[string]struct {
+		value string
+		line  float64
+	}{"a": {"person", 1}, "b": {"cylinder", 0}} {
+		shape, ok := props[id]["shape"].(map[string]any)
+		if !ok || shape["value"] != want.value || shape["source"].(map[string]any)["start"].(map[string]any)["line"] != want.line {
+			t.Errorf("%s shape %v, want %s declared on line %v", id, props[id]["shape"], want.value, want.line)
+		}
+	}
+	if _, ok := props["c"]["shape"]; ok {
+		t.Errorf("c has no declared shape, got %v", props["c"]["shape"])
 	}
 }

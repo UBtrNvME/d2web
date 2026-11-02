@@ -313,6 +313,10 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 	a := &Association{Objects: []AssocObject{}}
 	for _, o := range g.Objects {
 		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style)}
+		// Only a declared shape: D2 fills in "rectangle" without a key, and a default is absent from properties (spec 0004).
+		if o.Shape.MapKey != nil {
+			out.Properties["shape"] = scalar(&o.Shape)
+		}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}

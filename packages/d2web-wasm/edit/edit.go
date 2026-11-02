@@ -140,7 +140,8 @@ func Apply(req Request) (res Result) {
 	}
 	merged, conflicts := merge3(lines(formatted), lines(text), lines(output))
 	patched := strings.Join(merged, "\n")
-	if strings.HasSuffix(text, "\n") || text == "" {
+	// Keep the author's final newline; an emptied file stays empty rather than becoming one blank line.
+	if patched != "" && (strings.HasSuffix(text, "\n") || text == "") {
 		patched += "\n"
 	}
 	pg, err := compile(req, patched)

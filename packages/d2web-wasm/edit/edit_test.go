@@ -212,3 +212,11 @@ func TestImportedBoardsAndObjectsWarn(t *testing.T) {
 		}
 	}
 }
+
+// Found by the d2editor keyboard test: deleting the only object left "\n" instead of an empty file.
+func TestDeletingEverythingLeavesAnEmptyFile(t *testing.T) {
+	res := apply(t, "a: A\n", Op{Op: "delete", Key: "a"})
+	if res.Error != nil || res.Patch.Text != "" || applyEdits("a: A\n", res.Patch.Edits) != "" {
+		t.Fatalf("%+v %+v", res.Patch, res.Error)
+	}
+}
