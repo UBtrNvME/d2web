@@ -2,6 +2,7 @@
 import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult } from '../../d2web/src/index.ts';
 import { createHistory } from './history.ts';
 import { snap } from './snap.ts';
+import { canvas } from './canvas.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -22,6 +23,9 @@ try { initial = localStorage.getItem(STORAGE) ?? START; } catch { /* storage is 
 const client = createClient({ spawn: spawnWorker() });
 const view = mount($('host'));
 const history = createHistory(initial);
+const camera = canvas($('canvas'), $('host'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; });
+// Fit the next painted board: on load, an opened file or example, and a board switch.
+let fitNext = true;
 // `painted` is the revision the canvas shows.
 const state = { text: initial, revision: 0, painted: -1, board: '', result: undefined as CompileResult | undefined, selected: '', connectFrom: '' };
 type Range = { start: number; end: number; text: string };
@@ -31,6 +35,7 @@ let pending: { revision: number; ids: EditResult['ids']; changed: string[] } | u
 function status(message: string, error = false) {
   $('status').textContent = message;
   $('status').classList.toggle('error', error);
+  $('status').dataset.state = error ? 'error' : message === 'Compiling…' ? 'busy' : 'ok';
 }
 
 // The last patch's ranges, marked in a copy of the text behind the transparent textarea.
@@ -71,6 +76,7 @@ async function compile(seeds?: number[]) {
   const focused = $('host').shadowRoot?.activeElement?.getAttribute('data-id');
   try { await view.update(result, board); } catch (error) { status(String(error), true); return; }
   if (revision !== state.revision || run !== compileRun) return;
+  if (fitNext) { fitNext = false; camera.fit(); }
   const after = result.boards!.find(b => b.path === board)!.association;
   const change = pending?.revision === revision ? pending : undefined;
   if (before) snap($('host').shadowRoot!, before, after, change?.ids, change?.changed);
@@ -152,7 +158,7 @@ function select(id: string) {
   inspect();
 }
 view.on('click', e => select(e.id));
-view.on('focus', e => { state.selected = e.id; inspect(); });
+view.on('focus', e => { if (camera.pressed) return; state.selected = e.id; camera.reveal(e.domEvent.target as Element); inspect(); });
 
 function objectOf(id: string) {
   const board = state.result?.boards?.find(b => b.path === state.board);
@@ -165,17 +171,25 @@ function inspect() {
   if (!object) return;
   const form = $<HTMLFormElement>('props');
   const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
-  $('selected').textContent = `${object.kind === 'connection' ? 'Connection' : 'Shape'} ${object.id}`;
+  $('selected').replaceChildren(Object.assign(document.createElement('span'), { className: 'kind', textContent: object.kind === 'connection' ? 'Connection' : 'Shape' }), ` ${object.id}`);
   for (const name of ['label', 'fill', 'stroke']) {
     if (document.activeElement !== field(name)) field(name).value = object.properties[name]?.value ?? (name === 'label' ? object.label : '');
+  }
+  // The pickers follow the text field when it holds a hex colour; D2 theme codes and names leave the picker dimmed.
+  for (const picker of form.querySelectorAll<HTMLInputElement>('input[type=color]')) {
+    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(field(picker.dataset.for!).value) ? field(picker.dataset.for!).value : '';
+    picker.value = hex.length === 4 ? `#${[...hex.slice(1)].map(c => c + c).join('')}` : hex || '#000000';
+    picker.classList.toggle('unset', !hex);
   }
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
   for (const el of form.querySelectorAll<HTMLElement>('[data-shape-only]')) el.hidden = object.kind === 'connection';
   // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
-  $('sources').textContent = ['label', 'fill', 'stroke', 'shape'].map(name => {
+  $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {
     const source = object.properties[name]?.source;
-    return `${name}: ${source ? `${source.path} line ${source.start.line + 1}` : "D2's default"}`;
-  }).join('\n');
+    const dd = Object.assign(document.createElement('dd'), { textContent: source ? `${source.path} line ${source.start.line + 1}` : "D2's default" });
+    dd.classList.toggle('default', !source);
+    return [Object.assign(document.createElement('dt'), { textContent: name }), dd];
+  }));
   const name = $('rename').querySelector('input') as HTMLInputElement;
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
 }
@@ -184,6 +198,13 @@ const shapeSelect = ($<HTMLFormElement>('props').elements.namedItem('shape') as 
 shapeSelect.append(new Option("D2's", ''), ...SHAPES.map(s => new Option(s, s)));
 $<HTMLFormElement>('props').addEventListener('change', event => {
   const input = event.target as HTMLInputElement;
+  // A picked colour goes through its text field, so both make the same edit.
+  if (input.dataset.for) {
+    const text = ($<HTMLFormElement>('props').elements.namedItem(input.dataset.for) as HTMLInputElement);
+    text.value = input.value;
+    text.dispatchEvent(new Event('change', { bubbles: true }));
+    return;
+  }
   const id = state.selected, value = input.name === 'label' ? input.value : input.value.trim() || null;
   const key = { label: id, fill: `${id}.style.fill`, stroke: `${id}.style.stroke`, shape: `${id}.shape` }[input.name];
   if (key) void edit([{ op: 'set', key, value }]);
@@ -233,19 +254,30 @@ function step(text: string | undefined) {
 }
 $('undo').addEventListener('click', () => step(history.undo()));
 $('redo').addEventListener('click', () => step(history.redo()));
+$('zoom-in').addEventListener('click', () => camera.zoomBy(1.25));
+$('zoom-out').addEventListener('click', () => camera.zoomBy(0.8));
+$('zoom').addEventListener('click', () => camera.reset());
+$('fit').addEventListener('click', () => camera.fit());
+const typingIn = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { connecting(false); select(''); return; }
+  // Figma-style view keys outside text fields: +/- zoom, Shift+1 fit, Shift+0 100%.
+  if (!typingIn(event.target) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const action = { '+': () => camera.zoomBy(1.25), '=': () => camera.zoomBy(1.25), '-': () => camera.zoomBy(0.8), '!': () => camera.fit(), ')': () => camera.reset() }[event.key];
+    if (action) { event.preventDefault(); action(); return; }
+  }
   if (event.key === 'Enter' && event.target === $('host') && state.connectFrom) { event.preventDefault(); select(state.selected); return; }
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z' || $<HTMLDialogElement>('unchecked').open) return;
   event.preventDefault();
   step(event.shiftKey ? history.redo() : history.undo());
 });
 
-$<HTMLSelectElement>('board').addEventListener('change', event => { state.board = (event.target as HTMLSelectElement).value; state.selected = ''; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
+$<HTMLSelectElement>('board').addEventListener('change', event => { state.board = (event.target as HTMLSelectElement).value; state.selected = ''; fitNext = true; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
 
 function openText(text: string) {
   history.reset(text);
   state.board = '';
+  fitNext = true;
   state.selected = '';
   connecting(false);
   setText(text, { record: false });
