@@ -32,9 +32,16 @@ const examples = {
   'Containers': 'cloud: Cloud {\n  web: Web\n  app: App\n  web -> app\n}\nuser: User {shape: person}\nuser -> cloud.web: https\n',
   'Sequence diagram': 'shape: sequence_diagram\nalice -> bob: hello\nbob -> alice: hi\nalice -> bob: bye\n',
   'Grid': 'grid-rows: 2\ngrid-columns: 3\na\nb\nc\nd\ne\nf\n',
-  'SQL table and class': 'users: {shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar(100)\n}\nShape: {shape: class\n  +area(): float\n}\nusers.id -> Shape\n',
+  'SQL table and class': 'users: {shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar(100)\n}\nPolygon: {shape: class\n  +area(): float\n}\nusers.id -> Polygon\n',
   'Animated, links and tooltips': 'a -> b {style.animated: true}\nb: Docs {link: https://d2lang.com; tooltip: Opens the D2 docs}\nc: Lift {style.animated: true}\n',
   'Markdown, code, LaTeX': 'md: |md\n# Title\nSome **bold** text\n|\ncode: |`go\nfunc main() {}\n`|\nmath: |`latex\n\\frac{a}{b} + \\sqrt{c}\n`|\n',
+  'SQL foreign keys': 'orders: {shape: sql_table\n  id: int {constraint: primary_key}\n  user_id: int {constraint: foreign_key}\n  total: decimal\n}\nusers: {shape: sql_table\n  id: int {constraint: primary_key}\n  email: varchar {constraint: unique}\n}\norders.user_id -> users.id\n',
+  'Shapes gallery': 'grid-columns: 4\na: Rectangle {shape: rectangle}\nb: Circle {shape: circle}\nc: Diamond {shape: diamond}\nd: Hexagon {shape: hexagon}\ne: Cloud {shape: cloud}\nf: Cylinder {shape: cylinder}\ng: Document {shape: document}\nh: Queue {shape: queue}\ni: Step {shape: step}\nj: Package {shape: package}\nk: Callout {shape: callout}\nl: Person {shape: person}\n',
+  'Classes and variables': 'vars: {primary: "#1d4ed8"}\nclasses: {\n  service: {style.fill: ${primary}; style.font-color: white; style.border-radius: 8}\n}\nauth: Auth {class: service}\nbilling: Billing {class: service}\ndb: Postgres {shape: cylinder}\nauth -> db\nbilling -> db\n',
+  'Globs': '*.style.fill: "#dbeafe"\n(* -> *)[*].style.stroke: "#1d4ed8"\na\nb\nc\na -> b -> c\n',
+  'Arrowheads and labels': 'a -> b: {source-arrowhead.label: 1; target-arrowhead.label: "*"}\nb -> c: two way {source-arrowhead: {shape: diamond}; target-arrowhead: {shape: arrow}}\nc -> d: dashed {style.stroke-dash: 4}\nd -> a: animated {style.animated: true}\n',
+  'Nested containers': 'cloud: Cloud {\n  region: eu-west {\n    api: API\n    worker: Worker\n    api -> worker: jobs\n  }\n  store: Storage {shape: cylinder}\n  region.worker -> store\n}\nuser: User {shape: person}\nuser -> cloud.region.api: https\n',
+  'Multi-line labels': 'a: "Line one\\nLine two\\nLine three"\nb: Single\na -> b: "edge label\\non two lines"\n',
   'Layers (boards)': 'a -> b\nlayers: {\n  detail: {\n    x -> y\n  }\n}\n',
 };
 const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
