@@ -10,10 +10,13 @@
   label { display: flex; gap: 6px; align-items: center; }
   /* The canvas is demo chrome, not part of d2web: an infinite, dotted surface the board sits on. Its colour is D2's own scene background for the
      chosen theme (set in paintCanvas); the dots are a translucent ink picked for contrast with it. Pan and zoom are the demo's, in #world. */
-  main { position: relative; overflow: hidden; touch-action: none; cursor: grab; background-color: Canvas; --dot-rgb: 128 128 128; --dot-a: .22; --dot-r: .5px;
+  main { position: relative; overflow: hidden; touch-action: none; cursor: grab; background-color: Canvas; }
+  /* The dot grid is a sibling layer, not styling on <main>: its custom properties change on every pan frame, and on an ancestor of the board
+     they would restyle every element in it each time. */
+  #grid { position: absolute; inset: 0; pointer-events: none; --dot-rgb: 128 128 128; --dot-a: .22; --dot-r: .5px;
     background-image: radial-gradient(circle, rgb(var(--dot-rgb) / var(--dot-a)) var(--dot-r), transparent calc(var(--dot-r) + .4px)); background-size: var(--gap, 20px) var(--gap, 20px); background-position: var(--px, 0) var(--py, 0); }
   main.panning { cursor: grabbing; user-select: none; }
-  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  #world { position: absolute; z-index: 0; left: 0; top: 0; transform-origin: 0 0; }
   .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center; cursor: default; }
   .zoom button { min-width: 32px; height: 32px; font: inherit; cursor: pointer; }
   .zoom output { min-width: 3.5em; text-align: center; font-size: 12px; opacity: .8; }
@@ -32,6 +35,7 @@
   <div id="errors"></div>
 </aside>
 <main aria-label="Diagram canvas: drag empty space to pan, Ctrl or Cmd with the wheel (or pinch) to zoom">
+  <div id="grid" aria-hidden="true"></div>
   <div id="world"><div id="host"></div></div>
   <div class="zoom" role="group" aria-label="Canvas zoom">
     <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
@@ -202,7 +206,7 @@ function paintCanvas() {
   const root = $('host').shadowRoot;
   if (root && !root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
   sheet.replaceSync(color ? '[data-id="root:background"] { display: none; }' : '');
-  canvas.style.setProperty('--dot-rgb', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? '0 0 0' : '255 255 255') : '');
+  $('grid').style.setProperty('--dot-rgb', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? '0 0 0' : '255 255 255') : '');
 }
 
 // The infinite canvas (demo only): a pan/zoom transform on #world and a dot grid that moves and scales with it. Dragging empty space (or any
@@ -211,21 +215,26 @@ function paintCanvas() {
 const canvas = document.querySelector('main'), world = $('world');
 const camera = { x: 0, y: 0, k: 1 };
 const MIN = 0.1, MAX = 4;
+const grid = $('grid');
+let shownLevel = '', queued = false;
+// Input handlers ask for a frame; the camera is applied once per animation frame however many wheel or pointer events arrived.
+const scheduleCamera = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; applyCamera(); }); } };
 function applyCamera() {
   world.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.k})`;
   // Quiet by design (React Flow and tldraw as reference): 1 px dots every 20 px, scaling with zoom, fading out when zoomed far out instead of thickening.
   const gap = 20 * camera.k;
-  canvas.style.setProperty('--dot-a', `${(0.22 * Math.min(1, Math.max(0, (camera.k - 0.25) / 0.35))).toFixed(3)}`);
-  canvas.style.setProperty('--dot-r', `${Math.min(1.5, Math.max(0.5, 0.5 * camera.k)).toFixed(2)}px`);
-  canvas.style.setProperty('--gap', `${gap}px`);
-  canvas.style.setProperty('--px', `${camera.x % gap}px`);
-  canvas.style.setProperty('--py', `${camera.y % gap}px`);
-  $('zoom-level').textContent = `${Math.round(camera.k * 100)}%`;
+  grid.style.setProperty('--dot-a', `${(0.22 * Math.min(1, Math.max(0, (camera.k - 0.25) / 0.35))).toFixed(3)}`);
+  grid.style.setProperty('--dot-r', `${Math.min(1.5, Math.max(0.5, 0.5 * camera.k)).toFixed(2)}px`);
+  grid.style.setProperty('--gap', `${gap}px`);
+  grid.style.setProperty('--px', `${camera.x % gap}px`);
+  grid.style.setProperty('--py', `${camera.y % gap}px`);
+  const level = `${Math.round(camera.k * 100)}%`;
+  if (level !== shownLevel) { shownLevel = level; $('zoom-level').textContent = level; } // a text change forces layout, so only when it changes
 }
 function zoomAt(factor, cx, cy) {
   const k = Math.min(MAX, Math.max(MIN, camera.k * factor)), ratio = k / camera.k;
   camera.x = cx - (cx - camera.x) * ratio; camera.y = cy - (cy - camera.y) * ratio; camera.k = k;
-  applyCamera();
+  scheduleCamera();
 }
 const centre = () => { const r = canvas.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
 function fit() {
@@ -242,7 +251,7 @@ canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const r = canvas.getBoundingClientRect();
   if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-Math.max(-60, Math.min(60, e.deltaY * (e.deltaMode ? 5 : 1))) * 0.01), e.clientX - r.left, e.clientY - r.top); // trackpad pinch arrives as ctrl+wheel
-  else { camera.x -= e.deltaX; camera.y -= e.deltaY; applyCamera(); }
+  else { camera.x -= e.deltaX; camera.y -= e.deltaY; scheduleCamera(); }
 }, { passive: false });
 const pointers = new Map();
 let moved = false, pinch = null, panning = false;
@@ -262,7 +271,7 @@ canvas.addEventListener('pointermove', e => {
   if (pointers.size === 2 && pinch) {
     const [a, b] = [...pointers.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), r = canvas.getBoundingClientRect();
     zoomAt(d / pinch, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); pinch = d;
-  } else if (pointers.size === 1) { camera.x += dx; camera.y += dy; applyCamera(); }
+  } else if (pointers.size === 1) { camera.x += dx; camera.y += dy; scheduleCamera(); }
 });
 const release = e => { pointers.delete(e.pointerId); pinch = null; if (!pointers.size) { canvas.classList.remove('panning'); setTimeout(() => { panning = false; }, 0); } };
 canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release);
