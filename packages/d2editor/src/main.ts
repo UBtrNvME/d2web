@@ -3,6 +3,7 @@ import { createClient, getObject, mount, spawnWorker, type CompileResult, type E
 import { createHistory } from './history.ts';
 import { snap } from './snap.ts';
 import { canvas } from './canvas.ts';
+import { decodeScript, encodeScript } from './share.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -38,6 +39,8 @@ let fitNext = true;
 const state = { text: initial, revision: 0, painted: -1, board: '', result: undefined as CompileResult | undefined, selected: '', connectFrom: '' };
 type Range = { start: number; end: number; text: string };
 let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, compileRun = 0;
+// A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
+let notice = '';
 let pending: { revision: number; ids: EditResult['ids']; changed: string[] } | undefined;
 
 function status(message: string, error = false) {
@@ -94,7 +97,7 @@ async function compile(seeds?: number[]) {
   state.result = result;
   state.painted = revision;
   if (focused && focused === state.selected) $('host').shadowRoot?.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
-  status(`compiled in ${Math.round(result.millis)} ms`);
+  status(notice || `compiled in ${Math.round(result.millis)} ms`, Boolean(notice));
   inspect();
 }
 
@@ -116,6 +119,7 @@ function paintCanvas(scene: SceneDocument) {
 
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.
 function setText(text: string, { record = true, edits, delay = 0 }: { record?: boolean; edits?: Range[]; delay?: number } = {}) {
+  notice = '';
   clearTimeout(typing);
   clearTimeout(idle);
   state.text = text;
@@ -312,7 +316,7 @@ document.addEventListener('keydown', event => {
   step(event.shiftKey ? history.redo() : history.undo());
 });
 
-$<HTMLSelectElement>('board').addEventListener('change', event => { state.board = (event.target as HTMLSelectElement).value; state.selected = ''; fitNext = true; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
+$<HTMLSelectElement>('board').addEventListener('change', event => { state.board = (event.target as HTMLSelectElement).value; state.selected = ''; notice = ''; fitNext = true; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
 
 function openText(text: string) {
   history.reset(text);
@@ -342,8 +346,30 @@ dark.addEventListener('change', () => { if (themeSelect.value === 'auto') { stat
 for (const select of [themeSelect, layoutSelect]) select.addEventListener('change', () => {
   try { localStorage.setItem(VIEW, JSON.stringify({ theme: themeSelect.value, layout: layoutSelect.value })); } catch { /* storage is optional */ }
   if (select === layoutSelect) fitNext = true;
+  notice = '';
   status('Compiling…');
   void compile();
 });
+// A shared link (`?script=` in D2's URL encoding, with optional `layout` and `theme`) opens on top of this browser's text, so Undo brings that
+// text back. The query is then dropped, so a reload keeps the user's edits rather than resetting to the link.
+const params = new URLSearchParams(location.search);
+let shared: string | undefined, sharedError = '';
+if (params.has('script')) {
+  try { shared = await decodeScript(params.get('script')!); } catch (error) { sharedError = `The shared link could not be opened: ${(error as Error).message}`; }
+  for (const [select, value] of [[themeSelect, params.get('theme')], [layoutSelect, params.get('layout')]] as const) if ([...select.options].some(o => o.value === value)) select.value = value!;
+  window.history.replaceState(null, '', location.pathname + location.hash);
+}
+
 src.value = initial;
 setText(initial, { record: false });
+if (shared !== undefined && shared !== initial) setText(shared);
+if (sharedError) status(notice = sharedError, true);
+
+$('share').addEventListener('click', async () => {
+  const url = new URL(location.pathname, location.origin);
+  url.searchParams.set('script', await encodeScript(state.text));
+  url.searchParams.set('layout', layoutSelect.value);
+  if (themeSelect.value !== 'auto') url.searchParams.set('theme', themeSelect.value);
+  try { await navigator.clipboard.writeText(url.href); status(`Link copied (${url.href.length} characters)`); }
+  catch { status(`Copy this link: ${url.href}`); }
+});
