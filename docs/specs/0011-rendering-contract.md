@@ -16,14 +16,14 @@ const board = prepareBoard(result, '/layers/detail'); // '' selects the root
 | `scene` | Complete `SceneDocument` from the worker, including primitives, paint, transforms, clips, masks, filters, animation tracks, assets and link regions |
 | `association` | Complete source association, labels, content roles, hierarchy, endpoints and image policy from that board |
 | `fonts` | Font bytes from the compile result, keyed by scene asset ID |
-| `objects` | Association objects with optional `bounds`, preserving the existing `mount.nodeBox()` convention |
-| `links` | Scene regions with optional inferred `objectId`, using the same ownership calculation as native paint |
+| `objects` | Association objects with optional `bounds`: the worker's `box` (spec 0004), D2's own box for a shape, the `mount.nodeBox()` value |
+| `links` | Scene regions with the `objectId` D2 added them for (association `links`); the same owners native paint uses |
 
 The public scene types in `src/scene.ts` describe scene encoding v1, pinned to the Go encoder and D2 v0.9.0. Primitives, paints, assets and filters are closed tagged unions. D2 field names and numeric enums are preserved; coordinates are logical scene pixels and track durations are nanoseconds. Struct tags and any future extra fields remain in the borrowed data. This is D2's scene, not a second diagram model or a virtual DOM.
 
 Scenes and resources are borrowed, not cloned or frozen. Renderers must treat them as immutable, including the existing association records and font buffers. TypeScript marks scene fields and prepared collections readonly; this is not runtime validation of arbitrary third-party JSON. The existing versioned worker protocol remains the trust boundary. A renderer must implement unsupported kinds explicitly or fail visibly; it must not silently drop them.
 
-`bounds` is a compatibility helper, not exact ink geometry or a new layout contract: it takes the first outline rectangle, ellipse or path and the object's translation; path control points can overestimate curves. Text-only objects may have no box. It does not include labels, stroke/effects, or general affine transforms. Link ownership uses conservative painted extents and a containment heuristic; unowned links remain explicit regions. Consumers needing exact geometry must use the complete scene. Neither helper changes D2 layout.
+`bounds` is D2's box for a shape: the position, width and height D2 laid out (`d2target.Shape`), the box D2 sizes from a measured width/height, whatever paints it (curves, a `multiple` back card, a shadow or blend group). For a connection it is the exact geometry bounds of the paths it paints (route, both halves of an animated two-way route, arrowheads; D2's `Path.GeometryBounds`, curve extrema included). Labels outside the shape, strokes and effects are not in it. Link owners come from D2's region order (spec 0004). A board without these fields (hand-built input) falls back to exact rectangles and ellipses and no box for paths; a link region without a D2 owner stays unowned (the old smallest-containing-object estimate is removed).
 
 ## Native renderer and mount
 

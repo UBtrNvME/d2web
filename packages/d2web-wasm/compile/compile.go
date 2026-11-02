@@ -293,7 +293,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 		for id, bytes := range fonts {
 			res.Fonts[string(id)] = bytes
 		}
-		assoc := associate(graphs[path], doc)
+		assoc := associate(graphs[path], &leaf, doc)
 		if req.LinkImages {
 			attachLinkedImages(assoc, doc, path, graphs[path], store)
 		}

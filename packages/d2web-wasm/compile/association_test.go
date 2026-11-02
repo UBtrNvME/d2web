@@ -1,0 +1,84 @@
+package compile
+
+import (
+	"fmt"
+	"testing"
+)
+
+func TestMarkdownHTMLKeepsD2ElementsAndOnlyTheAttributesD2Reads(t *testing.T) {
+	for source, want := range map[string]string{
+		"# T\n\n- a\n  - b\n\n3. c\n\n| x | y |\n|:-:|--:|\n| 1 | 2 |": "<h1>T</h1>\n<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n<ol start=\"3\">\n<li>c</li>\n</ol>\n<table>\n<thead>\n<tr>\n<th align=\"center\">x</th>\n<th align=\"right\">y</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"center\">1</td>\n<td align=\"right\">2</td>\n</tr>\n</tbody>\n</table>\n",
+		`<p onclick="x()" style="color:red">hi <!-- c --></p> <a href="javascript:x" onmouseover="y">j</a>`: `<p>hi </p> <a href="javascript:x">j</a>`,
+		`[l](https://x.test "t")`: `<p><a href="https://x.test" title="t">l</a></p>` + "\n",
+		"```\n<&>\n```": "<pre><code>&lt;&amp;&gt;\n</code></pre>\n",
+		"![i](x.png)": "",
+		"<span>x</span>": "",
+		`<a title="t" href="https://y.test" href="javascript:x">y</a>`: `<p><a href="https://y.test" title="t">y</a></p>` + "\n",
+	} {
+		if got := markdownHTML(source); got != want {
+			t.Errorf("%q:\n got %q\nwant %q", source, got, want)
+		}
+	}
+}
+
+// Owners come from D2's preflight order (shapes, then connections, with metadata) and markdown viewports, not from geometry guesses.
+func TestLinkRegionsNameTheirObjects(t *testing.T) {
+	source := "big: { link: https://big.test\n  small: { tooltip: inner } }\nplain\nplain -> big: go { link: https://edge.test }\nmd: |md\n  [x](https://md.test)\n|\nout: |md\n  [o](https://out.test)\n| { label.near: outside-top-center; style.shadow: true }\nplain -> md: |md\n  [e](https://edge-md.test)\n|\n"
+	res := compileText(t, source)
+	if res["error"] != nil {
+		t.Fatal(res["error"])
+	}
+	board := res["boards"].([]any)[0].(map[string]any)
+	regions := board["scene"].(map[string]any)["Links"].([]any)
+	owner := map[string]string{}
+	for _, o := range board["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		links, _ := obj["links"].([]any)
+		for _, i := range links {
+			r := regions[int(i.(float64))].(map[string]any)
+			owner[fmt.Sprint(r["URL"], r["Tooltip"])] = obj["id"].(string)
+		}
+	}
+	want := map[string]string{"https://big.test": "big", "inner": "big.small", "https://edge.test": "(plain -> big)[0]", "https://md.test": "md", "https://out.test": "out", "https://edge-md.test": "(plain -> md)[0]"}
+	if len(owner) != len(regions) || len(owner) != len(want) {
+		t.Fatalf("owners %v for %d regions", owner, len(regions))
+	}
+	for k, id := range want {
+		if owner[k] != id {
+			t.Errorf("%s owned by %q, want %q", k, owner[k], id)
+		}
+	}
+}
+
+// A shape's box is D2's own box, whatever paints it: curves, a `multiple` back card or a shadow group do not move it.
+func TestShapeBoxIsD2sBox(t *testing.T) {
+	res := compileText(t, "c: { shape: cylinder; width: 100; height: 80 }\nq: { shape: cloud; width: 120; height: 70 }\nm: { style.multiple: true; width: 90; height: 60 }\nk: { shape: cylinder; style.multiple: true; width: 70; height: 110 }\ns: { style.shadow: true; width: 50; height: 40 }\nc -> q\n")
+	got := map[string][2]float64{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		if b, ok := obj["box"].(map[string]any); ok {
+			got[obj["id"].(string)] = [2]float64{b["Width"].(float64), b["Height"].(float64)}
+		}
+	}
+	for id, want := range map[string][2]float64{"c": {100, 80}, "q": {120, 70}, "m": {90, 60}, "k": {70, 110}, "s": {50, 40}} {
+		if got[id] != want {
+			t.Errorf("%s box %v, want %v", id, got[id], want)
+		}
+	}
+	if r := got["(c -> q)[0]"]; r[1] <= 0 {
+		t.Errorf("connection route box %v", r)
+	}
+	// An animated two-way route is painted as two paths; the box covers both, so it matches the plain route's.
+	boxOf := func(source string) [2]float64 {
+		for _, o := range compileText(t, source)["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+			if obj := o.(map[string]any); obj["id"] == "(a <-> b)[0]" {
+				b := obj["box"].(map[string]any)
+				return [2]float64{b["Width"].(float64), b["Height"].(float64)}
+			}
+		}
+		return [2]float64{}
+	}
+	if plain, animated := boxOf("a <-> b\n"), boxOf("a <-> b: { style.animated: true }\n"); plain != animated || plain[1] == 0 {
+		t.Errorf("animated route box %v, plain %v", animated, plain)
+	}
+}

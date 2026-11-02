@@ -75,7 +75,7 @@ classes: {
   call: {style: {stroke-width: 2; font-size: 16}}
   feed: {style: {stroke-dash: 3; opacity: 0.85; font-size: 16}}
   tier: {style: {font-size: 22; border-radius: 12}}
-  pic: {width: 64; height: 64; style.font-size: 18}
+  svc: {shape: image; width: 128; height: 128; style.font-size: 18}
 }
 
 title: |md
@@ -85,10 +85,10 @@ title: |md
 
 host: Host page {
   class: tier
-  author: Author {class: pic; shape: image; icon: https://icons.terrastruct.com/essentials%2F005-programmer.svg}
-  demo: "Demo app\nGitHub Pages" {class: pic; shape: image; icon: https://icons.terrastruct.com/tech%2Flaptop.svg}
+  author: Author {class: svc; icon: https://icons.terrastruct.com/essentials%2F005-programmer.svg}
+  demo: "Demo app\nGitHub Pages" {class: svc; icon: https://icons.terrastruct.com/tech%2Flaptop.svg}
   editor: "d2editor\n(future)" {class: later}
-  react: "React binding\n(future)" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Freact.svg; style.opacity: 0.55}
+  react: "React binding\n(future)" {class: [svc; later]; icon: https://icons.terrastruct.com/dev%2Freact.svg}
   icons: "Icon origin\nlinks the source names" {shape: cloud; style.font-size: 16}
   author -> demo: {class: call}
 }
@@ -96,73 +96,48 @@ host: Host page {
 pkg: "@d2web package (TypeScript)" {
   class: tier
   tooltip: "Framework independent: no React, no component library, no application state"
-  icon: https://icons.terrastruct.com/dev%2Ftypescript.svg
   client: "Client\ncreateClient\nlatest request wins" {class: part}
   worker: "Worker\none compile at a time\nrevision echoed" {class: part}
   mount: "Mount\nshadow root · typed events\nsetNodeContent" {class: part; tooltip: "hover, click and focus carry D2 identity: board path and object ID"}
-  painter: "Painter\npaintScene(scene)\nHTML first, SVG where needed\nlink mode: <img>" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fhtml5.svg}
+  painter: "Painter\npaintScene(scene)\nHTML first, SVG where needed" {class: svc; icon: https://icons.terrastruct.com/dev%2Fhtml5.svg}
   images: "Images\nfetchImages · resolve · cache\nbundle or link mode" {class: part; tooltip: "The page fetches; the worker never does. Limits: 4 MiB each, 256 images, 15 s, 6 at a time"}
-  fonts: "Fonts\nconsumer-listed faces" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fcss3.svg}
+  fonts: "Fonts\nconsumer-listed faces" {class: svc; icon: https://icons.terrastruct.com/dev%2Fcss3.svg}
   client -> worker: postMessage {class: call}
-  client -> mount: "update(result, board)" {class: call}
+  client -> mount: update {class: call}
   mount -> painter: paintScene {class: call}
   fonts -> mount: "@font-face" {class: feed}
-  images -> worker: "preflight, then bytes" {class: call}
+  images -> worker: image bytes {class: call}
 }
 
 wasm: "d2web.wasm (Go, pinned D2 v0.9.0)" {
   class: tier
-  icon: https://icons.terrastruct.com/dev%2Fgo.svg
-  direction: down
-  front: Parse and compile {
-    direction: right
-    style.font-size: 18
-    parser: "d2parser\ntext → AST" {class: stage}
-    ir: "d2ir\nimports · classes\nglobs · vars" {class: stage}
-    compiler: "d2compiler\nAST → d2graph" {class: stage}
-    preflight: "Preflight\nimage links, no layout" {class: stage}
-    parser -> ir -> compiler: {class: call}
-    compiler -> preflight: {class: feed}
-  }
-  back: Layout and scene {
-    direction: right
-    style.font-size: 18
-    engines: "Layout engines" {
-      direction: right
-      style.font-size: 16
-      tala: TALA {shape: hexagon}
-      dagre: dagre {shape: hexagon}
-      elk: ELK {shape: hexagon}
-    }
-    target: "d2target.Diagram\npositions · routes · styles" {class: stage}
-    build: "d2scenebuild\nthemes · sketch\nfonts · assets" {class: stage}
-    supplied: "Supplied images\nmap-backed transport\nno network" {class: stage}
-    scene: "Scene JSON\nassociation · diagnostics" {shape: page; style.font-size: 18}
-    engines -> target -> build -> scene: {class: call}
-    supplied -> build: "bytes by link" {class: call}
-  }
-  front.compiler -> back.engines: d2graph {class: call}
+  parser: "d2parser\ntext → AST" {class: stage}
+  ir: "d2ir\nimports · classes\nglobs · vars" {class: stage}
+  compiler: "d2compiler\nAST → d2graph" {class: stage}
+  preflight: "Preflight\nimage links, no layout" {class: stage}
+  layout: "Layout engine\nTALA · ELK · dagre" {shape: hexagon; style.font-size: 18}
+  build: "d2scenebuild\nthemes · sketch\nfonts · images" {class: stage}
+  scene: "Scene JSON\nassociation · diagnostics" {shape: page; style.font-size: 18}
+  parser -> ir -> compiler -> layout -> build -> scene: {class: call}
+  compiler -> preflight: {class: feed}
 }
 
 dom: "Native DOM\nHTML + SVG in a shadow root" {shape: cloud; style.font-size: 18}
 
 reference: Reference and quality {
   class: tier
-  cli: "d2 CLI (TALA)\nnative SVG" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fgo.svg}
-  e2e: "Playwright conformance\nwithin 5% raster of native" {class: pic; shape: image; icon: https://icons.terrastruct.com/essentials%2F092-graph%20bar.svg}
-  ci: "mise run check\ncheck:browser · Actions" {class: pic; shape: image; icon: https://icons.terrastruct.com/dev%2Fgithub.svg}
+  cli: "d2 CLI (TALA)\nnative SVG" {class: svc; icon: https://icons.terrastruct.com/dev%2Fgo.svg}
+  e2e: "Playwright conformance\nwithin 5% raster of native" {class: svc; icon: https://icons.terrastruct.com/essentials%2F092-graph%20bar.svg}
+  ci: "mise run check\ncheck:browser · Actions" {class: svc; icon: https://icons.terrastruct.com/dev%2Fgithub.svg}
   cli -> e2e: SVG {class: call}
   e2e -> ci: gates {class: call}
 }
 
-host.icons -> pkg.images: "fetch (allowlist, CORS)" {class: call}
-pkg.worker -> wasm.front.preflight: "preflight" {class: call}
-host.demo -> pkg.client: "compile({files, entry,\nlayout, render})" {class: call}
+host.icons -> pkg.images: fetch {class: call}
+host.demo -> pkg.client: "compile()" {class: call}
 host.editor -> pkg.client: {class: feed}
 host.react -> pkg.mount: {class: feed}
-pkg.worker -> wasm.front.parser: run {class: call}
-pkg.worker -> wasm.back.supplied: "images by link" {class: call}
-wasm.back.scene -> pkg.worker: "result: boards + fonts" {class: call}
+pkg.worker <-> wasm: "run · boards + fonts" {class: call}
 pkg.painter -> dom: markup {class: call}
 dom -> reference.e2e: screenshot {class: feed}
 `,
@@ -170,7 +145,7 @@ dom -> reference.e2e: screenshot {class: feed}
 
 classes: {
   tier: {style: {font-size: 20; border-radius: 12}}
-  pic: {width: 64; height: 64; style.font-size: 16}
+  svc: {shape: image; width: 128; height: 128; style.font-size: 16}
   call: {style: {stroke-width: 2; font-size: 15}}
   presigned: {style: {stroke-width: 3; stroke: "#d97706"; font-color: "#b45309"; font-size: 15}}
   async: {style: {stroke-dash: 4; stroke-width: 2; font-size: 15}}
@@ -179,65 +154,58 @@ classes: {
 title: |md
   # URL shortener on AWS
   Serverless, with S3 presigned URLs for bulk import and QR codes.
-  Orange lines go straight from the browser to S3.
-|
+  Orange lines go straight from the browser to S3; dashed lines are events.
+| {near: top-center}
 
 user: Visitor {shape: person; style.font-size: 18}
 
 edge: Edge {
   class: tier
-  direction: down
-  r53: "Route 53\nshort.example" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-Route-53.svg"}
-  cf: "CloudFront\ncache redirects" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-CloudFront.svg"}
-  waf: "WAF\nrate limit" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-WAF.svg"}
-  acm: "ACM\nTLS certificate" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-Certificate-Manager.svg"}
+  r53: "Route 53\nshort.example" {class: svc; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-Route-53.svg"}
+  cf: "CloudFront\ncache redirects" {class: svc; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-CloudFront.svg"}
+  waf: "WAF\nrate limit" {class: svc; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-WAF.svg"}
+  acm: "ACM\nTLS certificate" {class: svc; icon: "https://icons.terrastruct.com/aws%2FSecurity%2C%20Identity%2C%20%26%20Compliance%2FAWS-Certificate-Manager.svg"}
   r53 -> cf: alias {class: call}
   waf -> cf: protects {class: call}
   acm -> cf: https {class: call}
 }
 
-web: "S3\nstatic web app" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
-api: "API Gateway\nHTTP API" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-API-Gateway.svg"}
+web: "S3\nstatic web app" {class: svc; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
+api: "API Gateway\nHTTP API" {class: svc; icon: "https://icons.terrastruct.com/aws%2FNetworking%20&%20Content%20Delivery%2FAmazon-API-Gateway.svg"}
 
 fns: Lambda functions {
   class: tier
-  direction: down
-  redirect: "redirect\nGET /{slug}" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
-  create: "create\nPOST /links" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
-  presign: "presign\nPOST /uploads" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
-  import: "bulk-import\nS3 event" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
+  redirect: "redirect\nGET /{slug}" {class: svc; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg; tooltip: "Answers 302 with Location: the long URL"}
+  create: "create\nPOST /links" {class: svc; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg; tooltip: "PutItem fails if the slug exists; writes the QR code to qr/"}
+  presign: "presign\nPOST /uploads" {class: svc; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg; tooltip: "Signs PUT imports/…csv (5 min) and GET qr/…png (1 h)"}
+  import: "bulk-import\nS3 event" {class: svc; icon: https://icons.terrastruct.com/aws%2FCompute%2FAWS-Lambda.svg}
 }
 
 data: Data {
   class: tier
-  direction: down
-  db: "DynamoDB\nlinks: slug, url, ttl, clicks" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-DynamoDB.svg}
-  bucket: "S3 bucket (private)\nimports/ and qr/" {class: pic; shape: image; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
+  db: "DynamoDB\nslug, url, ttl, clicks" {class: svc; icon: https://icons.terrastruct.com/aws%2FDatabase%2FAmazon-DynamoDB.svg}
+  bucket: "S3 bucket (private)\nimports/ and qr/" {class: svc; icon: https://icons.terrastruct.com/aws%2FStorage%2FAmazon-Simple-Storage-Service-S3.svg}
 }
 
-cw: "CloudWatch\nlogs, metrics, alarms" {class: pic; shape: image; icon: "https://icons.terrastruct.com/aws%2FManagement%20%26%20Governance%2FAmazon-CloudWatch.svg"}
+cw: "CloudWatch\nlogs, metrics, alarms" {class: svc; icon: "https://icons.terrastruct.com/aws%2FManagement%20%26%20Governance%2FAmazon-CloudWatch.svg"}
 
-user -> edge.r53: "1 resolve" {class: call}
-user -> edge.cf: "2 GET /abc123 · POST /api/links" {class: call}
-edge.cf -> web: "/ (UI)" {class: call}
-edge.cf -> api: "/api/* and /{slug}" {class: call}
+user -> edge.r53: 1 resolve {class: call}
+user -> edge.cf: 2 request {class: call}
+edge.cf -> web: UI {class: call}
+edge.cf -> api: "/api, /{slug}" {class: call}
 api -> fns.redirect: GET {class: call}
 api -> fns.create: POST {class: call}
 api -> fns.presign: POST {class: call}
 
 fns.redirect -> data.db: GetItem {class: call}
-fns.create -> data.db: "PutItem (slug must be new)" {class: call}
-fns.create -> data.bucket: "PutObject qr/abc123.png" {class: call}
+fns.create -> data.db: PutItem {class: call}
+fns.create -> data.bucket: PutObject {class: call}
 fns.import -> data.db: BatchWriteItem {class: call}
-
-fns.presign -> data.bucket: "sign PUT imports/…csv (5 min)\nsign GET qr/…png (1 h)" {class: presigned}
-fns.presign -> user: "presigned URLs" {class: presigned}
-user -> data.bucket: "PUT csv · GET qr (presigned)" {class: presigned}
+fns.presign -> data.bucket: signs URLs {class: presigned}
+user -> data.bucket: PUT csv · GET qr {class: presigned}
 data.bucket -> fns.import: ObjectCreated {class: async}
 
-fns.redirect -> user: "302 Location: long URL" {class: call}
-
-fns -> cw: "logs · metrics" {class: async}
+fns -> cw: logs {class: async}
 `,
 };
 const themes = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];

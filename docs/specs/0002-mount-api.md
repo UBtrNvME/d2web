@@ -70,7 +70,7 @@ Compile results carry the font bytes D2 used (spec 0001 section 3.3). With `font
 | Links and keyboard focus under the shadow root | verified (focusable, hit-testable; navigation itself not exercised) | `events.spec.mjs` |
 | Font registration shared and reference-counted across mounts; `'consumer'` registers nothing | verified | `fonts.spec.mjs` |
 | Source to pixels through client and mount, light and dark within 5% of native D2 | verified on one board | `fonts.spec.mjs` |
-| `nodeBox` for path shapes is the bounds of the outline's points (control points included), not the exact outline | known approximation | `render.ts` |
+| `nodeBox` is D2's own box for a shape (and exact route bounds for a connection); before 2 November 2026 it was the outline's control points, which overshot curves and picked the back card of `multiple` shapes | verified (cylinder, cloud, `multiple`, shadow, cylinder+`multiple`) | `test:wasm` (`association_test.go`), `render.test.mjs` |
 | Animation painting | implemented; animated object accessibility/events/content have regression coverage | spec 0005; browser audit |
 | Firefox and Playwright WebKit | named suites have browser evidence; checkpoint mask transport corrected for WebKit | browser audit; real Safari unverified |
 | Screen readers | not tested with assistive technology | ARIA/DOM assertions do not establish spoken output |

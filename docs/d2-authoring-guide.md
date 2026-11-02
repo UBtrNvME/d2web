@@ -52,19 +52,20 @@ The demo examples in `packages/d2web/demo/index.html` have the same problems on 
 
 ### Labels and icons (lines through labels)
 
-18. **Do not use `shape: image` for nodes that have edges.** The label of an image sits outside the image's box. TALA and dagre route lines straight through it. ELK leaves room for it, but then some edges start or end at the bottom of the caption instead of at the icon. For the "icon with a caption" look of other diagramming apps, use an ordinary shape with the icon at the top and the label at the bottom:
+18. **Draw pictures as `shape: image` at 128x128, with no box around them.** A picture is the node; do not wrap it in an ordinary shape with `icon:`. A fixed 128x128 lines the pictures up into an even grid and gives them room to read at the zoom a whole diagram is viewed at:
 
     ```d2
     classes: {
       service: {
-        icon.near: top-center
-        label.near: bottom-center
+        shape: image
+        width: 128
+        height: 128
       }
     }
     cf: "CloudFront\ncache redirects" {class: service; icon: https://icons.terrastruct.com/...}
     ```
 
-    Both `near` values are needed. With only `icon.near: top-center`, ELK and dagre draw the label over the icon. Keep `shape: image` for pictures without a label. Results on the URL shortener:
+    Known cost: the caption of an image sits outside the image's box, so the engine does not reserve room for it. TALA and dagre can route lines through captions; ELK leaves room but can end an edge at the bottom of a caption. Keep captions short (two lines of a few words) and prefer ELK when lines cross them. Results on the URL shortener (captions were measured at 64x64; boxed icons are listed for comparison only):
 
     | Source | TALA | ELK | dagre |
     | --- | --- | --- | --- |
@@ -74,8 +75,8 @@ The demo examples in `packages/d2web/demo/index.html` have the same problems on 
     | Ordinary shape, invisible box (`fill`/`stroke: transparent`) | Captions clear; arrows stop short of the icon | Label drawn over the icon | Label drawn over the icon |
     | **Ordinary shape, `icon.near: top-center` and `label.near: bottom-center`** | **Clean** | **Clean** | **Clean** |
 
-    A bare icon without a box, with lines that end at the icon and never cross its caption, is not possible in D2 v0.9 on any engine. An edge ends at the node's box: either the box is the icon and the caption is unprotected, or the box includes the caption and lines end in empty space.
-19. **Do not shrink labelled nodes with `width`/`height`.** A fixed size smaller than the label pushes the label outside the shape, with the same result as `shape: image`.
+    In D2 v0.9 no engine both ends lines at a bare picture and keeps them off its caption: an edge ends at the node's box, and the box of an image is the picture alone.
+19. **Do not shrink labelled shapes with `width`/`height`.** A fixed size smaller than the label pushes the label outside the shape. (Pictures are the exception: rule 18.)
 20. **Fix the title's position with `near: top-center`.** Without `near`, the title is just another node and lands wherever the layout puts it.
 21. **Do not add icons as decorative nodes, and do not put icons on containers.** An icon on its own (a language logo, a mascot) is a node that the engine has to place and route around. ELK and dagre draw a container's icon outside its top-left corner, where lines cross it (the TS and Go icons in the ecosystem demo). Put the icon on the shape it describes, or leave it out.
 
@@ -91,7 +92,7 @@ The demo examples in `packages/d2web/demo/index.html` have the same problems on 
 
 - `top`/`left`, `near` to another object, and `width`/`height` on containers: they do not compile on every engine (rules 9 and 11).
 - `direction` on a container: only TALA honours it (rule 8).
-- `shape: image` with a label on a connected node (rule 18).
+- A box around a picture (an ordinary shape with `icon:`): draw the picture itself as `shape: image` (rule 18).
 - `style.3d`, `multiple`, `shadow`, `double-border` used everywhere: noise without meaning. Use them only where they mean something, such as `multiple` for "several replicas".
 - Deeply nested containers used only to group things visually: a `class` with a shared fill, or a separate board, does the job without the extra routing.
 - Hand-numbered steps (`"1. Server mutation"`) to show order: use `steps` or a sequence diagram.
@@ -102,7 +103,7 @@ The demo examples in `packages/d2web/demo/index.html` have the same problems on 
 - At most two levels of nesting?
 - Do edges connect at the level of this board, with no leaf-to-leaf edges across containers?
 - Is `direction` set at the root only? Are there no `top`/`left`, no `near` to an object, and no `width`/`height` on containers?
-- Do icon nodes use an ordinary shape with `icon.near: top-center` and `label.near: bottom-center`, not `shape: image`? Is the title fixed with `near`?
+- Are pictures `shape: image` at 128x128, with no box around them and short captions? Is the title fixed with `near`?
 - Are styles in `classes`, the legend in `vars.d2-legend`, and edge labels three words or fewer?
 - Does it compile and render without crossed labels on TALA, ELK and dagre?
 

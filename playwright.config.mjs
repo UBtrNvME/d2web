@@ -4,7 +4,8 @@ const browserName = process.env.D2WEB_BROWSER ?? 'chromium';
 
 export default defineConfig({
   testDir: '.',
-  testIgnore: ['**/.claude/**', '**/imports/**', '**/node_modules/**'],
+  // Anchored to this directory: Playwright matches absolute paths, and this checkout may itself live under a .claude/worktrees folder.
+  testIgnore: new RegExp(`^${import.meta.dirname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(?:.*/)?(?:\\.claude|imports|node_modules)/`),
   testMatch: ['tests/browser/*.spec.mjs', 'tests/features/*.spec.mjs', 'research/browser/*.spec.mjs', 'packages/*/tests/browser/*.spec.mjs'],
   outputDir: './artifacts/playwright',
   snapshotPathTemplate: '{testDir}/../../artifacts/native-png/{testName}/{arg}{ext}',

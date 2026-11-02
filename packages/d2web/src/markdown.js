@@ -1,102 +1,33 @@
 const esc = text => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// shortcut: a deliberately closed subset, not CommonMark; reject the whole object when syntax needs a fuller parser.
-export function renderMarkdown(source, hrefOf) {
+const entities = { amp: '&', lt: '<', gt: '>', quot: '"' };
+const decode = text => text.replace(/&(?:#(\d+)|([a-z]+));/g, (m, code, name) => code ? String.fromCodePoint(+code) : entities[name] ?? m);
+
+// The association `html` is D2's markdown document (goldmark, as D2 lays it out), serialised by the worker with only D2's elements and the
+// attributes D2 reads, `href` first. The page adds one thing: its link policy, so an unsafe destination keeps its text but loses `href`.
+// The page re-checks the shape it relies on (defence in depth if the worker's output were ever other than that): every `<` opens one of D2's
+// elements with only its allowed attributes, double-quoted, once each and in the worker's order (Go's serialiser escapes `<`, `>` and `"`
+// everywhere else), so the `href` below is the anchor's only one. Anything else stays positioned.
+const value = '="[^"<>]*"';
+const d2Tag = new RegExp(`</(?:p|h[1-6]|blockquote|ul|ol|li|pre|code|em|b|strong|del|s|strike|a|table|thead|tbody|tfoot|tr|td|th)>|<(?:p|h[1-6]|blockquote|ul|li|pre|code|em|b|strong|del|s|strike|table|thead|tbody|tfoot|tr|br/|hr/)>|<a(?: href${value})?(?: title${value})?>|<ol(?: start${value})?(?: type${value})?>|<t[hd](?: align${value})?>`, 'g');
+
+export function renderMarkdown(html, hrefOf) {
+  if (!html || html.replace(d2Tag, '').includes('<')) return null;
   const links = [];
-  function inline(text, inLink = false, depth = 0) {
-    if (depth > 8) return null;
-    let out = '';
-    for (let i = 0; i < text.length;) {
-      const rest = text.slice(i);
-      if (rest[0] === '`') {
-        const m = rest.match(/^`([^`\n]+)`(?!`)/);
-        if (!m || /^\s|\s$/.test(m[1])) return null;
-        out += `<code>${esc(m[1].replace(/[ \t]+/g, ' '))}</code>`; i += m[0].length;
-      } else if (rest[0] === '*' || rest[0] === '_' || rest.startsWith('~~')) {
-        const c = rest[0], mark = rest.startsWith(c + c) ? c + c : c, end = rest.indexOf(mark, mark.length);
-        if (c === '~' && mark === '~') return null;
-        if (end <= mark.length || /^\s|\s$/.test(rest.slice(mark.length, end)) || rest[end + mark.length] === c) return null;
-        if (/[\p{L}\p{N}]/u.test(text[i - 1] ?? '') || /[\p{L}\p{N}]/u.test(rest[end + mark.length] ?? '')) return null;
-        const body = inline(rest.slice(mark.length, end), inLink, depth + 1);
-        if (body === null || /<(?:strong|em|code|del)>/.test(body)) return null;
-        const tag = c === '~' ? 'del' : mark.length === 2 ? 'strong' : 'em';
-        out += `<${tag}>${body}</${tag}>`; i += end + mark.length;
-      } else if (rest[0] === '[') {
-        const m = rest.match(/^\[([^\[\]\n]+)\]\(([^\s()<>"\\]+)\)/);
-        if (!m || inLink || /&|['`]/.test(m[2])) return null;
-        const body = inline(m[1], true, depth + 1);
-        if (body === null) return null;
-        links.push(m[2]);
-        const href = hrefOf(m[2]);
-        out += `<a${href ? ` href="${esc(href)}"` : ''}>${body}</a>`; i += m[0].length;
-      } else {
-        const m = rest.match(/^[^*`[\]\\_~<>!&|]+/);
-        if (!m) return null;
-        out += esc(m[0]); i += m[0].length;
-      }
-    }
-    return out;
-  }
-  const lines = source.replace(/\r\n?/g, '\n').split('\n');
-  const special = line => /^(?:#{1,6}(?: |$)|[-+*](?: |$)|\d{1,9}\. |> |---$|```)/.test(line);
-  let html = '';
-  for (let i = 0; i < lines.length;) {
-    if (!lines[i].trim()) { i++; continue; }
-    if (/^[ \t]|[ \t]{2,}$|\t$/.test(lines[i])) return null;
-    const line = lines[i], heading = line.match(/^(#{1,6}) (.+)$/), list = line.match(/^(-|\d{1,9}\.) (.+)$/);
-    let tag, text;
-    if (line.startsWith('```')) {
-      if (!/^```[\w-]*$/.test(line)) return null;
-      const start = ++i;
-      while (i < lines.length && lines[i] !== '```') {
-        if (/^ {0,3}`{3,}[ \t]*$/.test(lines[i])) return null;
-        i++;
-      }
-      if (i === lines.length) return null;
-      html += `<pre><code>${esc(lines.slice(start, i).join('\n') + (i > start ? '\n' : ''))}</code></pre>`; i++; continue;
-    } else if (heading) {
-      tag = `h${heading[1].length}`; text = heading[2].replace(/[ \t]+#+[ \t]*$/, ''); i++;
-    } else if (line === '---') {
-      html += '<hr>'; i++; continue;
-    } else if (list) {
-      const ordered = list[1] !== '-', items = [], pattern = ordered ? /^\d{1,9}\. (.+)$/ : /^- (.+)$/;
-      while (i < lines.length && pattern.test(lines[i])) {
-        const text = lines[i++].match(pattern)[1], body = inline(text);
-        if (body === null || special(text) || /^[ \t]|[ \t]{2,}$|\t$|^\[[ xX]\] /.test(text)) return null;
-        items.push(`<li>${body}</li>`);
-      }
-      // Lazy continuations, nesting and loose lists have different block semantics.
-      let next = i; while (next < lines.length && !lines[next].trim()) next++;
-      if ((lines[i]?.trim() && !special(lines[i])) || (next > i && pattern.test(lines[next] ?? ''))) return null;
-      const tag = ordered ? 'ol' : 'ul', start = ordered && parseInt(list[1]) !== 1 ? ` start="${parseInt(list[1])}"` : '';
-      html += `<${tag}${start}>${items.join('')}</${tag}>`; continue;
-    } else if (line.startsWith('> ')) {
-      const quote = [];
-      while (lines[i]?.startsWith('> ')) {
-        const text = lines[i++].slice(2);
-        if (!text || special(text) || /^[ \t]|[ \t]{2,}$|\t$/.test(text)) return null;
-        quote.push(text);
-      }
-      if (lines[i]?.trim() && !special(lines[i])) return null;
-      tag = 'blockquote'; text = quote.join('\n');
-    } else {
-      const paragraph = [line]; i++;
-      while (i < lines.length && lines[i].trim() && !special(lines[i])) paragraph.push(lines[i++]);
-      if (paragraph.some(s => /^[ \t]|[ \t]{2,}$|\t$|^(?:#|>|[-+*](?: |\t)|\d+\.\t|[=~-]+$)/.test(s)) || lines[i] === '---' || /^\d+\. /.test(lines[i] ?? '') && !lines[i].startsWith('1. ')) return null;
-      tag = 'p'; text = paragraph.join('\n');
-    }
-    const body = inline(text);
-    if (body === null) return null;
-    html += tag === 'blockquote' ? `<blockquote><p>${body}</p></blockquote>` : `<${tag}>${body}</${tag}>`;
-  }
-  return html ? { html, links } : null;
+  const out = html.replace(/<a href="([^"]*)"/g, (_, raw) => {
+    const url = decode(raw), href = hrefOf(url);
+    links.push(url);
+    return href ? `<a href="${esc(href)}"` : '<a';
+  });
+  return { html: out, links };
 }
 
-// D2 v0.9.0 github-markdown.css and lib/textmeasure/markdown.go (metrics, including collapsed first/last margins).
+// D2 v0.9.0 github-markdown.css and lib/textmeasure/markdown.go (metrics, including collapsed first/last margins). Tables follow D2's own
+// layout (markdown_svg.go markdownTableCellContext): line height 1.25, semibold centred headers, 6x13 px cell padding.
 export const markdownCSS = `
 [data-flow-markdown]{display:flow-root;margin:0;font-family:var(--md-regular);font-size:16px;line-height:1.5;overflow-wrap:break-word;tab-size:4;font-synthesis:none}
 [data-flow-markdown] *{box-sizing:content-box}
-[data-flow-markdown] :is(p,blockquote,ul,ol,pre){margin:0 0 16px}
+[data-flow-markdown] :is(p,blockquote,ul,ol,pre,table){margin:0 0 16px}
 [data-flow-markdown] :is(h1,h2,h3,h4,h5,h6){margin:24px 0 16px;font-weight:400;line-height:1.25;font-family:var(--md-semibold)}
 [data-flow-markdown] h1{font-size:2em}
 [data-flow-markdown] h2{font-size:1.5em}
@@ -105,7 +36,6 @@ export const markdownCSS = `
 [data-flow-markdown] h4{font-size:1em}
 [data-flow-markdown] h5{font-size:.875em}
 [data-flow-markdown] h6{font-size:.85em;color:var(--md-muted,inherit)}
-[data-flow-markdown] strong{font-family:var(--md-bold);font-weight:inherit}
 [data-flow-markdown] em{font-family:var(--md-italic);font-style:normal}
 [data-flow-markdown] del{text-decoration:line-through}
 [data-flow-markdown] a{color:var(--md-accent,inherit);text-decoration:none}
@@ -113,6 +43,22 @@ export const markdownCSS = `
 [data-flow-markdown] a:not([href]){color:inherit}
 [data-flow-markdown] :is(ul,ol){padding-left:2em}
 [data-flow-markdown] li+li{margin-top:.25em}
+[data-flow-markdown] li>p{margin-top:16px}
+[data-flow-markdown] :is(ul,ol) :is(ul,ol){margin-top:0;margin-bottom:0}
+[data-flow-markdown] :is(ol,ul) ol{list-style-type:lower-roman}
+[data-flow-markdown] :is(ol,ul) :is(ol,ul) ol{list-style-type:lower-alpha}
+[data-flow-markdown] ol[type="1"]{list-style-type:decimal}
+[data-flow-markdown] ol[type=a]{list-style-type:lower-alpha}
+[data-flow-markdown] ol[type=i]{list-style-type:lower-roman}
+[data-flow-markdown] :is(b,strong){font-family:var(--md-bold);font-weight:inherit}
+[data-flow-markdown] th{font-family:var(--md-semibold);font-weight:inherit;text-align:center}
+[data-flow-markdown] :is(s,strike){text-decoration:line-through}
+[data-flow-markdown] table{display:block;width:max-content;max-width:100%;border-spacing:0;border-collapse:collapse;line-height:1.25;background:var(--md-table)}
+[data-flow-markdown] :is(th,td){padding:6px 13px;border:1px solid var(--md-table-border)}
+[data-flow-markdown] th[align=left],[data-flow-markdown] td[align=left]{text-align:left}
+[data-flow-markdown] th[align=center],[data-flow-markdown] td[align=center]{text-align:center}
+[data-flow-markdown] th[align=right],[data-flow-markdown] td[align=right]{text-align:right}
+[data-flow-markdown] tr:nth-child(2n){background:var(--md-table-stripe)}
 [data-flow-markdown] blockquote{padding:0 1em;color:var(--md-muted,inherit);border-left:.25em solid var(--md-border,currentColor)}
 [data-flow-markdown] hr{box-sizing:content-box;height:.25em;padding:0;margin:24px 0;border:0;background:var(--md-border,currentColor)}
 [data-flow-markdown] :is(pre,code){font-family:var(--md-mono)}
