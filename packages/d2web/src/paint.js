@@ -1,7 +1,7 @@
 // Painter: turns the scene JSON of spec 0001 (packages/d2web-wasm/scenejson) into SVG or HTML-first markup. It covers every primitive,
 // paint, clip, mask, filter and blend kind in the corpus; the native DOM renderer attaches the returned animation specifications.
 import { animationSpecs } from './animation.js';
-import { primBounds, subtreeBounds, objectForLink } from './geometry.ts';
+import { primBounds, subtreeBounds, linkOwners } from './geometry.ts';
 import { renderMarkdown, markdownCSS } from './markdown.js';
 
 const ALIGN = ['none', 'xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
@@ -226,7 +226,8 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     return ` id="${domId.get(n)}" role="group" tabindex="0" aria-label="${esc(nameOf(n))}"${description ? ` aria-description="${esc(description)}"` : ''}${owned.has(n) ? ` aria-owns="${owned.get(n).join(' ')}"` : ''}`;
   };
 
-  const objectFor = link => objectForLink(scene, link);
+  const linkOwner = new Map(linkOwners(scene, { objects: association }).map((id, i) => [scene.Links[i], (scene.Root.Children ?? []).find(n => n.ID === id)]));
+  const objectFor = link => linkOwner.get(link);
   const linkName = l => { const n = objectFor(l); return n ? nameOf(n) : ''; };
   if (a11y) for (const l of scene.Links ?? []) { const n = l.Tooltip && objectFor(l); if (n && objects.has(n)) tooltips.set(n, l.Tooltip); }
 
@@ -237,7 +238,7 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   function flowMarkdown(n) {
     const owner = (scene.Root.Children ?? []).find(o => o.Children?.includes(n));
     const object = info.get(owner?.ID);
-    if (object?.content !== 'markdown' || !object.label) return null;
+    if (object?.content !== 'markdown' || !object.html) return null;
     const children = kids(n), runs = children.map(c => c.Primitive).filter(p => p?.$ === 'TextRun');
     // Only the characterized flat, translated markdown subtree can release its D2 clip.
     if (![scene.Root, owner, n].every(o => o.Transform.A === 1 && o.Transform.D === 1 && o.Transform.B === 0 && o.Transform.C === 0)
@@ -245,19 +246,21 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       || !n.Clip || !isIdentity(n.Clip.Transform) || n.Mask || n.Filters?.length || n.Blend || n.Animations?.length || n.Primitive
       || children.some(c => !isIdentity(c.Transform) || c.Opacity !== 1 || c.Children?.length || c.Clip || c.Mask || c.Filters?.length || c.Blend || c.Animations?.length || !['TextRun', 'Rect'].includes(c.Primitive?.$))
       || !runs.length || runs.some(p => !p.Ink?.Valid || !solid(p.Fill) || p.Stroke?.Paint || p.Strike || p.Underline || !/^font:(SourceSansPro|SourceCodePro):/.test(p.Font.Asset))) return null;
-    const parsed = renderMarkdown(object.label, hrefOf), clip = primBounds(n.Clip.Path);
+    const parsed = renderMarkdown(object.html, hrefOf), clip = primBounds(n.Clip.Path);
     if (!parsed || !clip || clip[2] <= clip[0]) return null;
+    // D2 clipped its own paint (its layout measure and its painter disagree, e.g. a lazy list continuation): no flow fits D2's box.
+    if (runs.some(p => p.Ink.Max.X > clip[2] + .5 || p.Ink.Max.Y > clip[3] + .5)) return null;
     const headingSizes = [...parsed.html.matchAll(/<h([1-6])>/g)].map(m => [32, 24, 20, 16, 14, 13.6][+m[1] - 1]);
     if (runs.some(p => ![p.Font.Asset.startsWith('font:SourceCodePro:') ? 13.6 : 16, ...headingSizes].includes(p.Font.Size))) return null;
     const fonts = { regular: 'SourceSansPro:regular', semibold: 'SourceSansPro:semibold', bold: 'SourceSansPro:bold', italic: 'SourceSansPro:italic', mono: 'SourceCodePro:regular' };
-    if (/<(?:p|li)>/.test(parsed.html) && !scene.Assets?.['font:SourceSansPro:regular']) return null;
+    if (/<(?:p|li|td)\b/.test(parsed.html) && !scene.Assets?.['font:SourceSansPro:regular']) return null;
     const stacks = new Map();
     for (const p of runs) {
       const stack = fontStack(p);
       if (stacks.has(p.Font.Asset) && stacks.get(p.Font.Asset) !== stack) return null;
       stacks.set(p.Font.Asset, stack);
     }
-    const needed = [...(headingSizes.length ? ['semibold'] : []), ...(/<strong>/.test(parsed.html) ? ['bold'] : []), ...(/<em>/.test(parsed.html) ? ['italic'] : []), ...(/<code>/.test(parsed.html) ? ['mono'] : [])];
+    const needed = [...(headingSizes.length || /<th\b/.test(parsed.html) ? ['semibold'] : []), ...(/<(?:strong|b)>/.test(parsed.html) ? ['bold'] : []), ...(/<em>/.test(parsed.html) ? ['italic'] : []), ...(/<code>/.test(parsed.html) ? ['mono'] : [])];
     if (needed.some(role => !runs.some(p => p.Font.Asset === `font:${fonts[role]}`))) return null;
     const variables = Object.entries(fonts).map(([role, id]) => `--md-${role}:${stacks.get(`font:${id}`) ?? fontFamily(`font:${id}`)}`);
     const dx = scene.Root.Transform.E + owner.Transform.E + n.Transform.E, dy = scene.Root.Transform.F + owner.Transform.F + n.Transform.F;
@@ -266,10 +269,16 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     if (parsed.links.some(url => hrefOf(url) && !links.some(l => l.URL === url))) return null;
     const linked = p => links.some(l => l.Box.X < dx + p.Ink.Max.X && l.Box.X + l.Box.Width > dx + p.Ink.Min.X && l.Box.Y < dy + p.Ink.Max.Y && l.Box.Y + l.Box.Height > dy + p.Ink.Min.Y);
     const rects = children.map(c => c.Primitive).filter(p => p.$ === 'Rect' && solid(p.Fill));
+    // D2 paints a table as its background, row stripes and a 1 px grid (markdown_svg.go paintTable); only the grid has 1 px wide rects.
+    const column = rects.find(p => p.Box.Width === 1 && p.Box.Height > 1);
+    const grid = p => column && p.Box.X === column.Box.X && p.Box.Y >= column.Box.Y && p.Box.Y <= column.Box.Y + column.Box.Height;
+    const table = column && rects.find(p => p.Box.X === column.Box.X && p.Box.Y === column.Box.Y && p.Box.Width > 1 && p.Box.Height > 1);
+    const stripe = table && rects.find(p => p.Box.X === table.Box.X + 1 && p.Box.Width > 1 && p.Box.Height > 1 && p.RadiusX === 0);
+    if (/<table\b/.test(parsed.html) && !table) return null;
     const quote = rects.find(p => p.Box.X === 0 && p.Box.Width === 4);
     const muted = runs.find(p => quote && p.Origin.X >= 20 && p.Origin.Y > quote.Box.Y && p.Origin.Y < quote.Box.Y + quote.Box.Height) ?? runs.find(p => p.Font.Asset === 'font:SourceSansPro:semibold' && p.Font.Size === 13.6);
     const foreground = runs.find(p => !linked(p) && p !== muted && p.Font.Asset.startsWith('font:SourceSansPro:')) ?? runs[0];
-    for (const [role, paint] of Object.entries({ accent: runs.find(linked)?.Fill, muted: muted?.Fill, border: quote?.Fill ?? rects.find(p => p.Box.Height === 4)?.Fill, 'border-muted': rects.find(p => p.Box.Height === 1)?.Fill, code: rects.find(p => p.RadiusX === 6)?.Fill })) {
+    for (const [role, paint] of Object.entries({ accent: runs.find(linked)?.Fill, muted: muted?.Fill, border: quote?.Fill ?? rects.find(p => p.Box.Height === 4)?.Fill, 'border-muted': rects.find(p => p.Box.Height === 1 && !grid(p))?.Fill, code: rects.find(p => p.RadiusX === 6)?.Fill, table: table?.Fill, 'table-stripe': stripe?.Fill, 'table-border': column?.Fill })) {
       if (paint) variables.push(`--md-${role}:${rgba(paint.Color)}`);
     }
     // D2's box for this markdown is the clip it applied to it, not the ink of its runs (which leaves out padding and rules).

@@ -8,7 +8,14 @@ The reviewed runtime defects now have fixes and regression coverage: text baseli
 
 The missing upstream Git metadata was restored only after comparing all imported source files with the official pinned D2 commit; the imported source was unchanged. Root browser discovery now excludes nested worktrees/imports. Research census commands explicitly run the paint-artifact producer before its HTML consumer.
 
-This remains a framework-independent native web runtime with incomplete semantic coverage. It is not a full React renderer or proof of complete browser/assistive-technology support. Native/browser font rasterization differences, native layout overlap, conservative object bounds, limited markdown flow and real Safari remain documented limits. No reference images or comparison thresholds were relaxed.
+This remains a framework-independent native web runtime with incomplete semantic coverage. It is not a full React renderer or proof of complete browser/assistive-technology support. Native/browser font rasterization differences, native layout overlap and real Safari remain documented limits. No reference images or comparison thresholds were relaxed.
+
+**Follow-up (2 November 2026, later):** object bounds are now D2's own box (association `box`), link regions carry the owner D2 added them for (association `links`, from D2's region order) instead of the containment estimate, and opt-in markdown flow renders D2's own goldmark document instead of a hand-written subset, so nested/continued lists, tables and D2's raw HTML elements flow; only images, the sketch/terminal fonts and D2's own measure/paint disagreement stay positioned ([spec 0009](specs/0009-semantic-content.md#stage-b-flow-from-d2s-own-markdown-document-2-november-2026), [spec 0004](specs/0004-association.md)). Real Safari and screen readers stay manual checks (below). Text: the browser shapes D2's runs with D2's fonts at D2's positions; glyph rasterisation differs by engine by nature and is closed as `equivalent` in the feature map, not a gap code can remove.
+
+### Manual checks not automated here
+
+- **Real Safari** (Playwright's WebKit is automated): enable *Develop > Allow Remote Automation* or run `sudo safaridriver --enable` once, then run a WebDriver smoke of the demo; or open `mise run demo` in Safari and check: the AWS example paints, Tab moves through objects, a link opens, a tooltip shows on focus, copy from a code block returns its lines. Flow markdown has no demo switch; check it through a page that mounts with `{ markdown: 'flow' }`.
+- **Screen readers** (VoiceOver: Cmd+F5; NVDA on Windows): each object is a named group in paint order with its D2 label; connections announce their spelling as a description; tooltips are read on focus; code reads line by line; SQL/class tables navigate as tables; flowed markdown reads headings, lists and tables with their roles. Record the browser and reader versions with the result.
 
 ## Review baseline before these fixes (2 November 2026)
 

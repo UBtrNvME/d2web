@@ -1,12 +1,17 @@
 package compile
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
+
+	"golang.org/x/net/html"
 
 	"github.com/d2lang/d2/d2ast"
 	"github.com/d2lang/d2/d2graph"
 	"github.com/d2lang/d2/d2renderers/d2scene"
+	"github.com/d2lang/d2/d2target"
+	"github.com/d2lang/d2/lib/textmeasure"
 )
 
 // The association payload of spec 0004: D2 objects with their source declarations and the scene nodes that paint them.
@@ -43,6 +48,12 @@ type AssocObject struct {
 	Dst        string              `json:"dst,omitempty"`
 	// Spec 0010 2.3: the link of an image the scene could not carry, for the painter to show as a real image element.
 	Image *AssocImage `json:"image,omitempty"`
+	// HTML is D2's own rendering of a markdown label (textmeasure.RenderMarkdown), the document D2's markdown layout starts from.
+	HTML string `json:"html,omitempty"`
+	// Box is D2's box for a shape (its position, width and height); for a connection, the exact geometry bounds of its painted paths.
+	Box *d2scene.Box `json:"box,omitempty"`
+	// Links are the indices into the scene's Links that D2 added for this object.
+	Links []int `json:"links,omitempty"`
 }
 
 // AssocImage names the image link of an object, the scene node that holds D2's placeholder for it (<id>:icon) and the role D2 gave it.
@@ -124,7 +135,155 @@ func owners(doc *d2scene.Document, ids map[string]bool) map[string][]string {
 	return out
 }
 
-func associate(g *d2graph.Graph, doc *d2scene.Document) *Association {
+// markdownAttrs are the only attributes D2's markdown layout reads (lib/textmeasure/markdown_svg.go nodeAttr calls).
+var markdownAttrs = map[string][]string{"a": {"href", "title"}, "ol": {"start", "type"}, "th": {"align"}, "td": {"align"}}
+
+// markdownElements is D2's own element list (validateMarkdownSVGNodes) less img, which the flow leaves to D2's positioned paint.
+var markdownElements = map[string]bool{"p": true, "h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true, "blockquote": true, "ul": true,
+	"ol": true, "li": true, "pre": true, "code": true, "em": true, "b": true, "strong": true, "del": true, "s": true, "strike": true, "a": true, "br": true,
+	"hr": true, "table": true, "thead": true, "tbody": true, "tfoot": true, "tr": true, "td": true, "th": true}
+
+// markdownHTML is the document D2 lays a markdown label out from (textmeasure.RenderMarkdown, the first step of LayoutMarkdown), parsed as
+// D2 parses it and serialised again with only D2's elements and the attributes D2 reads. Raw author HTML is goldmark-unsafe, so anything else
+// (an image, an unknown element) returns "" and the object keeps D2's positioned paint.
+func markdownHTML(label string) string {
+	rendered, err := textmeasure.RenderMarkdown(label)
+	if err != nil {
+		return ""
+	}
+	doc, err := html.Parse(strings.NewReader(rendered))
+	if err != nil {
+		return ""
+	}
+	var body *html.Node
+	var find func(*html.Node)
+	find = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "body" {
+			body = n
+		}
+		for c := n.FirstChild; c != nil && body == nil; c = c.NextSibling {
+			find(c)
+		}
+	}
+	find(doc)
+	ok := body != nil
+	var clean func(*html.Node)
+	clean = func(n *html.Node) {
+		for c := n.FirstChild; c != nil; {
+			next := c.NextSibling
+			switch c.Type {
+			case html.ElementNode:
+				if !markdownElements[c.Data] {
+					ok = false
+				}
+				// In markdownAttrs order and once each, so the page finds an anchor's href first (the page applies its link policy to it).
+				var kept []html.Attribute
+				for _, name := range markdownAttrs[c.Data] {
+					for _, a := range c.Attr {
+						if a.Namespace == "" && a.Key == name {
+							kept = append(kept, html.Attribute{Key: a.Key, Val: a.Val})
+							break
+						}
+					}
+				}
+				c.Attr = kept
+				clean(c)
+			case html.TextNode:
+			default: // comments and doctypes paint nothing in D2
+				n.RemoveChild(c)
+			}
+			c = next
+		}
+	}
+	if ok {
+		clean(body)
+	}
+	if !ok {
+		return ""
+	}
+	var out bytes.Buffer
+	for c := body.FirstChild; c != nil; c = c.NextSibling {
+		if err := html.Render(&out, c); err != nil {
+			return ""
+		}
+	}
+	return out.String()
+}
+
+// linkOwners names the object of every scene link region. D2's scene builder preflight adds one region per shape, then per connection, that
+// has a link, tooltip or prettyLink, in diagram order (d2scenebuild compileLinkRegions); markdown inline-link regions follow, each inside the
+// viewport of its markdown scene node (`<id>:markdown`, clipped to it), so those go to the smallest such viewport holding them. A count D2's
+// order does not explain returns nil rather than shifting every owner.
+func linkOwners(d *d2target.Diagram, doc *d2scene.Document, nodeOwner map[string]string) []string {
+	var out []string
+	for _, s := range d.Shapes {
+		if s.Link != "" || s.Tooltip != "" || s.PrettyLink != "" {
+			out = append(out, s.ID)
+		}
+	}
+	for _, c := range d.Connections {
+		if c.Link != "" || c.Tooltip != "" || c.PrettyLink != "" {
+			out = append(out, c.ID)
+		}
+	}
+	if len(out) > len(doc.Links) {
+		return nil
+	}
+	type viewport struct {
+		id string
+		b  d2scene.Bounds
+	}
+	var md []viewport
+	var walk func(n *d2scene.Node, dx, dy float64)
+	walk = func(n *d2scene.Node, dx, dy float64) {
+		dx, dy = dx+n.Transform.E, dy+n.Transform.F // scene nodes down to a markdown viewport only translate
+		if n.Clip != nil && strings.HasSuffix(n.ID, ":markdown") {
+			if b, err := n.Clip.Path.GeometryBounds(); err == nil && b.Valid {
+				md = append(md, viewport{nodeOwner[n.ID], b.Translate(d2scene.Point{X: dx, Y: dy})})
+			}
+		}
+		for _, c := range n.Children {
+			walk(c, dx, dy)
+		}
+	}
+	walk(doc.Root, 0, 0)
+	const eps = .5 // D2 rounds region boxes; a region shares its viewport's edges
+	for i := len(out); i < len(doc.Links); i++ {
+		r, owner, area := doc.Links[i].Box, "", 0.0
+		for _, v := range md {
+			w, h := v.b.Max.X-v.b.Min.X, v.b.Max.Y-v.b.Min.Y
+			if r.X >= v.b.Min.X-eps && r.Y >= v.b.Min.Y-eps && r.X+r.Width <= v.b.Max.X+eps && r.Y+r.Height <= v.b.Max.Y+eps && (owner == "" || w*h < area) {
+				owner, area = v.id, w*h
+			}
+		}
+		out = append(out, owner)
+	}
+	return out
+}
+
+// routeBox is the exact geometry box of everything a connection's node paints as paths: its route (which D2 splits in two for an animated
+// two-way connection), arrowheads included.
+func routeBox(n *d2scene.Node) *d2scene.Box {
+	if n == nil {
+		return nil
+	}
+	var b d2scene.Bounds
+	for _, c := range n.Children {
+		if p, ok := c.Primitive.(d2scene.Path); ok {
+			pb, err := p.GeometryBounds()
+			if err != nil {
+				return nil
+			}
+			b = b.Union(pb)
+		}
+	}
+	if !b.Valid {
+		return nil
+	}
+	return &d2scene.Box{X: b.Min.X + n.Transform.E, Y: b.Min.Y + n.Transform.F, Width: b.Max.X - b.Min.X, Height: b.Max.Y - b.Min.Y}
+}
+
+func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *Association {
 	ids := map[string]bool{}
 	for _, o := range g.Objects {
 		ids[o.AbsID()] = true
@@ -133,11 +292,36 @@ func associate(g *d2graph.Graph, doc *d2scene.Document) *Association {
 		ids[e.AbsID()] = true
 	}
 	nodes := owners(doc, ids)
+	top := map[string]*d2scene.Node{}
+	for _, n := range doc.Root.Children {
+		top[n.ID] = n
+	}
+	nodeOwner := map[string]string{}
+	for id, ns := range nodes {
+		for _, n := range ns {
+			nodeOwner[n] = id
+		}
+	}
+	shapes := map[string]d2target.Shape{}
+	for _, s := range d.Shapes {
+		shapes[s.ID] = s
+	}
+	links := map[string][]int{}
+	for i, id := range linkOwners(d, doc, nodeOwner) {
+		links[id] = append(links[id], i)
+	}
 	a := &Association{Objects: []AssocObject{}}
 	for _, o := range g.Objects {
 		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style)}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
+		}
+		out.Links = links[out.ID]
+		if s, ok := shapes[out.ID]; ok {
+			out.Box = &d2scene.Box{X: float64(s.Pos.X), Y: float64(s.Pos.Y), Width: float64(s.Width), Height: float64(s.Height)}
+		}
+		if out.Content == "markdown" {
+			out.HTML = markdownHTML(o.Label.Value)
 		}
 		if o.Parent != nil && o.Parent.AbsID() != "" {
 			out.Parent = o.Parent.AbsID()
@@ -154,6 +338,8 @@ func associate(g *d2graph.Graph, doc *d2scene.Document) *Association {
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}
+		out.Links = links[out.ID]
+		out.Box = routeBox(top[out.ID])
 		for _, ref := range e.References {
 			if ref.Edge != nil {
 				out.References = append(out.References, source(ref.Edge.Range))
