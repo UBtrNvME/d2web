@@ -6,17 +6,27 @@
 <link rel="stylesheet" href="style.css">
 <body>
 <header>
-  <strong>d2editor</strong>
+  <strong class="brand">d2editor</strong>
   <div class="tools" role="toolbar" aria-label="Edit">
-    <button type="button" id="add" title="Add a shape (inside the selected container, if any)">Shape</button>
-    <button type="button" id="connect" aria-pressed="false" title="Connect the selected object to the next one you click">Connect</button>
-    <button type="button" id="undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
-    <button type="button" id="redo" title="Redo (Shift+Ctrl/Cmd+Z)">Redo</button>
+    <button type="button" id="add" title="Add a shape (inside the selected container, if any)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/></svg>Shape</button>
+    <button type="button" id="connect" aria-pressed="false" title="Connect the selected object to the next one you click"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><path d="M7 12h10m-3-3 3 3-3 3"/><circle cx="19" cy="12" r="2"/></svg>Connect</button>
   </div>
-  <label>Board <select id="board"><option value="">root</option></select></label>
-  <label>Example <select id="example"></select></label>
-  <label class="file">Open <input type="file" id="open" accept=".d2,text/plain"></label>
-  <button type="button" id="download">Download</button>
+  <div class="tools" role="toolbar" aria-label="History">
+    <button type="button" id="undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button type="button" id="redo" title="Redo (Shift+Ctrl/Cmd+Z)" aria-label="Redo"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+  </div>
+  <div class="tools" role="toolbar" aria-label="View">
+    <button type="button" id="zoom-out" title="Zoom out (-)" aria-label="Zoom out"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    <button type="button" id="zoom" title="Reset to 100% (Shift+0)" aria-label="Zoom level, reset to 100%">100%</button>
+    <button type="button" id="zoom-in" title="Zoom in (+)" aria-label="Zoom in"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
+    <button type="button" id="fit" title="Fit the diagram (Shift+1)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Fit</button>
+  </div>
+  <div class="document">
+    <label>Board <select id="board"><option value="">root</option></select></label>
+    <label>Example <select id="example"></select></label>
+    <label class="file" title="Open a .d2 file"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>Open<input type="file" id="open" accept=".d2,text/plain"></label>
+    <button type="button" id="download" title="Download the D2 text"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>Download</button>
+  </div>
 </header>
 <aside aria-label="Source">
   <div class="source">
@@ -25,23 +35,25 @@
   </div>
   <div id="status" role="status"></div>
 </aside>
-<main aria-label="Diagram canvas: click or Tab to an object to select it, Escape to clear">
+<main id="canvas" aria-label="Diagram canvas: click or Tab to an object to select it, Escape to clear; drag or scroll to pan, Ctrl/Cmd+scroll to zoom">
   <div id="host"></div>
 </main>
 <section id="inspector" aria-label="Selected object" hidden>
   <h2 id="selected"></h2>
   <form id="props">
+    <h3>Properties</h3>
     <label>Label <input name="label" autocomplete="off"></label>
-    <label>Fill <input name="fill" autocomplete="off" placeholder="D2's"></label>
-    <label>Stroke <input name="stroke" autocomplete="off" placeholder="D2's"></label>
+    <label>Fill <span class="color"><input name="fill" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="fill" tabindex="-1" aria-label="Pick fill colour"></span></label>
+    <label>Stroke <span class="color"><input name="stroke" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="stroke" tabindex="-1" aria-label="Pick stroke colour"></span></label>
     <label data-shape-only>Shape <select name="shape"></select></label>
-    <p class="sources" id="sources"></p>
+    <h3>Declared at</h3>
+    <dl class="sources" id="sources"></dl>
   </form>
   <form id="rename">
-    <label>Rename to <input name="name" autocomplete="off" required></label>
-    <button>Rename</button>
+    <h3>Name</h3>
+    <div class="row"><input name="name" autocomplete="off" required aria-label="Rename to"><button>Rename</button></div>
   </form>
-  <button type="button" id="delete">Delete</button>
+  <button type="button" id="delete" class="danger">Delete</button>
 </section>
 <dialog id="unchecked">
   <form method="dialog">

@@ -80,6 +80,32 @@ test('built page loads its real worker and wasm and paints the start example', a
   await expect(object(page, 'api')).toHaveCount(0);
 });
 
+test('the canvas pans by dragging without selecting, zooms with the controls, and a click still selects', async ({ page }) => {
+  await open(page);
+  const transform = () => page.locator('#host').evaluate(el => el.style.transform);
+  const box = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
+  await page.mouse.move(box.x + 5, box.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 45, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('#inspector')).toBeHidden();
+  const moved = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
+  expect([Math.round(moved.x - box.x), Math.round(moved.y - box.y)]).toEqual([75, 40]);
+  await page.click('#zoom-in');
+  await expect(page.locator('#zoom')).toHaveText('125%');
+  await expect.poll(transform).toContain('scale(1.25)');
+  await page.click('#fit');
+  await expect(page.locator('#zoom')).toHaveText('100%');
+  await select(page, 'api');
+  await expect(page.locator('#selected')).toHaveText('Shape api');
+  // Zoomed in and panned away, focusing the lowest object brings its own paint into view, not the scene origin its <svg> wrappers sit at.
+  for (let i = 0; i < 5; i++) await page.click('#zoom-in');
+  await page.locator('#canvas').dispatchEvent('wheel', { deltaX: 0, deltaY: 5000 });
+  await object(page, 'db').first().evaluate(el => el.focus());
+  const view = await page.locator('#canvas').boundingBox(), shape = await object(page, 'db').locator('path').first().boundingBox();
+  expect(shape.y >= view.y && shape.y + shape.height <= view.y + view.height).toBe(true);
+});
+
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, '# services\na: API\nb: DB\n');
@@ -100,6 +126,8 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   await visible(page, 'shape 2');
   await select(page, 'a');
   await page.click('#connect');
+  // Connect mode must look pressed: toolbar buttons are otherwise transparent.
+  await expect(page.locator('#connect')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   const connected = created + 'a -> b\n';
   await patch(page, connected, () => select(page, 'b'));
   await expect(object(page, '(a -> b)[0]').locator('path').first()).toHaveAttribute('d', /M/);
@@ -145,6 +173,9 @@ test('stroke and shape edits use checked patches; invalid values report D2’s r
   await property(page, 'fill', 'not-a-color');
   await expect(page.locator('#status.error')).toContainText('set a.style.fill');
   await expect(page.locator('#src')).toHaveValue(shaped);
+  // The colour picker makes the same edit through its text field.
+  await patch(page, shaped.replace('red', '"#00ff00"'), () => page.locator('input[data-for="stroke"]').fill('#00ff00'));
+  await expect(page.locator('#props [name="stroke"]')).toHaveValue('#00ff00');
 });
 
 test('undo and redo restore exact mixed typed and patched texts with buttons and keyboard, including in the textarea', async ({ page }) => {
