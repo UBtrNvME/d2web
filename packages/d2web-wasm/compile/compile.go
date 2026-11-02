@@ -70,11 +70,14 @@ type Request struct {
 	Render   Render            `json:"render"`
 	Budgets  Budgets           `json:"budgets"`
 	Boards   json.RawMessage   `json:"boards"`
+	// Spec 0010: images the page resolved, by the link exactly as the preflight reported it. Present (even empty) means bundle mode.
+	Images map[string]ImageInput `json:"images"`
 }
 
 type Diagnostic struct {
 	Severity string `json:"severity"`
 	Message  string `json:"message"`
+	Code     string `json:"code,omitempty"` // additive (spec 0010): image-unresolved
 	Board    string `json:"board,omitempty"`
 	File     string `json:"file,omitempty"`
 	Range    *struct {
@@ -109,6 +112,7 @@ type Result struct {
 	Echo        struct {
 		Layout string `json:"layout"`
 		Render Render `json:"render"`
+		Images string `json:"images,omitempty"` // the image mode used, when the request chose one
 	} `json:"echo"`
 }
 
@@ -135,6 +139,9 @@ func Handle(ctx context.Context, raw []byte) []byte {
 	} else {
 		res.ID, res.Revision = req.ID, req.Revision
 		res.Echo.Layout, res.Echo.Render = req.Layout, req.Render
+		if req.Images != nil {
+			res.Echo.Images = "bundle"
+		}
 		run(ctx, &req, &res)
 	}
 	res.Millis = float64(time.Since(start).Microseconds()) / 1000
@@ -245,11 +252,15 @@ func run(ctx context.Context, req *Request, res *Result) {
 	}
 	res.Fonts = map[string][]byte{}
 	fallback := &consumerResolver{missing: map[rune]struct{}{}}
+	var store *imageStore
+	if req.Images != nil {
+		store = newImageStore(req.Images)
+	}
 	for _, path := range wanted {
 		d := diagrams[path]
 		leaf := *d
 		leaf.Layers, leaf.Scenarios, leaf.Steps = nil, nil, nil
-		doc, err := build(ctx, req, opts, &leaf, fallback)
+		doc, err := build(ctx, req, opts, &leaf, fallback, store)
 		if err != nil {
 			code := "internal"
 			if strings.Contains(err.Error(), "budget") || strings.Contains(err.Error(), "exceed") || strings.Contains(err.Error(), "limit") {
@@ -268,14 +279,22 @@ func run(ctx context.Context, req *Request, res *Result) {
 		}
 		assoc := associate(graphs[path], doc)
 		res.Boards = append(res.Boards, Board{Path: path, Scene: data, Association: assoc})
+		if store != nil {
+			res.Diagnostics = append(res.Diagnostics, store.unresolvedImages(path, graphs[path])...)
+		}
 		res.Diagnostics = append(res.Diagnostics, missingGlyphDiagnostics(path, fallback.uncovered(), assoc.Objects)...)
 	}
 }
 
-func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2target.Diagram, fallback *consumerResolver) (*d2scene.Document, error) {
+func build(ctx context.Context, req *Request, opts *d2svg.RenderOpts, leaf *d2target.Diagram, fallback *consumerResolver, store *imageStore) (*d2scene.Document, error) {
 	// BaseDir is explicit because a browser has no working directory (os.Getwd is not implemented on js).
-	// Offline: remote images become the builder's placeholder, and files in the virtual filesystem are not readable as images yet.
-	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: offline{}}, Limits: imageasset.Limits{
+	// Offline: the worker never fetches. Without supplied images a remote image is the builder's placeholder; with them (spec 0010) the resolver's
+	// HTTP client answers from the page's bytes. Files in the virtual filesystem are not readable as images.
+	var transport http.RoundTripper = offline{}
+	if store != nil {
+		transport = store
+	}
+	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: transport}, Limits: imageasset.Limits{
 		MaxFetchedBytes: 1 << 22, MaxEncodedBytes: 1 << 22, MaxDecompressedBytes: 1 << 22, MaxSVGBytes: 1 << 20,
 		MaxDecodedWidth: 4096, MaxDecodedHeight: 4096, MaxDecodedPixels: 1 << 24,
 		MaxAssets: 256, MaxCumulativeEncodedBytes: 32 << 20, MaxCumulativeDecodedBytes: 128 << 20,

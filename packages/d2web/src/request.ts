@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type Engine, type FontSpec, type RenderOptions } from './protocol.ts';
+import { PROTOCOL_VERSION, type Budgets, type CompileRequest, type Engine, type FontSpec, type ImageBytes, type RenderOptions } from './protocol.ts';
 
 const ENGINES: readonly Engine[] = ['tala', 'dagre', 'elk'];
 
@@ -84,6 +84,18 @@ function boards(value: unknown): string[] | 'all' {
   return [...new Set(value as string[])];
 }
 
+// Spec 0010: supplied image bytes, by link. Values are checked here so the worker only ever sees bytes with a content type.
+function images(value: unknown): Record<string, ImageBytes> | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) return fail('images must map links to { type, data }');
+  const out: Record<string, ImageBytes> = {};
+  for (const [source, image] of Object.entries(value)) {
+    if (!isObject(image) || typeof image.type !== 'string' || !(image.data instanceof Uint8Array)) fail(`images[${JSON.stringify(source)}] must be { type: string, data: Uint8Array }`);
+    out[source] = image as unknown as ImageBytes;
+  }
+  return out;
+}
+
 // Validates a compile request and fills the spec's defaults (tala, root board, worker budgets). Throws ProtocolError with the first problem.
 export function normalizeCompileRequest(input: unknown): NormalizedRequest {
   if (!isObject(input)) return fail('request must be an object');
@@ -97,5 +109,6 @@ export function normalizeCompileRequest(input: unknown): NormalizedRequest {
     v: PROTOCOL_VERSION, type: 'compile', id: integer(input.id, 'id', 0), revision: integer(input.revision, 'revision', 0),
     files: files as Record<string, string>, entry: entry as string, layout: (layout as Engine | undefined) ?? 'tala',
     render: render(input.render), budgets: overlay(DEFAULT_BUDGETS, input.budgets as Budgets | undefined, 'budgets'), boards: boards(input.boards),
+    ...(input.images === undefined ? {} : { images: images(input.images) }),
   };
 }

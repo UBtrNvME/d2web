@@ -80,3 +80,34 @@ test('failures return an error and no boards', () => {
   const unnormalized = native(JSON.stringify({ v: 1, type: 'compile', id: 2, revision: 0, files: { 'main.d2': 'a' }, entry: 'main.d2', layout: 'tala', render, boards: [''] }));
   assert.equal(unnormalized.error.code, 'internal', 'budgets are required');
 });
+
+// Spec 0010: the preflight lists image links without layout, and supplied bytes (base64 across the JSON boundary, as worker.js sends them)
+// become real image assets; links that were not supplied stay placeholders with an image-unresolved warning.
+const svgIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" fill="#00ADD8"/></svg>';
+const withImages = 'a: { icon: "https://i.test/go.svg#frag" }\nb: { icon: https://i.test/none.svg }\n';
+const images = { 'https://i.test/go.svg#frag': { type: 'image/svg+xml', data: Buffer.from(svgIcon).toString('base64') } };
+const preflight = source => JSON.stringify({ v: 1, type: 'preflight', id: 4, files: { 'main.d2': source }, entry: 'main.d2' });
+const assetsOf = r => Object.keys(r.boards[0].scene.Assets ?? {}).filter(id => id.startsWith('image:'));
+
+test('images: preflight, supplied bytes and unresolved warnings; native and Node/WASM agree', { timeout: 300_000 }, () => {
+  const compile = JSON.parse(request(withImages));
+  compile.budgets.svgImport = { maxSourceBytes: 1 << 22, maxElements: 100000, maxAttributes: 500000, maxAttributeBytes: 1 << 22, maxPathCommands: 1000000, maxTransformFunctions: 100000, maxDeclaredResources: 10000, maxExpandedUseInstances: 10000 };
+  const plain = JSON.stringify(compile), bundled = JSON.stringify({ ...compile, images });
+
+  const found = native(preflight(withImages));
+  assert.equal(found.type, 'images'); assert.equal(found.id, 4);
+  assert.deepEqual(found.links.map(l => [l.board, l.id, l.kind, l.source]), [['', 'a', 'icon', 'https://i.test/go.svg#frag'], ['', 'b', 'icon', 'https://i.test/none.svg']]);
+  assert.match(native(preflight('a: {')).error, /./);
+
+  const without = native(plain);
+  assert.deepEqual(assetsOf(without).filter(id => id !== 'image:unavailable'), []); assert.deepEqual(without.diagnostics, []); assert.equal(without.echo.images, undefined);
+  const result = native(bundled);
+  assert.equal(result.error, undefined); assert.equal(result.echo.images, 'bundle');
+  assert(assetsOf(result).some(id => id !== 'image:unavailable'), 'the supplied link is a real asset');
+  assert(assetsOf(result).includes('image:unavailable'), 'the other link is still the placeholder');
+  assert.deepEqual(result.diagnostics.map(d => [d.severity, d.code, d.board ?? '']), [['warning', 'image-unresolved', '']]);
+  assert.match(result.diagnostics[0].message, /none\.svg/);
+
+  assert.deepEqual(stable(wasm(bundled)), stable(result));
+  assert.deepEqual(JSON.parse(goRun(join(goRoot, 'lib/wasm/go_js_wasm_exec'), [join(output, 'd2web.wasm'), preflight(withImages)], { ...opts, timeout: 60_000 })), found);
+});

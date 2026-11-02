@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -20,6 +21,13 @@ func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "expected one compile request as JSON")
 		os.Exit(1)
+	}
+	var peek struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal([]byte(os.Args[1]), &peek) == nil && peek.Type == "preflight" {
+		os.Stdout.Write(compile.Preflight([]byte(os.Args[1])))
+		return
 	}
 	os.Stdout.Write(compile.Handle(context.Background(), []byte(os.Args[1])))
 }

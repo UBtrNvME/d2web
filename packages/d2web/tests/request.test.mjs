@@ -62,3 +62,14 @@ test('render options: required, typed, theme overrides optional', () => {
   assert.equal(n.render.themeId, 200);
   assert.deepEqual(n.render.themeOverrides, { b1: '#fff' });
 });
+
+// Spec 0010: the images field is optional, and when present each entry is { type, data: Uint8Array } (test 1).
+test('images: absent by default; present even when empty; entries need a type and bytes', () => {
+  assert.equal('images' in normalizeCompileRequest(request()), false);
+  assert.deepEqual(normalizeCompileRequest(request({ images: {} })).images, {});
+  const ok = { 'https://i.test/a.svg': { type: 'image/svg+xml', data: new Uint8Array([1]) } };
+  assert.deepEqual(normalizeCompileRequest(request({ images: ok })).images, ok);
+  rejects({ images: [] }, /images must map/);
+  rejects({ images: { 'https://i.test/a.svg': { type: 'image/svg+xml', data: 'text' } } }, /must be \{ type: string, data: Uint8Array \}/);
+  rejects({ images: { 'https://i.test/a.svg': { data: new Uint8Array([1]) } } }, /must be \{ type: string/);
+});

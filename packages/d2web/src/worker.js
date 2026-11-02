@@ -2,6 +2,14 @@
 // Posts the ready message once, then answers each compile request with a result object.
 const params = new URL(self.location.href).searchParams;
 importScripts(params.get('exec') ?? new URL('wasm_exec.js', self.location.href).href);
+// Image bytes cross the JSON boundary as base64 (Go decodes []byte from it); everything else in the request is already JSON.
+const base64 = bytes => { let text = ''; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(text); };
+const withImagesEncoded = request => {
+  if (!request.images) return request;
+  const images = {};
+  for (const [source, image] of Object.entries(request.images)) images[source] = { type: image.type, data: base64(image.data) };
+  return { ...request, images };
+};
 (async () => {
   const go = new Go();
   go.argv = ['d2web', '--serve'];
@@ -16,7 +24,9 @@ importScripts(params.get('exec') ?? new URL('wasm_exec.js', self.location.href).
       const error = self.d2webSetFonts(event.data.fonts.map(f => f.name), event.data.fonts.map(f => f.data)) || (event.data.emoji ? self.d2webSetEmoji(event.data.emoji) : '');
       return postMessage({ type: 'fonts', error });
     }
-    postMessage(JSON.parse(await self.d2webCompile(JSON.stringify(event.data))));
+    // Spec 0010: which image links does this source use? Compiled without layout, so it is cheap.
+    if (event.data.type === 'preflight') return postMessage(JSON.parse(self.d2webPreflight(JSON.stringify(event.data))));
+    postMessage(JSON.parse(await self.d2webCompile(JSON.stringify(withImagesEncoded(event.data)))));
   };
   postMessage(JSON.parse(self.d2webReady));
 })();
