@@ -128,8 +128,9 @@ test('a focus tooltip flips inside the board near its edges and Escape dismisses
   const scene = await page.locator('#a [data-d2-scene]').boundingBox();
   for (const id of ['a', 'b']) {
     const group = page.locator(`#a [data-id="${id}"][role="group"]`), tip = page.locator('#a [role="tooltip"]', { hasText: `Tip ${id.toUpperCase()}` });
-    await group.focus();
-    await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+    // Tab from the previous stop, as a keyboard user would. Not focus() then Shift+Tab, Tab: Firefox leaves focus on the first stop for Shift+Tab, so Tab moves on.
+    await page.keyboard.press('Tab');
+    await expect(group).toBeFocused();
     await expect(tip).toBeVisible();
     const box = await tip.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(scene.x - 1);
@@ -138,8 +139,7 @@ test('a focus tooltip flips inside the board near its edges and Escape dismisses
     expect(box.y + box.height).toBeLessThanOrEqual(scene.y + scene.height + 1);
     await page.keyboard.press('Escape');
     await expect(tip).toBeHidden();
-    await group.blur();
   }
   await page.locator('#a [data-id="a"][role="group"]').focus();
-  await expect(page.locator('#a [role="tooltip"]', { hasText: 'Tip A' })).toBeVisible(); // refocus after blur shows it again
+  await expect(page.locator('#a [role="tooltip"]', { hasText: 'Tip A' })).toBeVisible(); // dismissed on Escape, shown again once focus has moved away and back
 });

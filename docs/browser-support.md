@@ -32,6 +32,12 @@ Fix: `packages/d2web-wasm/third_party/goldmark` is goldmark v1.8.5 minus its tes
 
 Not verified: real Safari (only Playwright's WebKit), and that other Go start-up code stays below WebKit's worker stack as D2 updates; the stack test is the early warning, with the 75 KB figure chosen because the unpatched build failed at it.
 
+## Focus tooltip test in Firefox (fixed 2 November 2026)
+
+`links.spec` "a focus tooltip flips inside the board…" failed only in Firefox, with Tip A hidden. Neither `:focus-visible` nor `:has()` was at fault: the object group matched `:focus-visible` and the tooltip showed as soon as it had focus. The test reached each object with `focus()` then Shift+Tab, Tab. Chromium and WebKit move focus out of the page on Shift+Tab from the first tab stop, so Tab comes back to it; Playwright's Firefox leaves focus where it is, so Tab moves on to the next object and shows Tip B instead. The test now reaches each object with Tab, as a keyboard user does.
+
+That exposed a real bug in all three engines: Escape's `data-dismissed` was cleared by a `focusout` listener on the shadow host, but a focus move between two objects inside the same shadow root retargets to the host on both sides and is not dispatched to it. A dismissed tooltip therefore stayed hidden until focus left the whole diagram. `mount()` now listens on the shadow root.
+
 ## Other WebKit notes
 
 - **Tab to links:** `events.spec` and `links.spec` skip their Tab-focus parts in WebKit. Safari leaves links out of the Tab order unless the user enables it; focusable D2 objects use `tabindex`.
