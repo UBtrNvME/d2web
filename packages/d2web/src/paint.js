@@ -108,18 +108,27 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
   }
 
   // Registers the clipPath and mask definitions for a node and returns their ids.
-  function clipMask(n, dx = 0, dy = 0) {
+  function clipMask(n, dx = 0, dy = 0, defineMask = true) {
     const shift = dx || dy ? `translate(${num(dx)} ${num(dy)}) ` : '';
     const out = {};
     if (n.Clip) {
       out.clip = next('clip');
       defs.push(`<clipPath id="${out.clip}"><path d="${pathData(n.Clip.Path.Commands)}" fill-rule="${n.Clip.Path.FillRule ? 'evenodd' : 'nonzero'}" transform="${shift}${matrix(n.Clip.Transform)}"/></clipPath>`);
     }
-    if (n.Mask) {
+    if (n.Mask && defineMask) {
       out.mask = next('mask');
       defs.push(`<mask id="${out.mask}" style="mask-type:${n.Mask.Type ? 'luminance' : 'alpha'}"><g transform="${shift}${matrix(n.Mask.Transform)}">${node(n.Mask.Root)}</g></mask>`);
     }
     return out;
+  }
+
+  // Safari does not resolve `mask: url(#id)` to an inline SVG <mask> from an HTML element, so the HTML painter hands every browser the same
+  // mask as an image: a data-URI SVG whose rect is cut by the D2 mask. An image mask is read as alpha, which is what the luminance mask yields.
+  function cssMaskImage(n, dx, dy, w, h) {
+    const shift = dx || dy ? `translate(${num(dx)} ${num(dy)}) ` : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${num(w)}" height="${num(h)}" viewBox="0 0 ${num(w)} ${num(h)}"><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="${num(w)}" height="${num(h)}" style="mask-type:${n.Mask.Type ? 'luminance' : 'alpha'}"><g transform="${shift}${matrix(n.Mask.Transform)}">${node(n.Mask.Root)}</g></mask><rect width="${num(w)}" height="${num(h)}" mask="url(#m)"/></svg>`;
+    const url = `url('data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}')`;
+    return ['mask-image', '-webkit-mask-image'].map(k => `${k}:${url}`).concat(['mask-size', '-webkit-mask-size'].map(k => `${k}:100% 100%`), ['mask-repeat', '-webkit-mask-repeat'].map(k => `${k}:no-repeat`)).join(';');
   }
 
   const kids = n => (n.Children ?? []).map(c => { if (!c) throw new Error(`null child under ${n.ID ?? 'unnamed node'}`); return c; });
@@ -504,12 +513,12 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
       const b = subtreeBounds(n);
       const [bx, by] = b ? [Math.floor(b[0]) - 2, Math.floor(b[1]) - 2] : [0, 0];
       const [w, h] = b ? [Math.ceil(b[2]) - bx + 2, Math.ceil(b[3]) - by + 2] : [0, 0];
-      const { clip, mask } = clipMask(n, -bx, -by);
+      const { clip } = clipMask(n, -bx, -by, false);
       const outer = ['position:absolute', `left:${px(bx)}`, `top:${px(by)}`, `width:${px(w)}`, `height:${px(h)}`, `transform-origin:${px(-bx)} ${px(-by)}`];
       if (!isIdentity(n.Transform)) outer.push(`transform:${matrix(n.Transform).replaceAll(' ', ',')}`);
       if (n.Opacity !== 1) outer.push(`opacity:${num(n.Opacity)}`);
       if (clip) { outer.push(`clip-path:url(#${clip})`); count('html:clipped-group'); }
-      if (mask) { outer.push(`mask:url(#${mask})`); count('html:masked-group'); }
+      if (n.Mask) { outer.push(cssMaskImage(n, -bx, -by, w, h)); count('html:masked-group'); }
       let own = '';
       if (n.Primitive) {
         const [markup, reason] = primitiveHtml(n.Primitive, codeToken);
@@ -519,10 +528,11 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     }
     if (n.Clip || n.Mask) {
       // CSS clip-path/mask by url() refer to the element's border box, so the group gets the document extent at the local origin.
-      const { clip, mask } = clipMask(n);
-      style.push(`width:${px(Math.max(v.X + v.Width, v.Width))}`, `height:${px(Math.max(v.Y + v.Height, v.Height))}`);
+      const { clip } = clipMask(n, 0, 0, false);
+      const [gw, gh] = [Math.max(v.X + v.Width, v.Width), Math.max(v.Y + v.Height, v.Height)];
+      style.push(`width:${px(gw)}`, `height:${px(gh)}`);
       if (clip) { style.push(`clip-path:url(#${clip})`); count('html:clipped-group'); }
-      if (mask) { style.push(`mask:url(#${mask})`); count('html:masked-group'); }
+      if (n.Mask) { style.push(cssMaskImage(n, 0, 0, gw, gh)); count('html:masked-group'); }
     }
     let own = '';
     if (n.Primitive) {
