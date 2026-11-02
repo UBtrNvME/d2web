@@ -1,4 +1,5 @@
-import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type FontSpec, type FontsMessage, type WorkerMessage, type WorkerReady } from './protocol.ts';
+import { createImageResolver, normalizeImages, type ImagesOption } from './images.ts';
+import { PROTOCOL_VERSION, SCENE_VERSION, type CompileRequest, type CompileResult, type FontSpec, type FontsMessage, type ImageBytes, type PreflightResult, type WorkerMessage, type WorkerReady } from './protocol.ts';
 import { normalizeCompileRequest, normalizeFonts } from './request.ts';
 
 // Minimal Worker surface so tests can script one; a real `Worker` fits.
@@ -25,9 +26,12 @@ export interface ClientOptions {
   emoji?: FontSpec;
   // The fetch used for `fonts` (default: the page's); a hook for tests and consumers that cache elsewhere.
   fetch?: (url: string) => Promise<Response>;
+  // Spec 0010: how image links are handled. Absent: nothing is fetched and a remote image is D2's placeholder. 'bundle': the page resolves each link to bytes
+  // (consumer's `resolve`/`supplied`) before the compile and the worker paints them; 'link': the link is kept and the browser loads it.
+  images?: ImagesOption;
 }
 
-export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id'>;
+export type CompileInput = Omit<CompileRequest, 'v' | 'type' | 'id' | 'images'>;
 
 export class SupersededError extends Error {}
 // `code: 'budget'` marks a compile aborted by budgets.maxLayoutMillis (spec 0008); other timeouts have no code.
@@ -37,10 +41,16 @@ export class VersionError extends Error {}
 // A listed font could not be fetched, did not match its checksum, or the wasm refused it (spec 0007).
 export class FontError extends Error {}
 
-interface Job { request: CompileRequest; resolve: (r: CompileResult) => void; reject: (e: unknown) => void; started: number; timer?: ReturnType<typeof setTimeout> }
+interface Job {
+  request: CompileRequest; resolve: (r: CompileResult) => void; reject: (e: unknown) => void; started: number; timer?: ReturnType<typeof setTimeout>;
+  // Set while the page is resolving images (spec 0010): aborting it cancels the `resolve` calls; `preflight` receives the worker's list of links.
+  imagePhase?: { controller: AbortController; preflight?: (r: PreflightResult) => void };
+}
 
 // Spec 0001 section 3.4: one compile at a time, latest request wins, no cooperative cancel (abort = terminate and respawn).
-export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, emoji, fetch: fetchFont = u => fetch(u) }: ClientOptions) {
+export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs = 120_000, startupTimeoutMs = 30_000, fonts, emoji, fetch: fetchFont = u => fetch(u), images }: ClientOptions) {
+  const imageOption = images === undefined ? undefined : normalizeImages(images);
+  const resolveImages = imageOption?.mode === 'bundle' ? createImageResolver(imageOption) : undefined;
   const listed = fonts === undefined ? undefined : normalizeFonts(fonts);
   const emojiSpec = emoji === undefined ? undefined : normalizeFonts([emoji])[0];
   let fontBytes: Promise<FontsMessage> | undefined;
@@ -73,6 +83,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         if (mine !== worker) return;
         if (data.type === 'ready') resolve(data);
         else if (data.type === 'fonts') { if (data.error && running) { const job = running; settle(job); job.reject(new FontError(`worker refused the fonts: ${data.error}`)); pump(); } }
+        else if (data.type === 'images') { if (running && data.id === running.request.id) running.imagePhase?.preflight?.(data); }
         else if (running && data.type === 'result' && data.id === running.request.id) finish(data);
       };
     });
@@ -120,9 +131,38 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         try { mine.postMessage(await loadFonts()); sent.add(mine); clearTimeout(job.timer); } catch (error) { if (running === job) { settle(job); job.reject(error); pump(); } return; }
         if (running !== job || mine !== worker) return;
       }
+      let request = job.request;
+      if (resolveImages) {
+        job.timer = timeout(silentTimeoutMs, 'images not resolved');
+        const images = await prepareImages(job, mine, resolveImages);
+        if (running !== job || mine !== worker) return;
+        clearTimeout(job.timer);
+        request = { ...request, images };
+      }
       job.timer = budget <= silentTimeoutMs ? timeout(budget, 'compile exceeded budgets.maxLayoutMillis', 'budget') : timeout(silentTimeoutMs, 'no reply');
-      mine.postMessage(job.request);
+      mine.postMessage(request);
     });
+  }
+
+  // Spec 0010 section 2.2: ask the worker which links the boards use, resolve them on the page, and hand the bytes to the compile. Every failure leaves a link
+  // unresolved (the worker warns and paints the placeholder); none fails the compile. Returns undefined when the job was superseded meanwhile.
+  async function prepareImages(job: Job, mine: WorkerLike, resolveLinks: ReturnType<typeof createImageResolver>): Promise<Record<string, ImageBytes> | undefined> {
+    const phase: NonNullable<Job['imagePhase']> = (job.imagePhase = { controller: new AbortController() });
+    try {
+      const { files, entry, boards = [''] } = job.request;
+      // Without the word "icon" in any file there is no image to ask about (a `shape: image` needs one too): no round trip. The worker still warns about any it finds.
+      if (!Object.values(files).some(text => /icon/i.test(text))) return {};
+      const listed = await new Promise<PreflightResult>(resolve => {
+        phase.preflight = resolve;
+        mine.postMessage({ v: PROTOCOL_VERSION, type: 'preflight', id: job.request.id, files, entry });
+        phase.controller.signal.addEventListener('abort', () => resolve({ v: PROTOCOL_VERSION, type: 'images', id: job.request.id, links: [], error: 'aborted' }));
+      });
+      if (listed.error) return {};
+      const wanted = listed.links.filter(l => boards === 'all' || boards.includes(l.board));
+      return await resolveLinks(wanted, phase.controller.signal);
+    } finally {
+      if (job.imagePhase === phase) job.imagePhase = undefined;
+    }
   }
 
   start();
@@ -135,7 +175,13 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
         waiting?.reject(new SupersededError(`revision ${waiting.request.revision} was superseded`));
         waiting = { request, resolve, reject, started: 0 };
         if (running && Date.now() - running.started > supersedeAfterMs) abort(new SupersededError(`revision ${running.request.revision} was aborted`));
-        else pump();
+        else if (running?.imagePhase) { // still resolving images: nothing was compiled, so cancel the `resolve` calls and move on without a respawn
+          const job = running;
+          job.imagePhase!.controller.abort();
+          settle(job);
+          job.reject(new SupersededError(`revision ${job.request.revision} was superseded`));
+          pump();
+        } else pump();
       });
     },
     dispose() {
