@@ -2,16 +2,26 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
-## Slice: align code with accepted ADRs and specs (4 November 2026 audit; plan awaiting the user)
+## Slice: align code with accepted ADRs and specs (4 November 2026 audit; ADR 0013 parts 1–2 authorized by the user)
 
-Docs were made factual the same day (specs 0003, 0005, 0006, 0009, 0013-0016; ADR `Delivery:` lines). Accepted but not built, in order:
-- [ ] ADR 0013 part 2: `packages/d2editor/src/traits.ts` with `{name, applies(object, ctx)}` (container, connectable, movable, has-handle); one `press()` arbiter replaces the ad hoc check at `main.ts:281`. Each trait has a test that compiles D2 and compares (`image` refuses children, `sql_table`/`class` turn them into rows, `text`/`code`/markdown lose content, only TALA honours `top`/`left`). Verify: `mise run test:editor`.
-- [ ] ADR 0013 part 1: palette entry becomes `{id, label, ops(ctx)}` with `base` inside `ctx`, so ADR and code match. Verify: `test:editor`.
+Docs were made factual the same day (specs 0003, 0005, 0006, 0009, 0013-0016; ADR `Delivery:` lines). Audit follow-up, in order:
+- [x] ADR 0013 part 2: `packages/d2editor/src/traits.ts` with `{name, applies(object, ctx)}` (container, connectable, movable, has-handle); one `press()` arbiter replaces the ad hoc check at `main.ts:281`. Each trait has a test that compiles D2 and compares (`image` refuses children, `sql_table`/`class` turn them into rows, only TALA honours `top`/`left`; content elements retain the existing editor exclusion). Live D2 preserves text/code/markdown content, correcting the research assumption. Verification and limits below.
+- [x] ADR 0013 part 1: palette entry becomes `{id, label, ops(ctx)}` with `base` inside `ctx`, so ADR and code match. Verify: `test:editor`.
 - [ ] Spec 0009: run `mise run check:browser`; confirm WebKit C1 `shape/sequence_diagram`; ask the user to record acceptance of stages A-C.
 - [ ] Spec 0012: add the zoom case missing from spec 0014 §5 (`position.test.mjs`), or reword the spec.
 - [ ] Unrun figures in specs (counts, timings, sizes): re-measure or drop; do not leave unchecked numbers as facts.
 - [ ] `docs:check` mise task in `check`: every backticked path, mise task and `Delivery:` claim in `docs/adr` and `docs/specs` resolves.
 - [ ] `AGENTS.md` phase bullets ("architecture research ... R1 next") vs "product phase": reconcile.
+
+
+ADR 0013 handoff (4 November 2026): parts 1–2 are implemented on `editor-traits-adr0013`, based on `docs-align-adrs-specs`. Changes: `packages/d2editor/src/{traits,palette,main}.ts`, `packages/d2editor/tests/{traits,palette}.test.mjs`, `mise.toml`, ADR 0013 and this ledger. Traits are derived; the press arbiter preserves body reparenting on every engine and position writes only on TALA. Palette ops choose their unique key from the current board, parent and optional naming base. No dependencies or lockfiles changed. The unrelated untracked `.claude/artifacts/` directory is preserved.
+
+D2 evidence: the focused `mise exec -- node --test packages/d2editor/tests/traits.test.mjs packages/d2editor/tests/palette.test.mjs` passes (9 tests). Image children fail; table/class children become scene rows; only TALA honours position deltas. Current D2 preserves text/code/markdown/latex content with children; the historical content-loss claim is not reproduced. The existing editor container exclusions remain unchanged.
+
+Verification in this sandbox: initial `mise run check` and `mise run test:editor` could not load missing `esbuild`; `mise exec -- pnpm install --frozen-lockfile` failed on registry DNS access. Reused `node_modules` from the existing local worktree after confirming its `pnpm-lock.yaml` is identical. `mise exec -- env PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false mise run check` passes (60.17 s), including typecheck, all 96 unit tests and native/Node-WASM checks. `mise exec -- env PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false mise run test:editor` builds the site and passes the Node serving check, but Chromium fails to launch (`MachPortRendezvousServer … Permission denied (1100)`), before browser assertions. Logs: `artifacts/d2editor-traits/{check,editor}.log`. No staging, commit, push or merge was performed; the coordinator owns the commit. Next: run `test:editor` outside the sandbox; later audit items above remain open. Full `check:browser`, touch input and the existing nested-position accuracy limitation are outside this task's verification.
+
+
+Independent verification (4 November 2026): `mise exec -- env PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false mise run --continue-on-error check` passed, including all 96 unit tests, typecheck, native/Node-WASM checks and diff checks (log: `/tmp/d2web-adr0013-check.log`). A fresh `mise run test:editor` rebuilt both distributions and passed its serving check; all 27 browser cases stopped at the sandbox's Chromium launch denial before page assertions (log: `/tmp/d2web-adr0013-editor.log`). `mise exec -- node --test packages/d2editor/tests/canvas.test.mjs packages/d2editor/tests/history.test.mjs packages/d2editor/tests/palette.test.mjs packages/d2editor/tests/position.test.mjs packages/d2editor/tests/share.test.mjs packages/d2editor/tests/snap.test.mjs packages/d2editor/tests/traits.test.mjs` passed all 24 editor Node tests. A temporary copy with the TALA predicate inverted failed both the movable and press tests; the source files were unchanged by that review check.
 
 ## Slice: d2editor drag past the origin (spec 0016, accepted by the user 3 November 2026)
 
