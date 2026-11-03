@@ -24,3 +24,8 @@ test('paths and mise tasks cited in ADRs and specs exist', () => {
   }
   assert.deepEqual(missing, []);
 });
+
+test('every spec states whether it is delivered', () => {
+  const bad = files.filter(f => f.startsWith('docs/specs/') && !/^Delivered: /m.test(readFileSync(f, 'utf8')));
+  assert.deepEqual(bad, []);
+});
