@@ -1,6 +1,7 @@
 # Spec 0005: animation painting
 
 Status: **accepted with the recommended answers to questions 1-3** (user, 31 October 2026). Builds on [spec 0002](0002-mount-api.md), which lists animation painting as unpainted in v1, and on [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web translates them to the web and adds no behaviour of its own.
+Delivered: partial: animation is painted (`animation.js`); equal-`currentTime` native/web comparison (test plan step 3) is not done. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. What D2 provides
 
@@ -9,7 +10,7 @@ The scene carries typed tracks on nodes (`d2scene.Node.Animations`, `imports/d2/
 - `style.animated` on a shape: repeating transform and two drop-shadow tracks (`shape_effects.go`);
 - the legend's animated entry (`legend.go`).
 
-Today the painter draws all of these at their first frame. The feature map case `animation/animated-edges` is therefore ok at t=0, which says nothing about motion.
+The painter plays these as Web Animations (`animation.js`, `dom.ts`). The feature map case `animation/animated-edges` checks t=0 only; motion is covered by `animation.spec.mjs`.
 
 ## 2. Proposal
 
@@ -50,7 +51,7 @@ Translate each track to the Web Animations API, one call per track on the elemen
 | Claim | State |
 | --- | --- |
 | Which D2 features emit tracks | verified in `d2scenebuild` source |
-| The painter ignores tracks today | verified (spec 0002, `paint.js`) |
-| Every track property and easing has a direct CSS/WAAPI form | proposed; the drop-shadow track and bidirectional split are not yet exercised |
+| The painter plays tracks as Web Animations | built (`animation.js`, `animation.spec.mjs`) |
+| Every track property and easing has a direct CSS/WAAPI form | proposed; the drop-shadow track is asserted in `animation.spec.mjs`, the bidirectional split is not yet exercised |
 | Native and web match at equal `currentTime` | unknown until step 3 of the test plan runs |
 | Firefox and Safari | animation suite passes in Firefox and in Playwright's WebKit; real Safari unverified (docs/browser-support.md) |

@@ -1,6 +1,7 @@
 # 0011. Images and icons behave like native D2, adapted to the web
 
 Status: accepted (user, 2 November 2026: "Accept", after the proposal and its evidence were written the same day). The open items at the end are settled in [spec 0010](../specs/0010-images.md), which is implemented (2 November 2026); the demo's regex-based inlining is gone.
+Delivery: delivered ([spec 0010](../specs/0010-images.md)). The first Consequences bullet is history: link-only images were carried by amending spec 0001 (association side), not by a new asset kind. (Audited 4 November 2026.)
 
 Context: a D2 source names images by link, for example `icon: https://icons.terrastruct.com/dev%2Fgo.svg` or `shape: image`. d2web compiles in a worker with a deliberately offline HTTP client (`packages/d2web-wasm/compile/compile.go`), so a remote image paints D2's placeholder and the consumer has had to "bake" its own images as `data:` URIs. That is clumsy and, until now, it was unclear which native behaviour it should match.
 

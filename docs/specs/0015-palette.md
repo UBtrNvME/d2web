@@ -1,6 +1,7 @@
 # Spec 0015: d2editor, palette, zones and drag-to-connect
 
-Status: **accepted** (user, 3 November 2026: "Accept both, build"); **built** 3 November 2026 on `claude/connection-route-box`: `mise run check`, `check:browser` and `test:editor` (23 Chromium cases, 6 for this spec) pass. A palette insert waits for the current text to compile, so a class typed just before is not overwritten (Codex review). Changes made while building are marked *Built:* below. Section 7 resolved as proposed: only a Container is a drop target. Builds on [spec 0013](0013-d2editor.md), [spec 0014](0014-drag-to-position.md) and the `move` op in [spec 0012](0012-edit-api.md); structure per [ADR 0013](../adr/0013-editor-traits-from-d2.md). Research and decisions: [palette primitives](../ideas/palette-primitives.md).
+Status: **accepted** (user, 3 November 2026: "Accept both, build"); **built** 3 November 2026 on `claude/connection-route-box`: `mise run check`, `check:browser` and `test:editor` (6 cases for this spec) pass. A palette insert waits for the current text to compile, so a class typed just before is not overwritten (Codex review). Changes made while building are marked *Built:* below. Section 7 resolved as proposed: only a Container is a drop target. Builds on [spec 0013](0013-d2editor.md), [spec 0014](0014-drag-to-position.md) and the `move` op in [spec 0012](0012-edit-api.md); structure per [ADR 0013](../adr/0013-editor-traits-from-d2.md). Research and decisions: [palette primitives](../ideas/palette-primitives.md).
+Delivered: delivered. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Objective
 

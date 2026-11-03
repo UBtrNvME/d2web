@@ -1,6 +1,7 @@
 # 0013. d2editor components: palette entries as data, traits derived from D2
 
 Status: accepted (user, 3 November 2026: "Accept both, build")
+Delivery: partial (audited 4 November 2026). Part 1 is built in `packages/d2editor/src/palette.ts` (entry is `{id, label, base, ops(key)}`, not `ops(ctx)`). Part 2 (traits, one press arbiter, D2-checked predicates) is not built; a press is an ad hoc check in `main.ts`. Class names and language are now carried (spec 0015). Part 3 holds. Tracked in [tasks/todo.md](../../tasks/todo.md).
 Context: The d2editor palette grows from one Shape button to markdown, code, icon shapes, zones and the document's own classes, with drag-to-connect and drop-into-zone ([idea](../ideas/palette-primitives.md), [spec 0015](../specs/0015-palette.md)). New components will keep arriving, so the editor needs a shape that extends without growing a second model of the diagram. Constraints:
 - [ADR 0009](0009-natural-web-forms.md): D2 owns semantics and d2web's painter owns each element's web form; the editor paints nothing per component.
 - [ADR 0012](0012-editing-in-scope.md): the only write path is the worker edit API, whose checked patches keep D2 text the source of truth.

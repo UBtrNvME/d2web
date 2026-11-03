@@ -1,6 +1,7 @@
 # Spec 0010: images and icons
 
 Status: **accepted with the recommended answers to questions 1-6** (user, 2 November 2026: "Use the options which are provided"; section 4 records them). Drafted the same day after [ADR 0011](../adr/0011-images-like-native-d2.md) was accepted. **Built in five slices on 2 November 2026** (section 6 records what the build showed and where it differs from the design). Implements ADR 0011's decision on top of [spec 0001](0001-compile-protocol.md) (protocol and scene), [spec 0004](0004-association.md) (association), [spec 0007](0007-fonts-and-text.md) (the page fetches, the worker stays offline) and the rules of [ADR 0009](../adr/0009-natural-web-forms.md) and [ADR 0010](../adr/0010-web-performance.md).
+Delivered: delivered (five commits, 2 November 2026). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. What is known
 

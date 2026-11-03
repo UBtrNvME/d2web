@@ -1,6 +1,7 @@
 # Spec 0002: mount API (painted board in a host element)
 
 Status: **accepted** (user, 31 October 2026, with the three recommendations of section 8), implemented in `packages/d2web/src/mount.ts`. Builds on [spec 0001](0001-compile-protocol.md) (compile protocol) and [ADR 0003](../adr/0003-runtime-shape.md) (shadow-root host, consumer-owned content). Scope per [product.md](../product.md): v1, read-only render. The [browser review](../web-native-audit.md) records the original text-calibration, animated-content and font-disposal defects and their follow-up fixes. [Spec 0011](0011-rendering-contract.md) defines current renderer and consumer ownership.
+Delivered: delivered (`packages/d2web/src/mount.ts`). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Purpose and non-goals
 

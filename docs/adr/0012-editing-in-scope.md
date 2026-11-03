@@ -1,6 +1,7 @@
 # 0012. Editing enters scope: a checked-patch edit API in d2web
 
 Status: accepted (user, 2 November 2026: "Accept", after confirming in chat the scope choices: lift only "editing is v2", edit API only, offer the formatted text on a failed check, one file with its boards).
+Delivery: delivered ([spec 0012](../specs/0012-edit-api.md)): set, create, rename, delete, move. "connect" is `create` with an arrow key; there is no separate op. (Audited 4 November 2026.)
 
 Context: [ADR 0007](0007-product-scope-v1.md) made v1 read-only and deferred editing to v2 because oracle patches, undo and stale handling were unresolved. Since then:
 - [ADR 0004](0004-edit-wrapper-and-patches.md) settled the mechanism: `d2oracle` edits a disposable compile behind a copy-on-write wrapper, recovers panics and publishes only text that recompiles. 17 requests give identical results in native, Node/WASM and Chromium WASM (`test:research:transaction`).

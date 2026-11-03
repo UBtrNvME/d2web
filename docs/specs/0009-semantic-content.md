@@ -1,8 +1,9 @@
 # Spec 0009: semantic rich content (web-native layout contracts)
 
-Status: **proposed**, built stage by stage; the user said "proceed" on 1 November 2026 and asked to keep a way back. Checkpoint: git tag `checkpoint/before-web-native-contracts` (commit d81f1af, painter at 73 % HTML elements, rich content as positioned text). Return with `git checkout checkpoint/before-web-native-contracts`, or compare with `git diff checkpoint/before-web-native-contracts`. Builds on [ADR 0009](../adr/0009-natural-web-forms.md) and [the audit](../web-native-audit.md).
+Status: **accepted** (user, 4 November 2026: "accept them", stages A-C); built stage by stage; the user said "proceed" on 1 November 2026 and asked to keep a way back. Checkpoint: git tag `checkpoint/before-web-native-contracts` (commit d81f1af, painter at 73 % HTML elements, rich content as positioned text). Return with `git checkout checkpoint/before-web-native-contracts`, or compare with `git diff checkpoint/before-web-native-contracts`. Builds on [ADR 0009](../adr/0009-natural-web-forms.md) and [the audit](../web-native-audit.md).
+Delivered: delivered, stages A-C (accepted by the user 4 November 2026); WebKit C1 check not re-run since the fix. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
-Current review note (2 November 2026): the stages below are implemented, with positioned content as the default and flow opt-in. The [browser audit](../web-native-audit.md) reproduces text displacement and markdown clipping when `update()` runs under CSS scale. Focused Chromium and Firefox checks passed; WebKit's zero-delta C1 checkpoint check failed reproducibly on `shape/sequence_diagram` (ratio `0.0008539786415447126`). Older three-browser success counts below are historical run records, not current blanket acceptance. No tolerance has been relaxed.
+Current review note (2 November 2026): the stages below are implemented, with positioned content as the default and flow opt-in. The [browser audit](../web-native-audit.md) reproduces text displacement and markdown clipping when `update()` runs under CSS scale. Focused Chromium and Firefox checks passed; WebKit's zero-delta C1 checkpoint check failed on `shape/sequence_diagram` (ratio `0.0008539786415447126`); a later fix is described under Stage B1 and has not been re-run since: verify with `mise run check:browser`. Older three-browser success counts below are historical run records, not current blanket acceptance. No tolerance has been relaxed.
 
 ## The contract
 
@@ -30,7 +31,7 @@ Changing D2's layout from browser measurements (option 2 of the discussion): it 
 
 ## Stage A execution handoff (1 November 2026)
 
-Scope: code, SQL tables and classes only, in the HTML painter. Markdown remains unchanged per the task. Implementation is prepared but **not accepted as complete**: browser execution and Git delivery are blocked by this session's permissions.
+Scope: code, SQL tables and classes only, in the HTML painter. Markdown remains unchanged per the task. Implementation is in the code (`paint.js`) and later stages build on it; the user has not recorded acceptance. (Original note: browser execution and Git delivery were blocked by that session's permissions.)
 
 - DOM: existing object groups, names, scene IDs, positioned primitives and baseline markers remain. Code gains `pre > code > span` (one block span per line), with the original token nodes inside each span. Only code tokens lose the painter's synthetic trailing LF; explicit line breaks and whitespace gaps come from D2's association label. Tabs expand to four spaces as D2's scene builder does. Copy is tested through the rendered selection, which is distinct from `innerText` for absolutely positioned runs.
 - SQL tables and classes gain an inner `role=table`, `row`, `columnheader` and `cell` hierarchy with `display:contents`. A multiline header stays one columnheader. The outer `role=group` and accessible name stay intact; `a11y:false` suppresses the ARIA roles. Actual class IDs are `class-header[-label]`, `class-field:R:prefix|name|type` and `class-method:R:prefix|name|type`, rather than the SQL `table-row` pattern.
@@ -55,7 +56,7 @@ Next: in a session that can launch the installed browsers and write the shared G
 
 ## Known gaps found while building
 
-- **Copy from code in Firefox and WebKit (stage A, fixed 2 November 2026).** Each token is an absolutely positioned (block-level) box, so those browsers serialised a selection as one token per line. `mount` now handles the `copy` event for a selection inside one `pre` and puts the text of the selected line spans on the clipboard (`getComposedRanges` where the selection is hidden in the shadow root). Checked with a real drag selection and the copy shortcut in Chromium, Firefox and WebKit. Limit: a selection that spans a code block and other text is left to the browser.
+- **Copy from code in Firefox and WebKit (stage A, fixed 2 November 2026).** Each token is an absolutely positioned (block-level) box, so those browsers serialised a selection as one token per line. the mount (`dom.ts`) now handles the `copy` event for a selection inside one `pre` and puts the text of the selected line spans on the clipboard (`getComposedRanges` where the selection is hidden in the shadow root). Checked with a real drag selection and the copy shortcut in Chromium, Firefox and WebKit. Limit: a selection that spans a code block and other text is left to the browser.
 
 ## Stage B1: markdown semantics without re-layout (1-2 November 2026)
 
@@ -73,7 +74,7 @@ API: `mount(host, { markdown: 'positioned' | 'flow' })`. Omitted or `'positioned
 
 For an association with `content === 'markdown'`, the association's `label` is parsed into one flowing HTML block at the original `:markdown` node's content origin. The block width is the x extent of `primBounds(n.Clip.Path)`, the viewport D2 used. The object group, `data-id`, accessible name, ARIA attributes and event delegation remain. Successful flow replaces the positioned markdown primitives; an optional D2 background rectangle remains. Inline links use the existing `hrefOf` safety boundary and replace their old scene hit regions, giving each source link one anchor and keyboard stop. If D2 disabled inline links (for example, a whole-object link), the object stays positioned.
 
-Parser subset (`packages/d2web/src/markdown.js`): ATX h1–h6, paragraphs with soft line breaks, `**strong**`, `*em*`, single-backtick code, `[text](url)`, flat tight `- ` / numbered `. ` lists (including ordered starts), consecutive `> ` quote lines as one paragraph, exactly `---`, and triple-backtick fenced literals with an optional word/hyphen language name. Code fences preserve text and the final LF; inline code collapses spaces as D2 does. Link labels can contain supported inline markup. All text is HTML-escaped; raw HTML is never inserted.
+*Superseded: the hand-written subset parser was removed in Stage B; `markdown.js` now only checks D2's HTML.* Historical subset: ATX h1–h6, paragraphs with soft line breaks, `**strong**`, `*em*`, single-backtick code, `[text](url)`, flat tight `- ` / numbered `. ` lists (including ordered starts), consecutive `> ` quote lines as one paragraph, exactly `---`, and triple-backtick fenced literals with an optional word/hyphen language name. Code fences preserve text and the final LF; inline code collapses spaces as D2 does. Link labels can contain supported inline markup. All text is HTML-escaped; raw HTML is never inserted.
 
 Fallback is per whole object, before changing markup or consuming link regions. Unsupported/ambiguous syntax includes tables, intraword emphasis (`snake_case`), images, entities, escapes, autolinks, reference links, link titles/complex destinations, nested emphasis/code combinations, nested/loose/continued lists, block content inside list items or quotes, setext headings, hard breaks, and unmatched/alternate fences. Empty markdown, missing source, unavailable required font faces, differing per-run fallback stacks for one face, nonstandard sizes, custom font families, strokes/decorations, transformed/effected/clipped ancestors and uncharacterized subtree shapes also stay in the existing positioned painter. This is a closed parser subset, not a CommonMark implementation.
 
@@ -123,7 +124,7 @@ D2 emits a multi-line label as one text run per line (`label:0`, `label:1`, ...)
 
 ## Stage B: underscore emphasis and strikethrough (2 November 2026)
 
-`_em_`, `__strong__` and `~~del~~` now parse in flow (`em`, `strong`, `del` with `text-decoration:line-through`), with the same boundary rules as `*` (no intraword, no nesting). `content/markdown-rich` moved from positioned to flow with fit delta 0 by 0; `content/markdown` still falls back on its lazy list continuation, `content/markdown-table` on the GFM table. Unit tests cover the new syntax and the `snake_case` rejection.
+`_em_`, `__strong__` and `~~del~~` now parse in flow (`em`, `strong`, `del` with `text-decoration:line-through`), with the same boundary rules as `*` (no intraword, no nesting). `content/markdown-rich` moved from positioned to flow with fit delta 0 by 0; `content/markdown` still falls back on its lazy list continuation, `content/markdown-table` on the GFM table. *(That parser and its tests were later removed, see Stage B.)*
 
 ## Checkpoint transport and link naming (2 November 2026)
 
@@ -144,4 +145,4 @@ Measured (Chromium, catalog plus the semantic sample, `semantic.spec.mjs` C2): 2
 
 Known trade-off: the flow block has no clip, as before. If the browser wraps differently from D2 (a consumer fallback font, a zoom-dependent rasteriser), the block can grow past D2's box; `data-flow-fit` reports it and the C2 test fails on it, but the mount does not re-paint that object positioned at runtime.
 
-Checks: `association_test.go` (sanitiser, attribute order, link owners, D2 boxes), `markdown.test.mjs` (link policy, entity decoding, the page-side structural check against `<img onerror>`, upper-case/unquoted `href`, `<svg onload>`, handler attributes and `<script>`, D2 self-clip fallback), `semantic.spec.mjs` 16/16 in Chromium.
+Checks: `association_test.go` (sanitiser, attribute order, link owners, D2 boxes), `markdown.test.mjs` (link policy, entity decoding, the page-side structural check against `<img onerror>`, upper-case/unquoted `href`, `<svg onload>`, handler attributes and `<script>`, D2 self-clip fallback), `semantic.spec.mjs` (`test:browser`).
