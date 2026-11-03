@@ -2,6 +2,10 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
+## Slice: advertised capabilities (ADR 0014, spec 0017; 4 November 2026)
+
+Built on `capabilities-0017`; tasks, findings and the open decision (5b, reverse and arrow direction) are in [todo-0017.md](todo-0017.md), the plan in [plan-0017.md](plan-0017.md).
+
 ## Slice: align code with accepted ADRs and specs (4 November 2026 audit; ADR 0013 parts 1–2 authorized by the user)
 
 Docs were made factual the same day (specs 0003, 0005, 0006, 0009, 0013-0016; ADR `Delivery:` lines). Audit follow-up, in order:

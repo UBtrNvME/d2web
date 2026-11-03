@@ -91,13 +91,46 @@ func scalar(sc *d2graph.Scalar) Property {
 	return p
 }
 
-// properties lists the label and every style keyword D2 holds a value for, named as in D2's own JSON (fontSize, strokeWidth, 3d, ...).
-func properties(label d2graph.Scalar, style d2graph.Style) map[string]Property {
+// properties lists the label, every style keyword D2 holds a value for (named as in D2's own JSON: fontSize, strokeWidth, 3d, ...) and the
+// layout keywords it holds (named as the D2 keyword: top, width, grid-rows, direction, near, ...; spec 0017).
+func properties(label d2graph.Scalar, style d2graph.Style, attrs *d2graph.Attributes) map[string]Property {
 	out := map[string]Property{"label": scalar(&label)}
 	v, t := reflect.ValueOf(style), reflect.TypeOf(style)
 	for i := 0; i < t.NumField(); i++ {
 		if sc, ok := v.Field(i).Interface().(*d2graph.Scalar); ok && sc != nil {
 			out[strings.Split(t.Field(i).Tag.Get("json"), ",")[0]] = scalar(sc)
+		}
+	}
+	for name, sc := range map[string]*d2graph.Scalar{
+		"tooltip": attrs.Tooltip, "link": attrs.Link, "width": attrs.WidthAttr, "height": attrs.HeightAttr, "top": attrs.Top, "left": attrs.Left,
+		"grid-rows": attrs.GridRows, "grid-columns": attrs.GridColumns, "grid-gap": attrs.GridGap, "vertical-gap": attrs.VerticalGap, "horizontal-gap": attrs.HorizontalGap,
+	} {
+		if sc != nil {
+			out[name] = scalar(sc)
+		}
+	}
+	if attrs.Direction.Value != "" {
+		out["direction"] = scalar(&attrs.Direction)
+	}
+	// A near key has no scalar, so no source: the value alone shows that one is set.
+	if attrs.NearKey != nil {
+		out["near"] = Property{Value: strings.Join(attrs.NearKey.StringIDA(), ".")}
+	}
+	return out
+}
+
+// edgeProperties adds each arrowhead's shape and fill to a connection's properties, named source-arrowhead, source-arrowhead.filled, ... (spec 0017).
+func edgeProperties(e *d2graph.Edge) map[string]Property {
+	out := properties(e.Label, e.Style, &e.Attributes)
+	for name, a := range map[string]*d2graph.Attributes{"source-arrowhead": e.SrcArrowhead, "target-arrowhead": e.DstArrowhead} {
+		if a == nil {
+			continue
+		}
+		if a.Shape.Value != "" {
+			out[name] = scalar(&a.Shape)
+		}
+		if a.Style.Filled != nil {
+			out[name+".filled"] = scalar(a.Style.Filled)
 		}
 	}
 	return out
@@ -330,7 +363,7 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 	}
 	a := &Association{Objects: []AssocObject{}, Classes: []string{}}
 	for _, o := range g.Objects {
-		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style)}
+		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style, &o.Attributes)}
 		if out.Content == "code" {
 			out.Language = o.Language
 		}
@@ -367,7 +400,7 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 		a.Objects = append(a.Objects, out)
 	}
 	for _, e := range g.Edges {
-		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Properties: properties(e.Label, e.Style), Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
+		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Properties: edgeProperties(e), Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}

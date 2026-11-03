@@ -1,0 +1,459 @@
+{
+  "d2": "v0.9.0",
+  "shapes": [
+    "rectangle",
+    "square",
+    "page",
+    "parallelogram",
+    "document",
+    "cylinder",
+    "queue",
+    "package",
+    "step",
+    "callout",
+    "stored_data",
+    "person",
+    "c4-person",
+    "diamond",
+    "oval",
+    "circle",
+    "hexagon",
+    "cloud",
+    "text",
+    "code",
+    "class",
+    "sql_table",
+    "image",
+    "sequence_diagram",
+    "hierarchy"
+  ],
+  "arrowheads": [
+    "arrow",
+    "box",
+    "cf-many",
+    "cf-many-required",
+    "cf-one",
+    "cf-one-required",
+    "circle",
+    "cross",
+    "diamond",
+    "none",
+    "triangle"
+  ],
+  "keywords": [
+    {
+      "name": "3d",
+      "style": true,
+      "only": [
+        "rectangle",
+        "square",
+        "hexagon"
+      ],
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "animated",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "bold",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "border-radius",
+      "style": true,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "class",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "constraint",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "direction",
+      "style": false,
+      "validated": true,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "up",
+          "down",
+          "right",
+          "left"
+        ]
+      }
+    },
+    {
+      "name": "double-border",
+      "style": true,
+      "only": [
+        "rectangle",
+        "square",
+        "oval",
+        "circle"
+      ],
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "fill",
+      "style": true,
+      "domain": {
+        "kind": "color"
+      }
+    },
+    {
+      "name": "fill-pattern",
+      "style": true,
+      "validated": true,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "none",
+          "dots",
+          "lines",
+          "grain",
+          "paper"
+        ]
+      }
+    },
+    {
+      "name": "filled",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "font",
+      "style": true,
+      "validated": true,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "default",
+          "mono"
+        ]
+      }
+    },
+    {
+      "name": "font-color",
+      "style": true,
+      "domain": {
+        "kind": "color"
+      }
+    },
+    {
+      "name": "font-size",
+      "style": true,
+      "domain": {
+        "kind": "number",
+        "min": 8,
+        "max": 100
+      }
+    },
+    {
+      "name": "grid-columns",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 1
+      }
+    },
+    {
+      "name": "grid-gap",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "grid-rows",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 1
+      }
+    },
+    {
+      "name": "height",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "horizontal-gap",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "icon",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "italic",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "label",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "left",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "link",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "multiple",
+      "style": true,
+      "not": [
+        "text",
+        "code",
+        "class",
+        "sql_table",
+        "image"
+      ],
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "near",
+      "style": false,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "top-left",
+          "top-center",
+          "top-right",
+          "center-left",
+          "center-right",
+          "bottom-left",
+          "bottom-center",
+          "bottom-right"
+        ]
+      }
+    },
+    {
+      "name": "opacity",
+      "style": true,
+      "domain": {
+        "kind": "number",
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
+      "name": "shadow",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "shape",
+      "style": false,
+      "validated": true,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "rectangle",
+          "square",
+          "page",
+          "parallelogram",
+          "document",
+          "cylinder",
+          "queue",
+          "package",
+          "step",
+          "callout",
+          "stored_data",
+          "person",
+          "c4-person",
+          "diamond",
+          "oval",
+          "circle",
+          "hexagon",
+          "cloud",
+          "text",
+          "code",
+          "class",
+          "sql_table",
+          "image",
+          "sequence_diagram",
+          "hierarchy"
+        ]
+      }
+    },
+    {
+      "name": "source-arrowhead",
+      "style": false,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "arrow",
+          "box",
+          "cf-many",
+          "cf-many-required",
+          "cf-one",
+          "cf-one-required",
+          "circle",
+          "cross",
+          "diamond",
+          "none",
+          "triangle"
+        ]
+      }
+    },
+    {
+      "name": "stroke",
+      "style": true,
+      "domain": {
+        "kind": "color"
+      }
+    },
+    {
+      "name": "stroke-dash",
+      "style": true,
+      "domain": {
+        "kind": "number",
+        "min": 0,
+        "max": 10
+      }
+    },
+    {
+      "name": "stroke-width",
+      "style": true,
+      "domain": {
+        "kind": "number",
+        "min": 0,
+        "max": 15
+      }
+    },
+    {
+      "name": "target-arrowhead",
+      "style": false,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "arrow",
+          "box",
+          "cf-many",
+          "cf-many-required",
+          "cf-one",
+          "cf-one-required",
+          "circle",
+          "cross",
+          "diamond",
+          "none",
+          "triangle"
+        ]
+      }
+    },
+    {
+      "name": "text-transform",
+      "style": true,
+      "validated": true,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "none",
+          "uppercase",
+          "lowercase",
+          "capitalize"
+        ]
+      }
+    },
+    {
+      "name": "tooltip",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "top",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "underline",
+      "style": true,
+      "domain": {
+        "kind": "boolean"
+      }
+    },
+    {
+      "name": "vars",
+      "style": false,
+      "domain": {
+        "kind": "text"
+      }
+    },
+    {
+      "name": "vertical-gap",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    },
+    {
+      "name": "width",
+      "style": false,
+      "domain": {
+        "kind": "number",
+        "min": 0
+      }
+    }
+  ]
+}

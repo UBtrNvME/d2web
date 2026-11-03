@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { leaves, place, placeShifting } from '../src/position.ts';
+import { leaves, moveOps, NUDGE, place, placeShifting } from '../src/position.ts';
 
 const shape = (id, X, Y, extra = {}) => ({ id, kind: 'shape', nodes: [id], properties: {}, box: { X, Y, Width: 50, Height: 60 }, ...extra });
 const fixed = (top, left) => ({ properties: { top: { value: String(top) }, left: { value: String(left) } } });
@@ -57,4 +57,14 @@ test('a drop is a reparent only when it no longer overlaps the container at all;
   assert.equal(leaves(box, parent, -20, 0), false); // inside the padding band, left of the origin
   assert.equal(leaves(box, parent, -70, 0), true);  // right edge exactly at the container's left edge
   assert.equal(leaves(box, parent, 0, 300), true);
+});
+
+test('moveOps pins the shape and any shifted siblings with top and left, one pair each', () => {
+  const objects = [shape('a', 120, 40), shape('b', 300, 40)];
+  assert.equal(NUDGE, 10);
+  assert.deepEqual(moveOps('a', placeShifting(objects, 'a', NUDGE, 0)), [{ op: 'set', key: 'a.top', value: '40' }, { op: 'set', key: 'a.left', value: '130' }]);
+  // Past the origin the sibling is pinned and shifted, as a drag does (spec 0016).
+  const ops = moveOps('a', placeShifting(objects, 'a', -200, 0));
+  assert.deepEqual(ops.map(o => o.key), ['a.top', 'a.left', 'b.top', 'b.left']);
+  assert.equal(ops[1].value, '0');
 });

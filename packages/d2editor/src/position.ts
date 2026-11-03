@@ -1,8 +1,11 @@
-import type { Association } from '../../d2web/src/index.ts';
+import type { Association, EditOp } from '../../d2web/src/index.ts';
 
 type AssocObject = Association['objects'][number];
 // TALA's container padding (d2talalayout layoutgraph ContainerPadding).
 const CONTAINER_PADDING = 60;
+
+/** An arrow key moves a shape this many diagram units (Shift: 1). */
+export const NUDGE = 10;
 
 const written = (o: AssocObject) => {
   const top = o.properties.top?.value, left = o.properties.left?.value;
@@ -53,3 +56,9 @@ export function placeShifting(objects: readonly AssocObject[], id: string, dx: n
 // fully go out"). The pointer leaving the box, or the padding band left of the origin, is still a shift.
 export const leaves = (box: { X: number; Y: number; Width: number; Height: number }, parent: { X: number; Y: number; Width: number; Height: number }, dx: number, dy: number) =>
   box.X + dx >= parent.X + parent.Width || box.X + dx + box.Width <= parent.X || box.Y + dy >= parent.Y + parent.Height || box.Y + dy + box.Height <= parent.Y;
+
+/** The edit that writes a placement: top and left for the shape and for each sibling a past-the-origin move shifted (D2 refuses one without the other). */
+export function moveOps(id: string, at: NonNullable<ReturnType<typeof placeShifting>>): EditOp[] {
+  const pin = (key: string, top: number, left: number): EditOp[] => [{ op: 'set', key: `${key}.top`, value: String(top) }, { op: 'set', key: `${key}.left`, value: String(left) }];
+  return [...pin(id, at.top, at.left), ...at.siblings.flatMap(s => pin(s.id, s.top, s.left))];
+}

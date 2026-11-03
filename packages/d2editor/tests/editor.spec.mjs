@@ -565,7 +565,8 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await patch(page, 'a: Keyboard\n', () => page.keyboard.press('Enter'));
   // Continue with Tab only, from the source through the canvas into the rename form.
   await page.locator('#src').focus();
-  for (let n = 0; n < 7; n++) await page.keyboard.press('Tab'); // a, label, fill, stroke, shape, icon, name
+  // a, label, fill, stroke, shape, icon, then every advertised style field (spec 0017), then name.
+  for (let n = 0; n < 80 && !(await page.locator('#rename input').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#rename input')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('renamed');
@@ -718,4 +719,133 @@ test('assembled Pages site serves the demo at / and the editor and worker depend
   await page.goto('https://pages.test/editor/');
   await painted(page);
   await visible(page, 'api');
+});
+
+test('the inspector advertises every style field with D2\'s values; a change is one edit, Reset removes it, an unavailable field says why (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\nb: B\n');
+  await select(page, 'a');
+  const field = k => page.locator(`#fields [data-path="a.style.${k}"]`);
+  await expect(field('opacity')).toHaveAttribute('max', '1');
+  await expect(field('stroke-width')).toHaveAttribute('max', '15');
+  await expect(field('fill-pattern').locator('option')).toHaveText(["D2's default", 'none', 'dots', 'lines', 'grain', 'paper']);
+  await expect(field('shadow').locator('option')).toHaveText(["D2's default", 'true', 'false']);
+  await expect(field('3d')).toBeEnabled();
+
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const change = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await change(() => field('fill-pattern').selectOption('dots'));
+  await expect.poll(() => source(page)).toContain('fill-pattern: dots');
+
+  await change(async () => { await field('opacity').fill('0.5'); await field('opacity').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('opacity: 0.5');
+  await expect(field('opacity')).toHaveValue('0.5');
+
+  await change(() => page.locator('#fields [data-reset="a.style.opacity"]').click());
+  await expect.poll(() => source(page)).not.toContain('opacity');
+  expect(await source(page)).toContain('fill-pattern: dots');
+
+  // 3d is D2's rectangle, square and hexagon only.
+  await change(() => page.locator('#props [name="shape"]').selectOption('circle'));
+  await expect(field('3d')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="a.style.3d"]')).toContainText('only to rectangle, square, hexagon');
+  expect(errors).toEqual([]);
+});
+
+test('layout fields: top and left are written together and need TALA; near is for root shapes; a connection offers link only (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'p: { x }\nq\n');
+  const field = (id, k) => page.locator(`#fields [data-path="${id}.${k}"]`);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const change = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await select(page, 'q');
+  await expect(field('q', 'direction').locator('option')).toHaveText(["D2's default", 'up', 'down', 'right', 'left']);
+  await expect(field('q', 'near')).toBeEnabled();
+  await change(async () => { await field('q', 'top').fill('30'); await field('q', 'top').press('Tab'); });
+  await expect.poll(() => source(page)).toMatch(/top: 30[\s\S]*left: 0|left: 0[\s\S]*top: 30/);
+  await expect(field('q', 'left')).toHaveValue('0');
+  await change(() => page.locator('#fields [data-reset="q.top"]').click());
+  await expect.poll(() => source(page)).not.toMatch(/top|left/);
+
+  await select(page, 'p.x');
+  await expect(field('p.x', 'near')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="p.x.near"]')).toContainText('root level shapes');
+
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await select(page, 'q');
+  await expect(field('q', 'top')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="q.top"]')).toContainText('TALA');
+  expect(errors).toEqual([]);
+});
+
+test('a connection lists its ends as buttons and both arrowheads with D2\'s shapes; an arrowhead edit is one patch (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a -> b\n');
+  await page.locator('#host [data-id="(a -> b)[0]"]').focus();
+  await expect(page.locator('#selected')).toHaveText('Connection (a -> b)[0]');
+  await expect(page.locator('#endpoints button')).toHaveText(['From: a', 'To: b']);
+  const head = page.locator('#fields [data-path="(a -> b)[0].target-arrowhead.shape"]');
+  await expect(head.locator('option')).toHaveText(["D2's default", 'arrow', 'box', 'cf-many', 'cf-many-required', 'cf-one', 'cf-one-required', 'circle', 'cross', 'diamond', 'none', 'triangle']);
+  await expect(page.locator('#fields [data-path="(a -> b)[0].style.shadow"]')).toHaveCount(0);
+  const n = await page.evaluate(() => traffic.edits.length);
+  await head.selectOption('diamond');
+  await expect.poll(() => page.evaluate(() => traffic.edits.length), { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('target-arrowhead');
+  await expect(head).toHaveValue('diamond');
+  await page.locator('#endpoints button', { hasText: 'To: b' }).click();
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await expect(page.locator('#endpoints')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('the inspector lists the actions of the selection and says why one is unavailable (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 't: { shape: sql_table }\nb\n');
+  await object(page, 'b').focus();
+  await expect(page.locator('#actions')).toContainText('Add child');
+  await expect(page.locator('#actions dd').nth(1)).toHaveText('available');
+  await object(page, 't').focus();
+  await expect(page.locator('#actions dd').nth(1)).toContainText('into rows');
+  expect(errors).toEqual([]);
+});
+
+test('arrow keys move a focused shape on TALA by one checked edit, Undo restores it; other engines say positions need TALA; the panel lists the gestures (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a\nb\n');
+  await object(page, 'a').focus();
+  await expect(page.locator('#interactions')).toContainText('edge handle');
+  await expect(page.locator('#interactions')).toContainText('Arrow keys');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/left: 10/);
+  const moved = await source(page);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await page.click('#undo');
+  await expect.poll(() => source(page)).toBe(moved);
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await object(page, 'a').focus();
+  await expect(page.locator('#interactions')).not.toContainText('Arrow keys');
+  const m = await edits();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#status')).toContainText('TALA');
+  expect(await edits()).toBe(m);
+  expect(errors).toEqual([]);
 });
