@@ -1,7 +1,7 @@
 # Spec 0005: animation painting
 
 Status: **accepted with the recommended answers to questions 1-3** (user, 31 October 2026). Builds on [spec 0002](0002-mount-api.md), which lists animation painting as unpainted in v1, and on [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web translates them to the web and adds no behaviour of its own.
-Delivered: partial: animation is painted (`animation.js`); equal-`currentTime` native/web comparison (test plan step 3) is not done. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
+Delivered: partial. Tracks are painted as Web Animations and an animated edge matches native D2 at equal `currentTime` (dash offset, `animation.spec.mjs`, 4 November 2026). Not done: the same comparison for shape tracks (transform, drop-shadow) and a pixel comparison. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. What D2 provides
 
@@ -53,5 +53,5 @@ Translate each track to the Web Animations API, one call per track on the elemen
 | Which D2 features emit tracks | verified in `d2scenebuild` source |
 | The painter plays tracks as Web Animations | built (`animation.js`, `animation.spec.mjs`) |
 | Every track property and easing has a direct CSS/WAAPI form | proposed; the drop-shadow track is asserted in `animation.spec.mjs`, the bidirectional split is not yet exercised |
-| Native and web match at equal `currentTime` | unknown until step 3 of the test plan runs |
+| Native and web match at equal `currentTime` | verified for an animated edge's dash offset (`animation.spec.mjs`); unknown for shape tracks |
 | Firefox and Safari | animation suite passes in Firefox and in Playwright's WebKit; real Safari unverified (docs/browser-support.md) |
