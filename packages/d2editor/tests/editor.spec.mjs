@@ -361,11 +361,13 @@ test('layout changes animate surviving nodes, new nodes fade and edits pulse; re
   expect(errors).toEqual([]);
 });
 
-test('theme and layout menus reach the compile, are restored on reload, and other engines skip the idle TALA compile', async ({ page }) => {
+test('theme, sketch and layout menus reach the compile, are restored on reload, and other engines skip the idle TALA compile', async ({ page }) => {
   await open(page);
   const last = () => page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1));
   await page.selectOption('#theme', '4');
   await expect.poll(async () => (await last()).render.themeId).toBe(4);
+  await page.check('#sketch');
+  await expect.poll(async () => (await last()).render.sketch).toBe(true);
   await page.selectOption('#layout', 'dagre');
   await expect.poll(async () => (await last()).layout).toBe('dagre');
   await painted(page);
@@ -378,7 +380,9 @@ test('theme and layout menus reach the compile, are restored on reload, and othe
   await painted(page);
   await expect(page.locator('#theme')).toHaveValue('4');
   await expect(page.locator('#layout')).toHaveValue('dagre');
+  await expect(page.locator('#sketch')).toBeChecked();
   expect((await last()).layout).toBe('dagre');
+  expect((await last()).render.sketch).toBe(true);
 });
 
 test('a ?script= link opens on top of the saved text, a bad link keeps it, and Share copies a link that reopens the diagram', async ({ page, context }) => {

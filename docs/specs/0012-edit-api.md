@@ -34,6 +34,7 @@ Protocol version becomes **2** (ADR 0012). Existing messages are unchanged; `rea
 | `create` | `key` | `Create(g, board, key)` | new shape (`svc`), connection (`a -> b`) |
 | `delete` | `key` | `Delete(g, board, key)` | shape with its connections, one connection (`(a -> b)[0]`) |
 | `rename` | `key`, `name` | `Rename(g, board, key, name)` | rename an ID; authored index references renumbered |
+| `move` | `key`, `parent` | `Move(g, board, key, ReparentIDDelta(…), true)` | reparent a shape with its descendants (`""` is the board's root); connections rewritten; its own `top`/`left` removed. Refused before the oracle runs: a move into itself or a descendant (the oracle overflows the Go stack), a shape whose own, descendant or connection declarations include one from an imported file (the oracle rewrites only the entry, so it would duplicate; an import spread inside the shape is refused too), a name the parent already has; refused after: a key a scenario or step references (the oracle would leave a second object there). Added 3 November 2026, [palette primitives](../ideas/palette-primitives.md) |
 
 `create` may return a different key than requested (D2 picks a free one); the result reports it (section 3.2).
 

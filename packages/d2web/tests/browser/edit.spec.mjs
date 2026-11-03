@@ -13,6 +13,7 @@ const requests = [
   { ops: [{ op: 'set', key: 'a.style.fill', value: '#ff0000' }] },
   { ops: [{ op: 'rename', key: 'a', name: 'api' }, { op: 'create', key: 'api -> c' }] },
   { ops: [{ op: 'set', key: 'a.style.opacity', value: '2' }] },
+  { ops: [{ op: 'move', key: 'b', parent: 'a' }] },
 ];
 
 test('edit, apply the patch, repaint; Chromium WASM equals native', async ({ page }) => {
@@ -34,6 +35,7 @@ test('edit, apply the patch, repaint; Chromium WASM equals native', async ({ pag
   expect(out.fill).toBe('#ff0000');
   expect([out.before, out.painted]).toEqual([false, true]);
   expect(out.results[2].error.code).toBe('edit');
+  expect(out.results[3].ids.renamed).toMatchObject({ b: 'a.b' });
   for (const [i, r] of requests.entries()) {
     expect(stable(out.results[i])).toEqual(stable(native({ v: 2, type: 'edit', id: 0, revision: 1, files: { 'main.d2': source }, entry: 'main.d2', ...r })));
   }
