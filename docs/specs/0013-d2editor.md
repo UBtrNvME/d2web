@@ -1,6 +1,7 @@
 # Spec 0013: d2editor, first slice (canvas editing on GitHub Pages)
 
-Status: **accepted** (user, 2 November 2026, with the recommended section 9 answers); **built** 2 November 2026: `mise run check` and `mise run check:browser` pass, including 12 Chromium editor cases (section 10). Not yet deployed: Pages publishes `/editor/` after merge to `main`. Idea: [d2editor](../ideas/d2editor.md). Consumer of the [edit API](0012-edit-api.md) under [ADR 0012](../adr/0012-editing-in-scope.md); a new directory under `packages/` as [ADR 0008](../adr/0008-repository-layout.md) foresees. d2editor is an application; d2web stays a library and gains nothing from this spec.
+Status: **accepted** (user, 2 November 2026, with the recommended section 9 answers); **built** 2 November 2026: `mise run check` and `mise run check:browser` pass, including the Chromium editor cases of `test:editor` (section 10). Not yet deployed: Pages publishes `/editor/` after merge to `main`. Idea: [d2editor](../ideas/d2editor.md). Consumer of the [edit API](0012-edit-api.md) under [ADR 0012](../adr/0012-editing-in-scope.md); a new directory under `packages/` as [ADR 0008](../adr/0008-repository-layout.md) foresees. d2editor is an application; d2web stays a library and gains nothing from this spec.
+Delivered: delivered (first slice). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Objective
 
@@ -25,7 +26,7 @@ First user: the author. One diagram file, one human. Agents, comments and the pa
 
 ```
 packages/d2editor/
-  package.json        private, depends on the workspace `d2web`
+  package.json        private; imports `../../d2web/src/index.ts`, no workspace dependency (section 10)
   src/main.ts         page wiring: panes, selection, inspector, actions
   src/history.ts      undo/redo text stack
   src/snap.ts         old box -> new box animation from two associations

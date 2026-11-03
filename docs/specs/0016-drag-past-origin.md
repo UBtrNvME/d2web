@@ -1,6 +1,7 @@
 # Spec 0016: d2editor, drag past the origin
 
-Status: **accepted** (user, 3 November 2026: "accept"; the padding band counts as inside, the default proposed). **Built** 3 November 2026 (uncommitted): `mise run check` and `test:editor` (19 Chromium cases) pass; the full `check:browser` was not run. Extends [spec 0014](0014-drag-to-position.md) and works with [spec 0015](0015-palette.md) §3.3 (drag to move between containers). Idea and decisions: [drag past the origin](../ideas/drag-past-origin.md).
+Status: **accepted** (user, 3 November 2026: "accept"; the padding band counts as inside, the default proposed). **Built** 3 November 2026 (committed on `main`): `mise run check` and `test:editor` pass; the full `check:browser` was not run. Extends [spec 0014](0014-drag-to-position.md) and works with [spec 0015](0015-palette.md) §3.3 (drag to move between containers). Idea and decisions: [drag past the origin](../ideas/drag-past-origin.md).
+Delivered: delivered. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Objective
 
@@ -25,7 +26,7 @@ Every fixed shape in one container shares an origin, and the board is cropped to
 
 ## 4. Testing
 
-Built and passing 3 November 2026 (`test:editor` 21 Chromium cases, three full runs):
+Built and passing 3 November 2026 (`test:editor`, three full runs):
 
 - Node (`position.test.mjs`): the overshoot on x, on y and nested (only that container's shapes shift, against the container's origin); none when nothing overshoots; unpinned siblings pinned at their painted position; the fully-out rule (`leaves`: the padding band and a 10 px overlap are inside, an exact edge touch is out).
 - Chromium: a drop past the left origin keeps the shape visible mid-drag past the board's box; with the compile held (only the one the edit causes), the dropped shape stays under the pointer and the sibling has not moved on screen (the virtual state); per-frame sampling from release to the settled board shows the dropped shape never moves and the sibling stays within 6 screen px of where it stood; the relative layout survives; two mark classes; Undo restores the text in one step. A drop past the top origin, the same by y. A nested drop in the container's padding band shifts that container's pinned sibling, and one with the pointer outside the container's box but the shape still overlapping it is a shift too (not a `move`). - Diff size: one overshoot drag on `a`/`b` (two unpinned shapes, one connection) rewrites 8 lines (both shapes' blocks: `top`, `left` and braces). Measured by the test (annotation `changed lines`, bounded at 10).

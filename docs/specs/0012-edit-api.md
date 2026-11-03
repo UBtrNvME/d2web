@@ -1,6 +1,7 @@
 # Spec 0012: edit API (edits published as checked patches)
 
 Status: **accepted** (user, 2 November 2026: "Approve", as drafted; the questions in section 7 stay open). Built 2 November 2026 (section 8). Scope set by [ADR 0012](../adr/0012-editing-in-scope.md); mechanism by [ADR 0004](../adr/0004-edit-wrapper-and-patches.md); transport by [spec 0001](0001-compile-protocol.md). Evidence: `test:research:transaction`, `test:research:roundtrip` and the probe results in the [d2editor idea](../ideas/d2editor.md#probe-results-publishing-edits-as-patches-2-november-2026).
+Delivered: delivered (set, create, rename, delete, move). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Purpose and non-goals
 

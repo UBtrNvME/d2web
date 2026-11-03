@@ -1,13 +1,14 @@
 # Spec 0006: accessible names, structure and descriptions
 
 Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [spec 0002](0002-mount-api.md) (`a11y` mount option, named focusable groups), [spec 0004](0004-association.md) (D2's own object data) and [ADR 0009](../adr/0009-natural-web-forms.md): D2 owns the semantics, d2web only expresses them with the web's accessibility attributes and adds no wording or behaviour of its own.
+Delivered: partial: gaps in section 1 are only partly fixed (see notes there); screen-reader output never verified. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
-## 1. Today (checked on a probe board)
+## 1. Gaps found on a probe board (partly fixed since; see notes)
 
 The mount makes every direct child of the scene root (except `root:*`) a `role="group" tabindex="0"` element named by its label text runs, or by its D2 ID when it has none (`paint.js`, `a11yAttrs`). A link anchor is named by its object's label (done, `links.spec.mjs`). Gaps:
-- **Unlabeled connection**: no text run, so it is named `(a -> b)[0]`, an internal ID.
+- **Unlabeled connection**: no text run, so it is named `(a -> b)[0]`, an internal ID. *Partly fixed: `paint.js` adds `aria-description` for the `a -> b` spelling.*
 - **Markdown label** (`m: |md **x** y |`): painted as a `markdown` subtree with no text runs, so the object is named by its ID `m`, not its text.
-- **Nesting**: shapes inside a container are siblings of it in the scene (`c`, `c.d`, `c.e`); a screen reader cannot tell `c.d` is in `c`.
+- **Nesting**: shapes inside a container are siblings of it in the scene (`c`, `c.d`, `c.e`); a screen reader cannot tell `c.d` is in `c`. *Partly fixed: `paint.js` adds `aria-owns`.*
 - **Tooltips** (no link): the tooltip text is only the `title` of an unfocusable overlay, so keyboard and screen-reader users never get it.
 
 ## 2. What D2 already provides

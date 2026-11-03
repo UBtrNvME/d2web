@@ -1,6 +1,7 @@
 # Spec 0003: packaging and distribution (build artifacts only)
 
 Status: **accepted with the recommended answers to questions 2-4** (user said "continue working", 31 October 2026); question 1 answered: `d2web` (npm registry returned 404 on 31 October 2026, so it is unregistered; not reserved until published); question 5 answered: d2web is MPL-2.0, the licence of the D2 code embedded in the wasm, so one licence covers the package (user: "use license which we can use"). This is not legal advice. Builds on [spec 0001](0001-compile-protocol.md), [spec 0002](0002-mount-api.md), [ADR 0003](../adr/0003-runtime-shape.md) (worker-hosted wasm), [ADR 0006](../adr/0006-font-delivery.md) and [ADR 0008](../adr/0008-repository-layout.md) (patched builds are explicit). Scope: how a consumer gets the worker, the wasm and the TypeScript package. **Publishing to a registry is out of scope**: this spec produces and tests the artifacts; releasing them is the user's separate decision.
+Delivered: delivered, except publishing to a registry (out of scope by this spec). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Measurements (31 October 2026, Go 1.27.3, D2 v0.9.0, darwin/arm64)
 
@@ -61,9 +62,9 @@ D2 is MPL-2.0 (Terrastruct); the wasm embeds its fonts (OFL, see D2's `d2fonts/N
 | --- | --- | --- |
 | Sizes in section 1 | measured | this spec |
 | The tests' worker loads wasm and runs in Chromium from query-parameter URLs | verified | `test:client` |
-| `dist/` build, exports map, `spawnWorker`, wasm MIME fallback | proposed, not built | |
-| Version mismatch rejected, `patched` reported | proposed | |
-| Packed tarball installs and runs in a consumer page under native ESM; under a restrictive CSP | proposed test | |
+| `dist/` build, exports map, `spawnWorker`, wasm MIME fallback | built | `build.mjs`, `test:dist`, `client.ts`, `worker.js` |
+| Version mismatch rejected, `patched` reported | built | `VersionError` in `client.ts` | |
+| Packed tarball installs and runs in a consumer page under native ESM; under a restrictive CSP | built | `test:consumer` | |
 | Vite, webpack, Next.js consumers | unknown | |
 | Cross-origin hosting, service-worker caching, brotli size | unknown | |
 | Byte-identical wasm across machines | unknown | |

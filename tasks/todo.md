@@ -2,6 +2,17 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
+## Slice: align code with accepted ADRs and specs (4 November 2026 audit; plan awaiting the user)
+
+Docs were made factual the same day (specs 0003, 0005, 0006, 0009, 0013-0016; ADR `Delivery:` lines). Accepted but not built, in order:
+- [ ] ADR 0013 part 2: `packages/d2editor/src/traits.ts` with `{name, applies(object, ctx)}` (container, connectable, movable, has-handle); one `press()` arbiter replaces the ad hoc check at `main.ts:281`. Each trait has a test that compiles D2 and compares (`image` refuses children, `sql_table`/`class` turn them into rows, `text`/`code`/markdown lose content, only TALA honours `top`/`left`). Verify: `mise run test:editor`.
+- [ ] ADR 0013 part 1: palette entry becomes `{id, label, ops(ctx)}` with `base` inside `ctx`, so ADR and code match. Verify: `test:editor`.
+- [ ] Spec 0009: run `mise run check:browser`; confirm WebKit C1 `shape/sequence_diagram`; ask the user to record acceptance of stages A-C.
+- [ ] Spec 0012: add the zoom case missing from spec 0014 §5 (`position.test.mjs`), or reword the spec.
+- [ ] Unrun figures in specs (counts, timings, sizes): re-measure or drop; do not leave unchecked numbers as facts.
+- [ ] `docs:check` mise task in `check`: every backticked path, mise task and `Delivery:` claim in `docs/adr` and `docs/specs` resolves.
+- [ ] `AGENTS.md` phase bullets ("architecture research ... R1 next") vs "product phase": reconcile.
+
 ## Slice: d2editor drag past the origin (spec 0016, accepted by the user 3 November 2026)
 
 Builds [spec 0016](../docs/specs/0016-drag-past-origin.md): a drop up or left of D2's `top`/`left` minimum shifts the container's other shapes instead of stopping the drag.

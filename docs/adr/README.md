@@ -4,12 +4,20 @@ One file per decision: `NNNN-short-title.md`, numbered in order, never renumbere
 
 **Status values:** `proposed` (written, not reviewed), `accepted` (the user decided it), `superseded by NNNN`, `rejected`. Only the user accepts. Research evidence supports an ADR; it does not accept one. Evidence lives in [research findings](../research-findings.md) and the [capability matrix](../capability-matrix.md); an ADR links to it instead of copying it.
 
+## Flow
+
+1. Write `proposed`; the user accepts. Accepted text is not rewritten.
+2. Build what it says. `Delivery:` records what exists; update only that line (and add a dated note) as code lands.
+3. If the code or the user departs from an ADR, add a new ADR that supersedes it and mark the old one `superseded by NNNN`. An ADR that is accepted but not built stays visible as `Delivery: not built` or `partial` and is a task in `tasks/todo.md`.
+4. Agents read this index at the start of work that touches a decision (it is linked from `AGENTS.md`); they do not contradict an accepted ADR silently.
+
 ## Template
 
 ```markdown
 # NNNN. Title
 
 Status: proposed | accepted (date) | superseded by NNNN
+Delivery: not built | partial (what is missing) | delivered (spec or commit) | n/a (audited date)
 Context: the forces and constraints, with links to evidence
 Decision: what we do, in one or two sentences
 Alternatives: what was considered, and the observation that ruled each out

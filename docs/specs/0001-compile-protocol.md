@@ -1,6 +1,7 @@
 # Spec 0001: compile protocol and scene bridge (render only)
 
 Status: **accepted** (user, 31 October 2026), implemented in `packages/d2web/src/{protocol,request,client}.ts` and `packages/d2web-wasm/{compile,scenejson}`. Scope set by [ADR 0007](../adr/0007-product-scope-v1.md) and [product.md](../product.md): v1 render only. Runtime shape is [ADR 0003](../adr/0003-runtime-shape.md). Implementation and named test coverage do not certify every feature combination; current browser findings are in the [audit](../web-native-audit.md).
+Delivered: delivered (`packages/d2web/src`, `packages/d2web-wasm/compile`). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Purpose and non-goals
 

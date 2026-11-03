@@ -1,6 +1,7 @@
 # Spec 0014: d2editor, drag to position
 
-Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: touch input; nested drops in containers TALA resizes or moves land off the drop point by design (section 3).
+Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` pass; the full `check:browser` was not run. Not checked: touch input; nested drops in containers TALA resizes or moves land off the drop point by design (section 3).
+Delivered: delivered, except the zoom unit case named in section 5. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Objective
 
