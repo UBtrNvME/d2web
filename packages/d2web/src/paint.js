@@ -534,8 +534,9 @@ export function paintScene(scene, { html = false, cssMasks = false, idPrefix = '
     // Tooltips (ADR 0009: shown on hover and on keyboard focus). `title` stays for hover; the element below shows when the object's group or the link has focus-visible.
     // It is d2web's one piece of behaviour for a tooltip: system colours, 12 CSS px whatever the zoom, and a `part` for the consumer to restyle.
     const tipRules = [];
-    const links = (scene.Links ?? []).filter(l => !usedLinks.has(l)).map((l, i) => {
-      const anchor = `<a data-k="link"${l.Tooltip ? ` id="${idPrefix}lk${i}"` : ''} ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`;
+    // `data-link` is the region's index in scene.Links, which the DOM view uses to find its owner.
+    const links = (scene.Links ?? []).flatMap((l, at) => (usedLinks.has(l) ? [] : [[l, at]])).map(([l, at], i) => {
+      const anchor = `<a data-k="link" data-link="${at}"${l.Tooltip ? ` id="${idPrefix}lk${i}"` : ''} ${hrefOf(l.URL ?? '') ? `href="${esc(l.URL)}"` : ''}${(l.URL || l.Target) && linkName(l) ? ` aria-label="${esc(linkName(l))}"` : ''}${l.Target ? ` data-target="${esc(l.Target)}"` : ''}${l.Tooltip ? ` title="${esc(l.Tooltip)}"` : ''} style="position:absolute;left:${px(l.Box.X)};top:${px(l.Box.Y)};width:${px(l.Box.Width)};height:${px(l.Box.Height)}"></a>`;
       if (!l.Tooltip) return anchor;
       const group = objectFor(l), focus = [`#${idPrefix}lk${i}:focus-visible`, group && domId.has(group) ? `#${domId.get(group)}:focus-visible` : ''].filter(Boolean).join(',');
       tipRules.push(`[data-d2-scene]:has(${focus}) #${idPrefix}tip${i}{display:block}`, `#${idPrefix}lk${i}:focus-visible+#${idPrefix}tip${i}{display:block}`); // second rule: no :has() needed for a focusable link
