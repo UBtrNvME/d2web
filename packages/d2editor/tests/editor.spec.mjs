@@ -427,6 +427,15 @@ test('a nested shape dragged past its container\'s origin shifts that container\
   expect(Math.abs((d1.x - e1.x) - ((m.before['c.d'].x - m.before['c.e'].x) + m.reach))).toBeLessThanOrEqual(2 * m.k + 4);
 });
 
+test('a nested shape is shifted, not moved out, while it still overlaps its container, even with the pointer outside the container', async ({ page }) => {
+  const m = await pastOrigin(page, 'c: {\n  d: {top: 30; left: 40}\n  e\n}\n', 'c.e', ['c.d', 'c'], 'x',
+    // The pointer ends 10 px left of the container's box; the shape (pressed 4 px in) still overlaps it.
+    before => (before['c.e'].x + 4) - (before.c.x - 10));
+  await drop(page, m, ['c.e']);
+  await page.mouse.up();
+  await expect(page.locator('#src')).toHaveValue(/^c: \{[\s\S]*\n  e: \{[\s\S]*left: 0[\s\S]*\n\}\n$/);
+});
+
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, '# services\na: API\nb: DB\n');

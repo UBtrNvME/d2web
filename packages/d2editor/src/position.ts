@@ -48,3 +48,8 @@ export function placeShifting(objects: readonly AssocObject[], id: string, dx: n
   const pinned = (o: AssocObject) => written(o) ?? { top: Math.round(o.box!.Y - at.origin.y), left: Math.round(o.box!.X - at.origin.x) };
   return { top: at.top + oy, left: at.left + ox, ox, oy, siblings: siblings.map(o => ({ id: o.id, top: pinned(o).top + oy, left: pinned(o).left + ox })) };
 }
+
+// Spec 0016: leaving a container is a reparent only when the dropped shape no longer overlaps the container's box at all (user: "the shape should
+// fully go out"). The pointer leaving the box, or the padding band left of the origin, is still a shift.
+export const leaves = (box: { X: number; Y: number; Width: number; Height: number }, parent: { X: number; Y: number; Width: number; Height: number }, dx: number, dy: number) =>
+  box.X + dx >= parent.X + parent.Width || box.X + dx + box.Width <= parent.X || box.Y + dy >= parent.Y + parent.Height || box.Y + dy + box.Height <= parent.Y;

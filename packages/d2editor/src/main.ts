@@ -3,7 +3,7 @@ import { createClient, getObject, type Association, mount, spawnWorker, type Com
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
-import { placeShifting } from './position.ts';
+import { leaves, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
 import { decodeScript, encodeScript } from './share.ts';
 
@@ -285,6 +285,7 @@ function grab(e: PointerEvent): Grab | undefined {
   const objects = board.association.objects, parent = object.parent ?? '';
   const elements = [...$('host').shadowRoot!.querySelectorAll<HTMLElement | SVGElement>('[data-id]')];
   const nodes = objects.filter(o => within(o.id, object.id)).flatMap(o => outerNodes(elements, o));
+  const parentBox = objects.find(o => o.id === parent)?.box;
   let into = parent;
   const reset = () => { markTarget(''); for (const el of nodes) el.style.translate = ''; };
   return {
@@ -292,7 +293,9 @@ function grab(e: PointerEvent): Grab | undefined {
       dragged = nodes;
       hideHandles();
       for (const el of nodes) el.style.translate = `${dx}px ${dy}px`;
-      into = dropTarget(objects, start.x + dx, start.y + dy, object.id);
+      const hit = dropTarget(objects, start.x + dx, start.y + dy, object.id);
+      // Spec 0016: to the root or an ancestor is a reparent only once the shape is fully out of its container; until then it is a shift.
+      into = parentBox && object.box && (hit === '' || within(parent, hit)) && !leaves(object.box, parentBox, dx, dy) ? parent : hit;
       markTarget(into === parent ? '' : into);
     },
     cancel: reset,
