@@ -1,4 +1,5 @@
 import type { Association, EditOp } from '../../d2web/src/index.ts';
+import { container, connectable, type Context } from './traits.ts';
 
 type AssocObject = Association['objects'][number];
 type Box = NonNullable<AssocObject['box']>;
@@ -7,12 +8,6 @@ type Box = NonNullable<AssocObject['box']>;
 export const PLACEHOLDER_ICON = 'https://icons.terrastruct.com/essentials/112-server.svg';
 
 const within = (id: string, ancestor: string) => id === ancestor || id.startsWith(`${ancestor}.`);
-
-// Traits (ADR 0013), derived from what D2 compiled. Container: D2 refuses children under `image`, turns them into rows under `sql_table` and
-// `class`, and replaces a text, code or block string's content with the label (research/palette.go).
-const LEAF_SHAPES = new Set(['image', 'sql_table', 'class', 'text', 'code']);
-export const isContainer = (o: AssocObject) =>
-  o.kind === 'shape' && !LEAF_SHAPES.has(o.properties.shape?.value ?? '') && !['markdown', 'code', 'latex', 'sql_table', 'class'].includes(o.content ?? '');
 
 // D2's reserved keywords (d2ast.ReservedKeywords at v0.9.0, with `classes`, `source-arrowhead` and `target-arrowhead`): never a shape name.
 const RESERVED = new Set(['3d', 'animated', 'bold', 'border-radius', 'class', 'classes', 'constraint', 'direction', 'double-border', 'fill', 'fill-pattern', 'filled',
@@ -30,24 +25,49 @@ export function freeKey(objects: readonly AssocObject[], parent: string, base: s
   }
 }
 
-export type Entry = { id: string; label: string; base: string; ops(key: string): EditOp[] };
+export type EntryContext = { board: Association; parent: string; base?: string };
+export type Entry = { id: string; label: string; ops(ctx: EntryContext): EditOp[] };
+const entryKey = (ctx: EntryContext, base: string) => freeKey(ctx.board.objects, ctx.parent, ctx.base ?? base);
 
 // Spec 0015 §3.1. A class name becomes the key's base only when it is a plain D2 key.
 export function entries(classes: readonly string[]): Entry[] {
   const plain = (name: string) => /^[\w-]+$/.test(name) ? name : 'shape';
   return [
-    { id: 'shape', label: 'Shape', base: 'shape', ops: k => [{ op: 'create', key: k }] },
-    { id: 'markdown', label: 'Markdown', base: 'note', ops: k => [{ op: 'create', key: k }, { op: 'set', key: k, value: '# Note', tag: 'md' }] },
-    { id: 'code', label: 'Code', base: 'code', ops: k => [{ op: 'create', key: k }, { op: 'set', key: k, value: 'print("hello")', tag: 'python' }] },
-    // `shape: image` before `icon` fails to recompile, so the icon goes first.
-    { id: 'icon', label: 'Icon', base: 'service', ops: k => [{ op: 'create', key: k }, { op: 'set', key: `${k}.icon`, value: PLACEHOLDER_ICON }, { op: 'set', key: `${k}.shape`, value: 'image' }] },
+    { id: 'shape', label: 'Shape', ops: ctx => [{ op: 'create', key: entryKey(ctx, 'shape') }] },
     {
-      id: 'zone', label: 'Zone', base: 'zone', ops: k => [
-        ...(classes.includes('zone') ? [] : [{ op: 'set', key: 'classes.zone.style.stroke-dash', value: '3' }, { op: 'set', key: 'classes.zone.style.fill', value: 'transparent' }] as EditOp[]),
-        { op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: 'zone' },
-      ],
+      id: 'markdown', label: 'Markdown', ops: ctx => {
+        const k = entryKey(ctx, 'note');
+        return [{ op: 'create', key: k }, { op: 'set', key: k, value: '# Note', tag: 'md' }];
+      },
     },
-    ...classes.filter(c => c !== 'zone').map((c): Entry => ({ id: `class:${c}`, label: c, base: plain(c), ops: k => [{ op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: c }] })),
+    {
+      id: 'code', label: 'Code', ops: ctx => {
+        const k = entryKey(ctx, 'code');
+        return [{ op: 'create', key: k }, { op: 'set', key: k, value: 'print("hello")', tag: 'python' }];
+      },
+    },
+    {
+      id: 'icon', label: 'Icon', ops: ctx => {
+        const k = entryKey(ctx, 'service');
+        // `shape: image` before `icon` fails to recompile, so the icon goes first.
+        return [{ op: 'create', key: k }, { op: 'set', key: `${k}.icon`, value: PLACEHOLDER_ICON }, { op: 'set', key: `${k}.shape`, value: 'image' }];
+      },
+    },
+    {
+      id: 'zone', label: 'Zone', ops: ctx => {
+        const k = entryKey(ctx, 'zone');
+        return [
+          ...(ctx.board.classes.includes('zone') ? [] : [{ op: 'set', key: 'classes.zone.style.stroke-dash', value: '3' }, { op: 'set', key: 'classes.zone.style.fill', value: 'transparent' }] as EditOp[]),
+          { op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: 'zone' },
+        ];
+      },
+    },
+    ...classes.filter(c => c !== 'zone').map((c): Entry => ({
+      id: `class:${c}`, label: c, ops: ctx => {
+        const k = entryKey(ctx, plain(c));
+        return [{ op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: c }];
+      },
+    })),
   ];
 }
 
@@ -56,18 +76,18 @@ const depth = (o: AssocObject) => o.id.split('.').length;
 
 // A Container that receives drops: one that already holds shapes, or a zone. A plain leaf rectangle is a Container in D2 but not a target, or
 // repositioning a shape next to a sibling on TALA would nest it.
-export const receives = (o: AssocObject, objects: readonly AssocObject[]) => isContainer(o) && (o.classes?.includes('zone') || objects.some(c => c.parent === o.id));
+export const receives = (o: AssocObject, ctx: Context) => container.applies(o, ctx) && (o.classes?.includes('zone') || ctx.board.objects.some(c => c.parent === o.id));
 
 // Spec 0015 §3.3: the deepest receiving Container whose box holds (x, y), never `dragged` or its descendants; '' is the board's root.
-export function dropTarget(objects: readonly AssocObject[], x: number, y: number, dragged = '') {
-  const hits = objects.filter(o => o.box && receives(o, objects) && !(dragged && within(o.id, dragged)) && contains(o.box, x, y));
+export function dropTarget(ctx: Context, x: number, y: number, dragged = '') {
+  const hits = ctx.board.objects.filter(o => o.box && receives(o, ctx) && !(dragged && within(o.id, dragged)) && contains(o.box, x, y));
   return hits.sort((a, b) => depth(b) - depth(a))[0]?.id ?? '';
 }
 
 // Spec 0015 §3.4: the deepest shape whose box holds (x, y), else the nearest within `slop` (diagram units) of its box. A receiving Container is
 // not a target: a release in its empty area creates a shape inside it (dropTarget).
-export function connectTarget(objects: readonly AssocObject[], x: number, y: number, slop: number) {
-  const shapes = objects.filter(o => o.kind === 'shape' && o.box && !receives(o, objects));
+export function connectTarget(ctx: Context, x: number, y: number, slop: number) {
+  const shapes = ctx.board.objects.filter(o => connectable.applies(o, ctx) && o.box && !receives(o, ctx));
   const inside = shapes.filter(o => contains(o.box!, x, y)).sort((a, b) => depth(b) - depth(a))[0];
   if (inside) return inside.id;
   const gap = (b: Box) => Math.hypot(Math.max(b.X - x, 0, x - b.X - b.Width), Math.max(b.Y - y, 0, y - b.Y - b.Height));

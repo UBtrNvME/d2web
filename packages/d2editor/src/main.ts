@@ -5,6 +5,7 @@ import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
 import { leaves, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
+import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -279,9 +280,13 @@ function markTarget(id: string) {
 
 function grab(e: PointerEvent): Grab | undefined {
   const handle = (e.composedPath()[0] as Element | undefined)?.closest?.('.handle');
-  if (handle) return connectFrom(handle as HTMLElement, e);
-  const object = objectOf(hovered), board = boardOf(), start = toScene(e.clientX, e.clientY);
-  if (object?.kind !== 'shape' || !board || !start) return;
+  const object = objectOf(handle ? (handle as HTMLElement).dataset.from! : hovered), board = boardOf();
+  if (!board) return;
+  const ctx = { board: board.association, engine: layout() };
+  const action = press(object, ctx, handle ? 'handle' : 'body');
+  if (action === 'connect') return connectFrom(handle as HTMLElement, e);
+  const start = toScene(e.clientX, e.clientY);
+  if (action === 'pan' || !object || !start) return;
   const objects = board.association.objects, parent = object.parent ?? '';
   const elements = [...$('host').shadowRoot!.querySelectorAll<HTMLElement | SVGElement>('[data-id]')];
   const nodes = objects.filter(o => within(o.id, object.id)).flatMap(o => outerNodes(elements, o));
@@ -293,7 +298,7 @@ function grab(e: PointerEvent): Grab | undefined {
       dragged = nodes;
       hideHandles();
       for (const el of nodes) el.style.translate = `${dx}px ${dy}px`;
-      const hit = dropTarget(objects, start.x + dx, start.y + dy, object.id);
+      const hit = dropTarget(ctx, start.x + dx, start.y + dy, object.id);
       // Spec 0016: to the root or an ancestor is a reparent only once the shape is fully out of its container; until then it is a shift.
       into = parentBox && object.box && (hit === '' || within(parent, hit)) && !leaves(object.box, parentBox, dx, dy) ? parent : hit;
       markTarget(into === parent ? '' : into);
@@ -304,7 +309,7 @@ function grab(e: PointerEvent): Grab | undefined {
       state.selected = object.id;
       dropping = state.revision;
       if (into !== parent) { void edit([{ op: 'move', key: object.id, parent: into }]).then(result => { dropping = -1; if (!result) reset(); }); return; }
-      if (layout() !== 'tala') { dropping = -1; reset(); status('Positions need the TALA layout engine; drop a shape into a zone to move it there.'); return; }
+      if (!movable.applies(object, { board: board.association, engine: layout() })) { dropping = -1; reset(); status('Positions need the TALA layout engine; drop a shape into a zone to move it there.'); return; }
       const at = placeShifting(objects, object.id, dx, dy)!;
       const rect = screenCorner(nodes);
       const pin = (id: string, top: number, left: number): EditOp[] => [{ op: 'set', key: `${id}.top`, value: String(top) }, { op: 'set', key: `${id}.left`, value: String(left) }];
@@ -324,8 +329,8 @@ let handles: Element[] = [], handleFor = '', overHandle = false, hideTimer: Retu
 function hideHandles() { for (const h of handles) h.remove(); handles = []; handleFor = ''; }
 function showHandles() {
   clearTimeout(hideTimer);
-  const object = objectOf(hovered);
-  if (object?.kind !== 'shape' || !object.box) {
+  const object = objectOf(hovered), board = boardOf();
+  if (!object || !board || !hasHandle.applies(object, { board: board.association, engine: layout() }) || !object.box) {
     // Moving onto a handle leaves the shape: keep its handles a moment so the pointer can reach them.
     hideTimer = setTimeout(() => { if (!overHandle && !hovered) hideHandles(); }, 150);
     return;
@@ -345,7 +350,7 @@ function showHandles() {
 function connectFrom(handle: HTMLElement, e: PointerEvent): Grab | undefined {
   const board = boardOf(), from = handle.dataset.from!, x0 = +handle.dataset.x!, y0 = +handle.dataset.y!, start = toScene(e.clientX, e.clientY);
   if (!board || !start) return;
-  const objects = board.association.objects;
+  const ctx = { board: board.association, engine: layout() }, objects = board.association.objects;
   const band = chrome('rubber-band', 'left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none', 'svg');
   const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   line.setAttribute('stroke', '#3975d5');
@@ -360,7 +365,7 @@ function connectFrom(handle: HTMLElement, e: PointerEvent): Grab | undefined {
       if (aborted) return;
       at = { x: start.x + dx, y: start.y + dy };
       line.setAttribute('x1', String(x0)); line.setAttribute('y1', String(y0)); line.setAttribute('x2', String(at.x)); line.setAttribute('y2', String(at.y));
-      to = connectTarget(objects, at.x, at.y, 12 / camera.view.k);
+      to = connectTarget(ctx, at.x, at.y, 12 / camera.view.k);
       markTarget(to && to !== from ? to : '');
     },
     cancel: end,
@@ -368,7 +373,7 @@ function connectFrom(handle: HTMLElement, e: PointerEvent): Grab | undefined {
       end();
       if (aborted || to === from) return;
       if (to) { void edit([{ op: 'create', key: `${from} -> ${to}` }]).then(r => { if (r) select(r.ids.created[0] ?? to); }); return; }
-      const key = freeKey(objects, dropTarget(objects, at.x, at.y), 'shape');
+      const key = freeKey(objects, dropTarget(ctx, at.x, at.y), 'shape');
       void (async () => {
         const result = await edit([{ op: 'create', key }, { op: 'create', key: `${from} -> ${key}` }]);
         if (!result) return;
@@ -471,9 +476,9 @@ async function insert(make: () => Entry | undefined) {
   if (state.painted !== state.revision) { status('The D2 text must compile before adding to it.', true); return; }
   const board = state.result?.boards?.find(b => b.path === state.board), entry = make(), parent = objectOf(state.selected);
   if (!board || !entry) return;
-  const at = parent && receives(parent, board.association.objects) ? parent.id : '';
-  const key = freeKey(board.association.objects, at, entry.base);
-  const result = await edit(entry.ops(key));
+  const at = parent && receives(parent, { board: board.association, engine: layout() }) ? parent.id : '';
+  const ops = entry.ops({ board: board.association, parent: at }), key = ops.find(o => o.op === 'create')!.key;
+  const result = await edit(ops);
   if (!result) return;
   state.selected = result.ids.created[0] ?? key;
   await compiled();
