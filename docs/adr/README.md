@@ -32,3 +32,4 @@ Consequences: what it commits us to, what stays open, what would reverse it
 | [0010](0010-web-performance.md) | Web performance is a standing constraint: rules, measurement method and review checklist | accepted |
 | [0011](0011-images-like-native-d2.md) | Images and icons behave like native D2 as explicit consumer-chosen modes (`bundle`, `link`), with web adaptations | accepted |
 | [0012](0012-editing-in-scope.md) | Editing enters scope: d2web owns a worker edit API that publishes checked patches; one file and its boards | accepted |
+| [0013](0013-editor-traits-from-d2.md) | d2editor components: palette entries as data, traits derived from D2, edit ops the only write path | accepted |

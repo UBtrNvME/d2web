@@ -1,6 +1,6 @@
 # Palette primitives and traits for d2editor
 
-Idea one-pager, 3 November 2026. Not an accepted ADR or spec; see [ADR 0012](../adr/0012-editing-in-scope.md), [spec 0012](../specs/0012-edit-api.md), [spec 0013](../specs/0013-d2editor.md) and [spec 0014](../specs/0014-drag-to-position.md) for what exists.
+Idea one-pager, 3 November 2026. Carried into [ADR 0013](../adr/0013-editor-traits-from-d2.md) and [spec 0015](../specs/0015-palette.md) (both accepted 3 November 2026). Not itself an accepted ADR or spec; see [ADR 0012](../adr/0012-editing-in-scope.md), [spec 0012](../specs/0012-edit-api.md), [spec 0013](../specs/0013-d2editor.md) and [spec 0014](../specs/0014-drag-to-position.md) for what exists.
 
 ## Problem statement
 
