@@ -1,7 +1,7 @@
 :root {
   color-scheme: light dark; font: 13px/1.4 system-ui, sans-serif;
   --bg: #fff; --panel: #f7f7f8; --fg: #1d1d1f; --muted: #6b6b73; --line: #0000001a; --control: #fff; --hover: #0000000d;
-  --accent: #3975d5; --danger: #c0392b; --ok: #2e9d5b; --busy: #d79b00; --mark: #f5c40066;
+  --accent: #3975d5; --danger: #c0392b; --ok: #2e9d5b; --busy: #d79b00; --mark: #f5c40066; --mark-side: #3975d55c;
 }
 @media (prefers-color-scheme: dark) {
   /* Close to D2's Dark Mauve (theme 200) background, which the canvas shows in dark mode. */
@@ -41,6 +41,7 @@ aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; bor
 #src { background: transparent; color: inherit; resize: none; }
 #marks { color: transparent; pointer-events: none; background: var(--bg); }
 #marks mark { background: var(--mark); color: transparent; border-radius: 2px; }
+#marks mark.side { background: var(--mark-side); }
 #status { font-size: 12px; min-height: 1.4em; white-space: pre-wrap; color: var(--muted); display: flex; gap: 6px; }
 #status::before { content: ""; width: 8px; height: 8px; margin-top: .3em; border-radius: 50%; flex: none; background: var(--ok); }
 #status[data-state="busy"]::before { background: var(--busy); }

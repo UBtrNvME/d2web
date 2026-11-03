@@ -20,5 +20,6 @@ The accepted product scope is [read-only v1](product.md); [ADRs](adr/README.md) 
 | [0013 d2editor, first slice](specs/0013-d2editor.md) | Accepted; built in `packages/d2editor` and verified in Chromium; published at `/editor/` on GitHub Pages once merged to `main` |
 | [0014 d2editor, drag to position](specs/0014-drag-to-position.md) | Accepted and built 3 November 2026; `test:editor` in Chromium |
 | [0015 d2editor, palette, zones and drag-to-connect](specs/0015-palette.md) | Accepted 3 November 2026; building |
+| [0016 d2editor, drag past the origin](specs/0016-drag-past-origin.md) | Accepted and built 3 November 2026; `test:editor` in Chromium |
 
 Research probes under `research/` are evidence, not additional production APIs. The generated [feature map](feature-map.md) covers catalog constructs and paint measurements; it is not full semantic or browser acceptance.
