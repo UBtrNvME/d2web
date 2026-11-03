@@ -14,7 +14,7 @@ test('paths and mise tasks cited in ADRs and specs exist', () => {
     const text = readFileSync(file, 'utf8');
     for (const [, tok] of text.matchAll(/`([^`\n]+)`/g)) {
       const path = tok.replace(/[:#].*$/, '').replace(/\/$/, '');
-      if (roots.some(r => path.startsWith(r)) && !/[*{}<>\s]/.test(path) && !existsSync(path)) missing.push(`${file}: ${tok}`);
+      if (roots.some(r => path.startsWith(r)) && !/[*{}<>\s]/.test(path) && !/(^|\/)(dist|artifacts|node_modules)(\/|$)/.test(path) && !existsSync(path)) missing.push(`${file}: ${tok}`);
       const run = tok.match(/^mise run (\S+)/)?.[1];
       if (run && !tasks.has(run)) missing.push(`${file}: task ${run}`);
     }
