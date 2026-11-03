@@ -1,9 +1,9 @@
 // d2editor (spec 0013): the D2 text is the only document; canvas actions become d2web edits (spec 0012) and land in it as checked patches.
-import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
+import { createClient, getObject, type Association, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
-import { place } from './position.ts';
+import { leaves, placeShifting } from './position.ts';
 import { decodeScript, encodeScript } from './share.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -42,8 +42,9 @@ type Range = { start: number; end: number; text: string };
 let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, compileRun = 0;
 // A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
 let notice = '';
-// `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was.
-let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number } } | undefined;
+// `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was. Past the origin (spec 0015)
+// the scene shifts by (ox, oy) and `rect` is where the shape stood on screen, so the camera can keep it there.
+let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number; ox: number; oy: number; rect: { left: number; top: number } } } | undefined;
 
 function status(message: string, error = false) {
   $('status').textContent = message;
@@ -52,14 +53,14 @@ function status(message: string, error = false) {
 }
 
 // The last patch's ranges, marked in a copy of the text behind the transparent textarea.
-function mark(edits: Range[] = []) {
+function mark(edits: Range[] = [], side = new Set<Range>()) {
   const marks = $('marks');
   marks.replaceChildren();
   let at = 0, shift = 0;
   for (const e of edits) {
     // Ranges are against the text before the patch; in the new text each starts after the earlier replacements.
     const start = e.start + shift, end = start + e.text.length;
-    marks.append(state.text.slice(at, start), Object.assign(document.createElement('mark'), { textContent: state.text.slice(start, end) || ' ' }));
+    marks.append(state.text.slice(at, start), Object.assign(document.createElement('mark'), { textContent: state.text.slice(start, end) || ' ', className: side.has(e) ? 'side' : '' }));
     at = end;
     shift += e.text.length - (e.end - e.start);
   }
@@ -67,6 +68,25 @@ function mark(edits: Range[] = []) {
   marks.scrollTop = src.scrollTop;
 }
 src.addEventListener('scroll', () => { $('marks').scrollTop = src.scrollTop; });
+
+// Top-left on screen of the painted parts under some nodes. Ownership frames can be zero-sized and each path's 1×1 <svg> wrapper sits at the
+// scene origin (as in canvas.reveal), so only the other descendants count.
+function screenCorner(nodes: Element[]) {
+  const rects = nodes.flatMap(el => [el, ...el.querySelectorAll('*')]).filter(e => e.localName !== 'svg').map(e => e.getBoundingClientRect()).filter(r => r.width || r.height);
+  return rects.length ? { left: Math.min(...rects.map(r => r.left)), top: Math.min(...rects.map(r => r.top)) } : undefined;
+}
+
+// Past the origin the scene's coordinates shift, so the painted board would slide under the author's hand. The snap animates each shape from
+// its predicted box, so pan the camera until the dragged shape's start (its natural place minus that animation offset) is where it stood.
+function keepInPlace(moved: NonNullable<typeof pending>['moved'] & {}, before: Association, after: Association) {
+  const was = before.objects.find(o => o.id === moved.id)?.box, now = after.objects.find(o => o.id === moved.id);
+  if (!was || !now?.box) return;
+  const elements = [...$('host').shadowRoot!.querySelectorAll<HTMLElement | SVGElement>('[data-id]')];
+  const corner = screenCorner(outerNodes(elements, now));
+  if (!corner) return;
+  const k = camera.view.k;
+  camera.pan(moved.rect.left - (corner.left - (now.box.X - was.X) * k), moved.rect.top - (corner.top - (now.box.Y - was.Y) * k));
+}
 
 async function compile(seeds?: number[]) {
   const revision = state.revision, board = state.board, run = ++compileRun;
@@ -77,7 +97,7 @@ async function compile(seeds?: number[]) {
     if (run === compileRun && revision === state.revision && (error as Error).name !== 'SupersededError') status(String(error), true);
     return;
   }
-  if (revision !== state.revision || run !== compileRun) return;
+  if (revision !== state.revision || run !== compileRun || revision === dropping) return;
   if (result.error) {
     // A board the text no longer has falls back to the root.
     if (board && !result.available.includes(board)) { state.board = ''; return compile(seeds); }
@@ -87,7 +107,8 @@ async function compile(seeds?: number[]) {
   $<HTMLSelectElement>('board').replaceChildren(...result.available.map(path => new Option(path || 'root', path, false, path === state.board)));
   const change = pending?.revision === revision ? pending : undefined, moved = change?.moved;
   const old = state.result?.boards?.find(b => b.path === board)?.association;
-  const before = old && moved ? { ...old, objects: old.objects.map(o => within(o.id, moved.id) && o.box ? { ...o, box: { ...o.box, X: o.box.X + moved.dx, Y: o.box.Y + moved.dy } } : o) } : old;
+  // The prediction in the new scene's coordinates: everything shifted by the overshoot, the dragged shape also by the drag.
+  const before = old && moved ? { ...old, objects: old.objects.map(o => o.box ? { ...o, box: { ...o.box, X: o.box.X + moved.ox + (within(o.id, moved.id) ? moved.dx : 0), Y: o.box.Y + moved.oy + (within(o.id, moved.id) ? moved.dy : 0) } } : o) } : old;
   const focused = $('host').shadowRoot?.activeElement?.getAttribute('data-id');
   outline?.remove();
   for (const el of dragged) el.style.translate = '';
@@ -97,6 +118,7 @@ async function compile(seeds?: number[]) {
   paintCanvas(result.boards!.find(b => b.path === board)!.scene);
   if (fitNext) { fitNext = false; camera.fit(); }
   const after = result.boards!.find(b => b.path === board)!.association;
+  if (moved && (moved.ox || moved.oy)) keepInPlace(moved, before!, after);
   if (before) snap($('host').shadowRoot!, before, after, change?.ids, change?.changed);
   pending = undefined;
   state.result = result;
@@ -117,13 +139,14 @@ function paintCanvas(scene: SceneDocument) {
   $('canvas').style.backgroundColor = color;
   const root = $('host').shadowRoot!;
   if (!root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
-  sheet.replaceSync(color ? '[data-id="root:background"] { display: none; }' : '');
+  // The scene's own box clips what leaves the board; a dragged shape must be seen past it (spec 0015).
+  sheet.replaceSync(`[data-d2-scene] { overflow: visible !important; }${color ? '[data-id="root:background"] { display: none; }' : ''}`);
   const [r, g, b] = color ? color.match(/\d+/g)!.map(Number) : [];
   $('grid').style.setProperty('--dot-rgb', color ? ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5 ? '0 0 0' : '255 255 255') : '');
 }
 
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.
-function setText(text: string, { record = true, edits, delay = 0 }: { record?: boolean; edits?: Range[]; delay?: number } = {}) {
+function setText(text: string, { record = true, edits, side, delay = 0 }: { record?: boolean; edits?: Range[]; side?: Set<Range>; delay?: number } = {}) {
   notice = '';
   clearTimeout(typing);
   clearTimeout(idle);
@@ -131,7 +154,7 @@ function setText(text: string, { record = true, edits, delay = 0 }: { record?: b
   state.revision++;
   if (record) history.push(text);
   if (src.value !== text) src.value = text;
-  mark(edits);
+  mark(edits, side);
   try { localStorage.setItem(STORAGE, text); } catch { /* storage is optional */ }
   status('Compiling…');
   typing = setTimeout(() => void compile([1]), delay);
@@ -142,7 +165,8 @@ function setText(text: string, { record = true, edits, delay = 0 }: { record?: b
 src.addEventListener('input', () => setText(src.value, { delay: 250 }));
 
 // One canvas action, one transaction. Only a checked patch changes the text; anything else leaves it as it was.
-async function edit(ops: EditOp[]): Promise<EditResult | undefined> {
+// `effects` are objects the edit changes only as a side effect: their ranges are marked apart from the author's own (spec 0015).
+async function edit(ops: EditOp[], effects: Association['objects'] = [], own?: Association['objects'][number]): Promise<EditResult | undefined> {
   const revision = state.revision, board = state.board, selected = state.selected;
   let result: EditResult;
   try { result = await client.edit({ revision, files: { [ENTRY]: state.text }, entry: ENTRY, board, ops }); }
@@ -152,7 +176,10 @@ async function edit(ops: EditOp[]): Promise<EditResult | undefined> {
   if (result.patch) {
     follow(result.ids);
     pending = { revision: revision + 1, ids: result.ids, changed: [selected] };
-    setText(result.patch.text, { edits: result.patch.edits });
+    const spans = (objects: typeof effects) => objects.flatMap(o => [...o.references, ...Object.values(o.properties).flatMap(p => (p.source ? [p.source] : []))]);
+    const touches = (e: Range, objects: typeof effects) => spans(objects).some(s => (e.start < s.end.offset && e.end > s.start.offset) || (e.start === e.end && e.start >= s.start.offset && e.start <= s.end.offset));
+    // One range can cover both (adjacent declarations): it is the author's.
+    setText(result.patch.text, { edits: result.patch.edits, side: new Set(result.patch.edits.filter(e => touches(e, effects) && !(own && touches(e, [own])))) });
     for (const d of result.diagnostics) status(d.message);
     return result;
   }
@@ -197,6 +224,9 @@ view.on('click', e => select(e.id));
 
 // Dragging a shape (spec 0014). The shape under the pointer comes from mount's hover events; on TALA a press on it previews the move by
 // translating its painted nodes (and its children's) and the drop sets D2's `top` and `left` in one edit. Other engines ignore positions.
+// `dropping` is the revision a dropped shape is being edited against: a compile of that text finishing meanwhile (the idle one, say) must not repaint
+// and wipe the dropped shape's preview; the edit's own compile follows.
+let dropping = -1;
 let hovered = '', dragged: (HTMLElement | SVGElement)[] = [], hint = false;
 view.on('hover', e => { if (e.domEvent.type === 'pointerover') hovered = e.id; else if (hovered === e.id) hovered = ''; });
 const within = (id: string, ancestor: string) => id === ancestor || id.startsWith(`${ancestor}.`);
@@ -211,11 +241,22 @@ function grab(): Grab | undefined {
     move(dx, dy) { dragged = nodes; for (const el of nodes) el.style.translate = `${dx}px ${dy}px`; },
     cancel: reset,
     drop(dx, dy) {
-      const at = place(board.association.objects, object.id, dx, dy)!;
+      const objects = board.association.objects, box = object.box!, parent = objects.find(o => o.id === object.parent)?.box;
+      // Dropped fully outside its container is a reparent, which needs a `move` edit (spec 0012, not built).
+      if (parent && leaves(box, parent, dx, dy)) {
+        reset();
+        return status('Moving a shape out of its container is not built yet; drop it inside.');
+      }
+      const at = placeShifting(objects, object.id, dx, dy)!;
+      const rect = screenCorner(nodes);
       state.selected = object.id;
-      void edit([{ op: 'set', key: `${object.id}.top`, value: String(at.top) }, { op: 'set', key: `${object.id}.left`, value: String(at.left) }]).then(result => {
+      dropping = state.revision;
+      const pin = (id: string, top: number, left: number): EditOp[] => [{ op: 'set', key: `${id}.top`, value: String(top) }, { op: 'set', key: `${id}.left`, value: String(left) }];
+      const ops = [...pin(object.id, at.top, at.left), ...at.siblings.flatMap(s => pin(s.id, s.top, s.left))];
+      void edit(ops, objects.filter(o => at.siblings.some(s => s.id === o.id)), object).then(result => {
+        dropping = -1;
         if (!result) return reset();
-        if (pending) pending.moved = { id: object.id, dx, dy };
+        if (pending) pending.moved = { id: object.id, dx, dy, ox: at.ox, oy: at.oy, rect: rect! };
       });
     },
   };

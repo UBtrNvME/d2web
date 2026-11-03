@@ -20,7 +20,10 @@ async function open(page, path = '/') {
             traffic.edits.push(r);
             if (traffic.hold) { event.stopImmediatePropagation(); traffic.held = { worker: this, data: r }; }
           }
-          if (r.type === 'result') traffic.results.push({ revision: r.revision, echo: r.echo, error: r.error });
+          if (r.type === 'result') {
+            traffic.results.push({ revision: r.revision, echo: r.echo, error: r.error });
+            if (traffic.holdAbove !== undefined && r.revision > traffic.holdAbove) { event.stopImmediatePropagation(); traffic.heldResult = { worker: this, data: r }; }
+          }
         });
       }
       postMessage(message, ...rest) { traffic.requests.push(message); super.postMessage(message, ...rest); }
@@ -176,6 +179,120 @@ test('a nested shape beside a fixed sibling lands where dropped; empty space pan
   const moved = await object(page, 'x').locator('[data-k]').first().boundingBox();
   expect(Math.round(moved.x - at.x)).toBe(60);
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
+});
+
+// Spec 0015: a drop past the origin sits at 0 and the container's other shapes move by the overshoot.
+const box = (page, id) => object(page, id).locator('[data-k]').first().boundingBox();
+// Samples an object's screen left/top on every frame until stopped, so a jump between frames shows.
+const sample = (page, ids) => page.evaluate(ids => {
+  const seen = window.seen = { stop: false, frames: [] };
+  const pos = id => { const el = document.querySelector('#host').shadowRoot.querySelector(`[data-id=${JSON.stringify(id)}] [data-k]`); return el && el.getBoundingClientRect(); };
+  const frame = () => { seen.frames.push(Object.fromEntries(ids.map(id => [id, pos(id) && { x: pos(id).x, y: pos(id).y }]))); if (!seen.stop) requestAnimationFrame(frame); };
+  frame();
+}, ids);
+// Pans so the origin lies inside the viewport, then drags `id` inside the canvas but past that origin along one axis.
+async function pastOrigin(page, text, id, others, axis, reachOf) {
+  await open(page);
+  await type(page, text);
+  await select(page, id);
+  const view = await page.locator('#canvas').boundingBox();
+  await page.mouse.move(view.x + view.width / 2, view.y + view.height - 20);
+  if (!reachOf) await page.mouse.wheel(axis === 'x' ? -150 : 0, axis === 'y' ? -150 : 0);
+  const k = await zoom(page), before = { [id]: await box(page, id) };
+  for (const o of others) before[o] = await box(page, o);
+  const at = before[id], reach = reachOf ? reachOf(before, k) : axis === 'x' ? at.x - view.x - 40 : at.y - view.y - 40;
+  const from = { x: at.x + 4, y: at.y + 4 }, to = axis === 'x' ? { x: from.x - reach, y: from.y } : { x: from.x, y: from.y - reach };
+  const host = await page.locator('#host').boundingBox();
+  if (!reachOf) expect(axis === 'x' ? at.x - reach : at.y - reach).toBeLessThan(axis === 'x' ? host.x : host.y);
+  return { k, before, reach, from, to, view, host };
+}
+const drop = async (page, { from, to }, ids) => {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await sample(page, ids);
+};
+
+test('dragging past the left origin keeps the layout the author drew; the DOM predicts it before the worker answers, nothing jumps, and the diff is marked', async ({ page }) => {
+  const text = 'a: A\n\n# between\n\nb: B\na -> b\n';
+  const m = await pastOrigin(page, text, 'a', ['b'], 'x');
+  const { k, before, reach } = m;
+  const count = await page.evaluate(() => traffic.edits.length);
+  await drop(page, m, ['a', 'b']);
+  // Mid-drag the shape is painted past the board's own box (the scene no longer clips).
+  expect((await box(page, 'a')).x).toBeLessThan(m.host.x - 20);
+  await expect(object(page, 'a').locator('[data-k]').first()).toBeVisible();
+  // Hold only the compile this edit causes: one already in flight must still finish, or the edit waits behind it.
+  await page.evaluate(() => { traffic.holdAbove = Math.max(0, ...traffic.requests.map(q => q.revision ?? 0)); });
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => traffic.edits.length)).toBe(count + 1);
+  await expect(page.locator('#src')).toHaveValue(/a: A \{[\s\S]*left: 0[\s\S]*b: B \{[\s\S]*left: \d+/);
+  await expect(page.locator('#marks mark.side').first()).toBeAttached();
+  await expect(page.locator('#marks mark:not(.side)').first()).toBeAttached();
+  // Virtual state: with the compile held, the shape is where it was dropped and the sibling has not moved on screen.
+  await page.waitForTimeout(300);
+  expect(Math.abs((await box(page, 'a')).x - m.to.x + 4)).toBeLessThanOrEqual(3);
+  expect(Math.abs((await box(page, 'b')).x - before.b.x)).toBeLessThanOrEqual(3);
+  await page.evaluate(() => { traffic.holdAbove = undefined; const h = traffic.heldResult; h.worker.dispatchEvent(new MessageEvent('message', { data: h.data })); });
+  await painted(page);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { window.seen.stop = true; });
+  // No frame from the drop to the settled board moved the dropped shape, and the sibling stays within TALA's drift of where it was.
+  const frames = (await page.evaluate(() => window.seen.frames)).filter(f => f.a && f.b);
+  expect(frames.length).toBeGreaterThan(10);
+  for (const f of frames) {
+    expect(Math.abs(f.a.x - (m.to.x - 4))).toBeLessThanOrEqual(3);
+    expect(Math.abs(f.b.x - before.b.x)).toBeLessThanOrEqual(6 * k);
+  }
+  const a1 = await box(page, 'a'), b1 = await box(page, 'b');
+  expect(Math.abs((b1.x - a1.x) - ((before.b.x - before.a.x) + reach))).toBeLessThanOrEqual(2 * k + 2);
+  expect(Math.abs(a1.y - before.a.y)).toBeLessThanOrEqual(3);
+  // One drag rewrote this many lines (spec 0015 section 4).
+  const after = await page.inputValue('#src'), old = text.split('\n');
+  const changed = after.split('\n').filter(l => { const i = old.indexOf(l); if (i < 0) return true; old.splice(i, 1); return false; }).length;
+  test.info().annotations.push({ type: 'changed lines', description: String(changed) });
+  expect(changed).toBeLessThanOrEqual(10);
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue(text);
+});
+
+test('dragging past the top origin shifts siblings down, and the shape stays under the pointer', async ({ page }) => {
+  const text = 'a: A\n\n# between\n\nb: B\na -> b\n';
+  const m = await pastOrigin(page, text, 'a', ['b'], 'y');
+  await drop(page, m, ['a', 'b']);
+  await page.mouse.up();
+  await expect(page.locator('#src')).toHaveValue(/a: A \{[\s\S]*top: 0[\s\S]*b: B \{[\s\S]*top: \d+/);
+  await painted(page);
+  await page.waitForTimeout(400);
+  const a1 = await box(page, 'a'), b1 = await box(page, 'b');
+  expect(Math.abs(a1.y - (m.to.y - 4))).toBeLessThanOrEqual(3);
+  expect(Math.abs((b1.y - a1.y) - ((m.before.b.y - m.before.a.y) + m.reach))).toBeLessThanOrEqual(2 * m.k + 2);
+  expect(Math.abs(a1.x - m.before.a.x)).toBeLessThanOrEqual(3);
+});
+
+test('a nested shape dragged past its container\'s origin shifts that container\'s other shapes', async ({ page }) => {
+  const m = await pastOrigin(page, 'c: {\n  d: {top: 30; left: 40}\n  e\n}\nz: Z\n', 'c.e', ['c.d', 'z'], 'x',
+    // Drop 20 px left of the container's origin (d's left edge minus its `left: 40`): inside the container's padding band, so a shift, not a reparent.
+    (before, k) => before['c.e'].x - (before['c.d'].x - 40 * k) + 20 * k);
+  await drop(page, m, ['c.e', 'c.d', 'z']);
+  await page.mouse.up();
+  await expect(page.locator('#src')).toHaveValue(/d: \{top: 30; left: (?!40\b)\d+\}[\s\S]*e: \{[\s\S]*left: 0/);
+  await painted(page);
+  await page.waitForTimeout(400);
+  const e1 = await box(page, 'c.e'), d1 = await box(page, 'c.d');
+  expect(Math.abs(e1.x - (m.to.x - 4))).toBeLessThanOrEqual(6);
+  expect(Math.abs((d1.x - e1.x) - ((m.before['c.d'].x - m.before['c.e'].x) + m.reach))).toBeLessThanOrEqual(2 * m.k + 4);
+});
+
+test('a shape dropped fully outside its container makes no edit and says why', async ({ page }) => {
+  await open(page);
+  await type(page, 'c: {\n  d\n}\n');
+  const count = await page.evaluate(() => traffic.edits.length);
+  const c = await box(page, 'c');
+  await drag(page, 'c.d', c.width + 200, 0);
+  await expect(page.locator('#status')).toContainText('out of its container');
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
+  await visible(page, 'c.d');
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
