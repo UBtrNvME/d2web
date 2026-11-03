@@ -98,26 +98,34 @@ export function mount(host: HTMLElement, options: MountOptions = {}): Mount {
   delegate('pointerover', 'hover', e => { const to = objectOf(e.target as Element); return to !== objectOf((e as PointerEvent).relatedTarget as Element | null) ? to : undefined; });
   delegate('pointerout', 'hover', e => { const from = objectOf(e.target as Element); return from !== objectOf((e as PointerEvent).relatedTarget as Element | null) ? from : undefined; });
 
+  // Updates paint in call order: a later result never waits behind, or is painted over by, an earlier one still loading fonts.
+  let queue: Promise<unknown> = Promise.resolve();
+  async function paint(result: CompileResult, path: string): Promise<UpdateReport> {
+    alive();
+    let next: RenderBoard;
+    try { next = prepareBoard(result, path); } catch (error) { throw new MountError((error as Error).message); }
+    if (options.fonts !== 'consumer') await acquireFonts(result.fonts);
+    alive();
+    let rendered: DomView;
+    try { rendered = createDomView(next, { idPrefix: prefix, a11y: options.a11y ?? true, markdown: options.markdown }); }
+    catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
+    view?.dispose();
+    wrapper.replaceChildren(rendered.fragment);
+    view = rendered;
+    prepared = next;
+    board = path;
+    view.attach(shadow);
+    const orphaned: string[] = [];
+    for (const [id, element] of content) if (!view.setContent(id, element)) orphaned.push(id);
+    const rejectedFonts = [...rejected].filter(([id]) => id in (result.fonts ?? {})).map(([id, message]) => ({ id, message }));
+    return { board: path, orphaned, ...(rejectedFonts.length ? { rejectedFonts } : {}) };
+  }
+
   return {
-    async update(result, path = '') {
-      alive();
-      let next: RenderBoard;
-      try { next = prepareBoard(result, path); } catch (error) { throw new MountError((error as Error).message); }
-      if (options.fonts !== 'consumer') await acquireFonts(result.fonts);
-      alive();
-      let rendered: DomView;
-      try { rendered = createDomView(next, { idPrefix: prefix, a11y: options.a11y ?? true, markdown: options.markdown }); }
-      catch (error) { throw new MountError(`cannot paint board "${path}": ${(error as Error).message}`); }
-      view?.dispose();
-      wrapper.replaceChildren(rendered.fragment);
-      view = rendered;
-      prepared = next;
-      board = path;
-      view.attach(shadow);
-      const orphaned: string[] = [];
-      for (const [id, element] of content) if (!view.setContent(id, element)) orphaned.push(id);
-      const rejectedFonts = [...rejected].filter(([id]) => id in (result.fonts ?? {})).map(([id, message]) => ({ id, message }));
-      return { board: path, orphaned, ...(rejectedFonts.length ? { rejectedFonts } : {}) };
+    update(result, path = '') {
+      const run = queue.then(() => paint(result, path));
+      queue = run.catch(() => {});
+      return run;
     },
     nodeBox(id) { alive(); return prepared?.objects.find(o => o.id === id)?.bounds; },
     setNodeContent(id, element) {

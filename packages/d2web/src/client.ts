@@ -78,8 +78,12 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
   const loadFonts = () => (fontBytes ??= Promise.all([
     Promise.all((listed ?? []).map(async f => ({ name: f.name, data: await fetchBytes(f) }))),
     emojiSpec ? fetchBytes(emojiSpec) : undefined,
-  ]).then(([list, emojiData]) => ({ type: 'fonts' as const, fonts: list, ...(emojiData ? { emoji: emojiData } : {}) })));
+  ]).then(([list, emojiData]) => ({ type: 'fonts' as const, fonts: list, ...(emojiData ? { emoji: emojiData } : {}) }))
+    // A failed fetch is retried by the next compile rather than kept for the client's lifetime.
+    .catch(error => { fontBytes = undefined; throw error; }));
   let worker: WorkerLike;
+  // The current worker's answer to the fonts message: '' when it took them.
+  let fontsAck: ((error: string) => void) | undefined;
   let ready: Promise<WorkerReady>;
   let running: Job | null = null;
   let waiting: Job | null = null;
@@ -95,7 +99,7 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       mine.onmessage = ({ data }) => {
         if (mine !== worker) return;
         if (data.type === 'ready') resolve(data);
-        else if (data.type === 'fonts') { if (data.error && running) { const job = running; settle(job); job.reject(new FontError(`worker refused the fonts: ${data.error}`)); pump(); } }
+        else if (data.type === 'fonts') fontsAck?.(data.error);
         else if (data.type === 'images') { if (running && data.id === running.request.id) running.imagePhase?.preflight?.(data); }
         else if (running && data.type === 'result' && data.id === running.request.id) finish(data);
         else if (editing && data.type === 'edited' && data.id === editing.request.id) finishEdit(data);
@@ -171,7 +175,16 @@ export function createClient({ spawn, supersedeAfterMs = 2000, silentTimeoutMs =
       const budget = job.request.budgets!.maxLayoutMillis!;
       if ((listed?.length || emojiSpec) && !sent.has(mine)) {
         job.timer = timeout(silentTimeoutMs, 'fonts not loaded');
-        try { mine.postMessage(await loadFonts()); sent.add(mine); clearTimeout(job.timer); } catch (error) { if (running === job) { settle(job); job.reject(error); pump(); } return; }
+        try {
+          const message = await loadFonts();
+          if (running !== job || mine !== worker) return;
+          // Wait for the worker to take them, so a refusal fails this compile and every later one alike, and nothing is posted while it still works.
+          const refused = await new Promise<string>(resolve => { fontsAck = resolve; mine.postMessage(message); });
+          fontsAck = undefined;
+          if (refused) throw new FontError(`worker refused the fonts: ${refused}`);
+          sent.add(mine);
+          clearTimeout(job.timer);
+        } catch (error) { if (running === job) { settle(job); job.reject(error); pump(); } return; }
         if (running !== job || mine !== worker) return;
       }
       let request = job.request;

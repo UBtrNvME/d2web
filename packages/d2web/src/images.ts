@@ -1,5 +1,5 @@
 import type { ImageBytes, ImageLink } from './protocol.ts';
-import { ProtocolError } from './request.ts';
+import { isObject, ProtocolError } from './request.ts';
 
 // Spec 0010. The page resolves image links to bytes; the worker never fetches. Nothing here runs unless the consumer passes `images`.
 
@@ -24,8 +24,6 @@ export const DEFAULT_IMAGE_LIMITS = { bytes: 4 << 20, count: 256, timeoutMs: 15_
 // The worker's cumulative ceiling (compile/images.go); the cache stays under it too.
 const CUMULATIVE_BYTES = 32 << 20;
 const NEGATIVE_TTL_MS = 60_000;
-
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 export function normalizeImages(value: unknown): ImagesOption {
   if (!isObject(value)) throw new ProtocolError('images must be an object');
