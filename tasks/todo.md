@@ -7,11 +7,11 @@ Current work and historical execution records. Product scope and accepted archit
 Docs were made factual the same day (specs 0003, 0005, 0006, 0009, 0013-0016; ADR `Delivery:` lines). Audit follow-up, in order:
 - [x] ADR 0013 part 2: `packages/d2editor/src/traits.ts` with `{name, applies(object, ctx)}` (container, connectable, movable, has-handle); one `press()` arbiter replaces the ad hoc check at `main.ts:281`. Each trait has a test that compiles D2 and compares (`image` refuses children, `sql_table`/`class` turn them into rows, only TALA honours `top`/`left`; content elements retain the existing editor exclusion). Live D2 preserves text/code/markdown content, correcting the research assumption. Verification and limits below.
 - [x] ADR 0013 part 1: palette entry becomes `{id, label, ops(ctx)}` with `base` inside `ctx`, so ADR and code match. Verify: `test:editor`.
-- [ ] Spec 0009: run `mise run check:browser`; confirm WebKit C1 `shape/sequence_diagram`; ask the user to record acceptance of stages A-C.
-- [ ] Spec 0012: add the zoom case missing from spec 0014 §5 (`position.test.mjs`), or reword the spec.
-- [ ] Unrun figures in specs (counts, timings, sizes): re-measure or drop; do not leave unchecked numbers as facts.
-- [ ] `docs:check` mise task in `check`: every backticked path, mise task and `Delivery:` claim in `docs/adr` and `docs/specs` resolves.
-- [ ] `AGENTS.md` phase bullets ("architecture research ... R1 next") vs "product phase": reconcile.
+- [x] Spec 0009: WebKit C1 and Firefox pass (`test:webkit`, `test:firefox`, 4 November 2026); stages A-C accepted by the user.
+- [x] Spec 0014 zoom: reworded; zoom is covered by the Chromium drag cases.
+- [x] Unrun figures: verified where cheap (text widths), timings marked as a dated baseline (spec 0008).
+- [x] `docs:check` (`tests/docs-check.mjs`, in `test:unit`): cited paths, tasks, links and a `Delivered:` line per spec.
+- [x] `AGENTS.md` phase bullets reconciled.
 
 
 ADR 0013 handoff (4 November 2026): parts 1–2 are implemented on `editor-traits-adr0013`, based on `docs-align-adrs-specs`. Changes: `packages/d2editor/src/{traits,palette,main}.ts`, `packages/d2editor/tests/{traits,palette}.test.mjs`, `mise.toml`, ADR 0013 and this ledger. Traits are derived; the press arbiter preserves body reparenting on every engine and position writes only on TALA. Palette ops choose their unique key from the current board, parent and optional naming base. No dependencies or lockfiles changed. The unrelated untracked `.claude/artifacts/` directory is preserved.
@@ -286,10 +286,10 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 
 - [x] HTML text selection fixed with a trailing newline per label; copy order is paint order, not semantic order.
 - [x] Accessibility grouping per D2 object: named focusable groups from scene IDs, pixel-identical, Tab order = paint order (`test:research:a11y`).
-- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), (done, spec 0006) names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy.
+- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), (done, spec 0006) names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy. *Audited 4 November 2026: nesting and tooltips are built (spec 0006). Still open: real screen-reader output, an arrow-key policy; find-in-page is only logged, not asserted.*
 - [ ] Trace the HTML-only edge differences (pixel snapping of fractional borders; geometry 3.9%, jupyter_aws_eks 2.5%).
-- [ ] Remaining text: fallback fonts across the corpus (WASM resolves none; large bytes), bidi/RTL, bold/italic fallback, the 3% of runs that miss D2's advances, decoration, markdown/code as DOM structure, LaTeX vector in the browser.
-- [ ] Images and animation: not comparable yet (native SVG links files, scene embeds); animation not painted; dark theme not covered; non-root boards not painted.
+- [ ] Remaining text: fallback fonts across the corpus (WASM resolves none; large bytes), bidi/RTL, bold/italic fallback, the 3% of runs that miss D2's advances, decoration, markdown/code as DOM structure, LaTeX vector in the browser. *Audited 4 November 2026: consumer fonts, bold/italic, decoration and bidi are built (spec 0007). Not confirmed: the 3% of runs that miss D2 advances.*
+- [x] Images and animation: not comparable yet (native SVG links files, scene embeds); animation not painted; dark theme not covered; non-root boards not painted. *Audited 4 November 2026: stale. Images are inlined, animation is painted and compared with native (spec 0005), dark theme and non-root boards are covered (feature-map).*
 - [ ] Filters and blend as CSS, other browsers, hit-testing under masks, performance with 600+ masks on one page.
 - [ ] Replace the reflection-based scene dump with a designed bridge; it must carry compile-resolved render options (theme overrides and sketch were silently dropped once).
 
@@ -328,11 +328,11 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 
 ## Capability coverage with no probe yet
 
-- [ ] Gradients, patterns and filters beyond the corpus counts, sketch correctness analysis, themes and dark mode, layers/scenarios/steps in the browser, the full 25-shape set, SQL tables and classes, grids and sequence layout, exports.
+- [x] Gradients, patterns and filters beyond the corpus counts, sketch correctness analysis, themes and dark mode, layers/scenarios/steps in the browser, the full 25-shape set, SQL tables and classes, grids and sequence layout, exports. *Audited 4 November 2026: gradients, effects, themes, 25 shapes, sql/class, grid, sequence and layers/scenarios/steps are ok in docs/feature-map.md; exports stay out of v1 scope.*
 
 ## Housekeeping
 
-- [ ] Nothing is committed; commit only when the user asks.
+- [x] Historical: the rule stands (commit only when the user asks). Work is merged through PRs.
 - [ ] Imported Studio lint fails (56 errors, 3 warnings); `studio:check` stays a separate gate.
 - [ ] Native corpus is 145/147 (two broken remote image URLs).
 - [ ] Go/Node WASM hang (about 1 in 20-50 runs under load) is worked around by a timeout and retry, cause unknown.
