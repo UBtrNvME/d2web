@@ -1,0 +1,3 @@
+# Gitignored paths a new worktree reuses from the primary worktree (wt step copy-ignored, .config/wt.toml).
+node_modules/
+imports/d2/
