@@ -35,3 +35,23 @@ export function step(written: number, painted: number, target: number, prev?: { 
   const slope = prev && painted !== prev.painted ? (written - prev.written) / (painted - prev.painted) : 1;
   return Math.max(0, Math.round(written + (target - painted) * (slope > 0.2 && slope < 5 ? slope : 1)));
 }
+
+// A nested drop still being measured: the drop point relative to the container's painted corner, tries left, the best attempt so far, and the
+// last single-axis move (its slope is only trusted for that axis while the other one stayed put).
+export type Aim = { X: number; Y: number; tries: number; best?: { top: number; left: number; miss: number }; moved?: { axis: 'X' | 'Y'; written: number; painted: number } };
+
+// The next top/left toward `aim`, given where TALA painted them, or undefined when done. Moving one container child grows or shifts the container
+// on both axes, so each attempt moves only the axis that misses more; when out of tries or stuck it settles on the best attempt seen.
+export function attempt(at: { top: number; left: number }, painted: { X: number; Y: number }, aim: Aim): { top: number; left: number; aim: Aim } | undefined {
+  const miss = { X: aim.X - painted.X, Y: aim.Y - painted.Y }, worst = Math.max(Math.abs(miss.X), Math.abs(miss.Y));
+  if (worst <= 1) return;
+  const best = !aim.best || worst < aim.best.miss ? { ...at, miss: worst } : aim.best;
+  const settle = () => (best.top === at.top && best.left === at.left ? undefined : { top: best.top, left: best.left, aim: { X: aim.X, Y: aim.Y, tries: 0, best } });
+  if (aim.tries <= 1) return settle();
+  for (const axis of Math.abs(miss.X) >= Math.abs(miss.Y) ? ['X', 'Y'] as const : ['Y', 'X'] as const) {
+    const key = axis === 'X' ? 'left' : 'top';
+    const value = step(at[key], painted[axis], aim[axis], aim.moved?.axis === axis ? aim.moved : undefined);
+    if (value !== at[key]) return { ...at, [key]: value, aim: { X: aim.X, Y: aim.Y, tries: aim.tries - 1, best, moved: { axis, written: at[key], painted: painted[axis] } } };
+  }
+  return settle();
+}

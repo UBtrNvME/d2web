@@ -3,7 +3,7 @@ import { createClient, getObject, mount, spawnWorker, type CompileResult, type E
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
-import { place, step as stepToward } from './position.ts';
+import { attempt, place, type Aim } from './position.ts';
 import { decodeScript, encodeScript } from './share.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -43,8 +43,6 @@ let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, 
 // A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
 let notice = '';
 // `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was.
-// `aim` is a nested drop still being measured: the drop point relative to the container's painted corner, tries left, and the last attempt.
-type Aim = { X: number; Y: number; tries: number; prev?: { top: number; left: number; X: number; Y: number } };
 let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number; aim?: Aim } } | undefined;
 
 function status(message: string, error = false) {
@@ -219,7 +217,7 @@ function grab(): Grab | undefined {
       const at = place(board.association.objects, object.id, dx, dy)!, box = object.box!;
       // A nested drop is measured after the compile (see correct), against the container's corner: TALA may move the container itself.
       const corner = object.parent === undefined ? undefined : getObject(board.association, object.parent)?.box;
-      const aim = at.exact || !corner ? undefined : { X: box.X + dx - corner.X, Y: box.Y + dy - corner.Y, tries: 5 };
+      const aim = at.exact || !corner ? undefined : { X: box.X + dx - corner.X, Y: box.Y + dy - corner.Y, tries: 8 };
       state.selected = object.id;
       void edit([{ op: 'set', key: `${object.id}.top`, value: String(at.top) }, { op: 'set', key: `${object.id}.left`, value: String(at.left) }], { settled: true }).then(result => {
         if (!result) return reset();
@@ -228,18 +226,16 @@ function grab(): Grab | undefined {
     },
   };
 }
-// After a nested drop, measure where TALA painted the shape inside its container and step top/left toward the drop point (TALA's origin moves
-// as a pinned child grows or moves its container, so this is measured, not computed), a few times at most and folded into the drag's Undo step.
+// After a nested drop, measure where TALA painted the shape inside its container and try again toward the drop point (attempt in position.ts:
+// TALA's origin moves as a pinned child grows or moves its container, so this is measured, not computed); folded into the drag's Undo step.
 function correct(association: Parameters<typeof getObject>[0], id: string, aim: Aim) {
   const o = getObject(association, id), corner = o?.parent === undefined ? undefined : getObject(association, o.parent)?.box;
   const top = Number(o?.properties.top?.value), left = Number(o?.properties.left?.value);
   if (!o?.box || !corner || Number.isNaN(top) || Number.isNaN(left)) return;
-  const X = o.box.X - corner.X, Y = o.box.Y - corner.Y;
-  if (Math.abs(aim.X - X) <= 1 && Math.abs(aim.Y - Y) <= 1) return;
-  const next = { left: stepToward(left, X, aim.X, aim.prev && { written: aim.prev.left, painted: aim.prev.X }), top: stepToward(top, Y, aim.Y, aim.prev && { written: aim.prev.top, painted: aim.prev.Y }) };
-  if (next.left === left && next.top === top) return;
+  const next = attempt({ top, left }, { X: o.box.X - corner.X, Y: o.box.Y - corner.Y }, aim);
+  if (!next) return;
   void edit([{ op: 'set', key: `${id}.top`, value: String(next.top) }, { op: 'set', key: `${id}.left`, value: String(next.left) }], { replace: true, settled: true })
-    .then(result => { if (result && pending) pending.moved = { id, dx: 0, dy: 0, aim: { ...aim, tries: aim.tries - 1, prev: { top, left, X, Y } } }; });
+    .then(result => { if (result && pending) pending.moved = { id, dx: 0, dy: 0, aim: next.aim }; });
 }
 // A drag on a shape pans on other engines; say why once it moves.
 $('canvas').addEventListener('pointermove', () => { if (hint && $('canvas').classList.contains('panning')) { hint = false; status('Positions need the TALA layout engine; this drag pans the canvas.'); } });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { place, step } from '../src/position.ts';
+import { place, step, attempt } from '../src/position.ts';
 
 const shape = (id, X, Y, extra = {}) => ({ id, kind: 'shape', nodes: [id], properties: {}, box: { X, Y, Width: 50, Height: 60 }, ...extra });
 const fixed = (top, left) => ({ properties: { top: { value: String(top) }, left: { value: String(left) } } });
@@ -41,4 +41,17 @@ test('a correction step uses the slope measured from the previous attempt, else 
   // A slope outside 0.2..5 (a layout jump) falls back to the miss; never below 0.
   assert.equal(step(10, 500, 20, { written: 9, painted: 0 }), 0);
   assert.equal(step(10, 20, 30, { written: 9, painted: 20 }), 20);
+});
+
+// A simulated container whose origin moves with both values (as a circle grows around a pinned child): painted = written * 1.2 + other * 0.3.
+const circle = ({ top, left }) => ({ X: left * 1.2 + top * 0.3, Y: top * 1.2 + left * 0.3 });
+test('correction attempts converge on a coupled container and never end worse than the best attempt', () => {
+  let at = { top: 50, left: 50 }, aim = { X: 130, Y: 90, tries: 8 };
+  for (let next; (next = attempt(at, circle(at), aim)); ) ({ at, aim } = { at: next, aim: next.aim });
+  const p = circle(at);
+  assert.ok(Math.max(Math.abs(p.X - 130), Math.abs(p.Y - 90)) <= 1, `landed at ${JSON.stringify(p)}`);
+  // Out of tries: go back to the best attempt seen rather than stop on a worse one.
+  const best = { top: 40, left: 90, miss: 3 };
+  assert.deepEqual(attempt({ top: 70, left: 60 }, { X: 200, Y: 200 }, { X: 130, Y: 90, tries: 1, best }), { top: 40, left: 90, aim: { X: 130, Y: 90, tries: 0, best } });
+  assert.equal(attempt({ top: 40, left: 90 }, { X: 131, Y: 90 }, { X: 130, Y: 90, tries: 3 }), undefined, 'within 1 px: done');
 });
