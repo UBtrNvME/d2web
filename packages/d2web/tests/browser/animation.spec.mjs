@@ -72,3 +72,21 @@ test('an animated edge matches native D2 at equal currentTime', async ({ page })
   expect(nat.some(v => v !== nat[0])).toBe(true); // the native dash really moves
   web.forEach((v, i) => expect(v).toBeCloseTo(nat[i], 1));
 });
+
+test('an animated shape matches native D2 at equal currentTime (transform and drop-shadow)', async ({ page }) => {
+  const source = 'x: Lift {style.animated: true}', dir = mkdtempSync(join(tmpdir(), 'anim-'));
+  writeFileSync(join(dir, 'main.d2'), source);
+  execFileSync('d2', ['--layout=tala', '--tala-seeds=1,2,3', '--bundle=true', '--animate-interval=0', '--pad=0', join(dir, 'main.d2'), join(dir, 'out.svg')], { stdio: 'pipe' });
+  await open(page, { body: host + '<div id="n"></div>' });
+  await update(page, source);
+  const times = [0, 250, 500, 750];
+  const [web, nat] = await page.evaluate(async ({ svg, times }) => {
+    document.getElementById('n').innerHTML = svg;
+    const web = document.getElementById('a').shadowRoot.getAnimations(), native = document.getAnimations().find(x => x.animationName === 'shapeappear');
+    const read = el => { const s = getComputedStyle(el); return [s.transform, s.filter]; };
+    const at = (list, el, t) => { for (const a of list) { a.pause(); a.currentTime = t; } return read(el); };
+    return [times.map(t => at(web, web[0].effect.target, t)), times.map(t => at([native], native.effect.target, t))];
+  }, { svg: readFileSync(join(dir, 'out.svg'), 'utf8'), times });
+  expect(nat[2]).not.toEqual(nat[0]); // the native shape really moves
+  expect(web).toEqual(nat);
+});
