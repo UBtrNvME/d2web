@@ -22,7 +22,7 @@ Object = {
   references: [ Source ],        // declarations that name the object
   properties: { label, fill?, stroke?, ... : { value, source: Source | null } },   // absent = D2 default
   src?: id, dst?: id             // connections only
-  box?: { X, Y, Width, Height }  // shape: D2's own box (position, width, height); connection: exact bounds of its painted paths (route, arrowheads; d2scene GeometryBounds)
+  box?: { X, Y, Width, Height }  // shape: D2's own box (position, width, height); connection: bounds of its painted paths (route, arrowheads; d2scene GeometryBounds through each node transform, also under the masked `:geometry` node a connection label adds; a diagonal arrowhead can widen it a few px)
   links?: [ index ],             // indices into the scene's Links that D2 added for this object
   html?: string                  // markdown only: D2's goldmark document, D2's elements and the attributes D2 reads; absent otherwise
 }

@@ -81,6 +81,20 @@ func TestShapeBoxIsD2sBox(t *testing.T) {
 	if plain, animated := boxOf("a <-> b\n"), boxOf("a <-> b: { style.animated: true }\n"); plain != animated || plain[1] == 0 {
 		t.Errorf("animated route box %v, plain %v", animated, plain)
 	}
+	// The box spans the gap between the two shapes (D2 ends a route a pixel or two short), with arrowheads in place, not at their local
+	// origin; also when a connection label makes D2 put every route under a masked `:geometry` node.
+	boxes := map[string]map[string]any{}
+	for _, o := range compileText(t, "a -> b\nc -> d: label\n")["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		boxes[obj["id"].(string)], _ = obj["box"].(map[string]any)
+	}
+	near := func(a, b float64) bool { return a-b < 2 && b-a < 2 }
+	for _, e := range [][3]string{{"(a -> b)[0]", "a", "b"}, {"(c -> d)[0]", "c", "d"}} {
+		r, src, dst := boxes[e[0]], boxes[e[1]], boxes[e[2]]
+		if r == nil || !near(r["Y"].(float64), src["Y"].(float64)+src["Height"].(float64)) || !near(r["Y"].(float64)+r["Height"].(float64), dst["Y"].(float64)) {
+			t.Errorf("masked route box %v between %v and %v", r, src, dst)
+		}
+	}
 }
 
 // Spec 0004 amendment (2 November 2026, for the d2editor inspector): a declared shape and its declaration; D2's default rectangle is absent.
