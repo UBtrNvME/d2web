@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { open } from './harness.mjs';
 
 // Spec 0005: D2's animation tracks run as Web Animations inside the mount's shadow root; no extra API.
@@ -47,4 +51,24 @@ test('replacing the board and disposing cancel the animations', async ({ page })
   await update(page, 'a -> b {style.animated: true}');
   const states = await page.evaluate(() => { const list = document.getElementById('a').shadowRoot.getAnimations(); m.dispose(); return list.map(a => a.playState); });
   expect(states).toEqual(['idle']);
+});
+
+// Spec 0005 test plan step 3: the web animation and native D2's own CSS animation, paused at the same currentTime, hold the same dash offset.
+test('an animated edge matches native D2 at equal currentTime', async ({ page }) => {
+  const source = 'a -> b {style.animated: true}', dir = mkdtempSync(join(tmpdir(), 'anim-'));
+  writeFileSync(join(dir, 'main.d2'), source);
+  execFileSync('d2', ['--layout=tala', '--tala-seeds=1,2,3', '--bundle=true', '--animate-interval=0', '--pad=0', join(dir, 'main.d2'), join(dir, 'out.svg')], { stdio: 'pipe' });
+  const svg = readFileSync(join(dir, 'out.svg'), 'utf8');
+  await open(page, { body: host + '<div id="n"></div>' });
+  await update(page, source);
+  const times = [0, 250, 750, 1500];
+  const [web, nat] = await page.evaluate(async ({ svg, times }) => {
+    document.getElementById('n').innerHTML = svg;
+    const offset = (anim, t) => { anim.pause(); anim.currentTime = t; return +getComputedStyle(anim.effect.target).strokeDashoffset.replace('px', ''); };
+    const w = document.getElementById('a').shadowRoot.getAnimations()[0];
+    const n = document.getAnimations().find(x => x.animationName === 'dashdraw');
+    return [times.map(t => offset(w, t)), times.map(t => offset(n, t))];
+  }, { svg, times });
+  expect(nat.some(v => v !== nat[0])).toBe(true); // the native dash really moves
+  web.forEach((v, i) => expect(v).toBeCloseTo(nat[i], 1));
 });
