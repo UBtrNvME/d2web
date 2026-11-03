@@ -23,7 +23,7 @@ The runtime, worker protocol, mount, association, packaging, fonts, animation an
 - [D2 feature map](docs/feature-map.md): every D2 capability, how it reaches the web and whether it paints equal to native (generated)
 - [Writing D2 that lays out well](docs/d2-authoring-guide.md): authoring rules and features to avoid, from rendering the large examples on TALA, ELK and dagre
 - [Browser review: text, clipping and web-native gaps](docs/web-native-audit.md)
-- [d2editor first slice](docs/specs/0013-d2editor.md): source and canvas editing, local files, exact-text undo and checked patches; agents and a class palette remain later slices
+- [d2editor first slice](docs/specs/0013-d2editor.md): source and canvas editing, local files, exact-text undo and checked patches; later slices: [drag to position](docs/specs/0014-drag-to-position.md), [palette, zones and drag-to-connect](docs/specs/0015-palette.md), [drag past the origin](docs/specs/0016-drag-past-origin.md); agents remain later
 - [Specifications index](docs/SPEC.md): [0001 compile protocol (accepted)](docs/specs/0001-compile-protocol.md), [0002 mount API (accepted)](docs/specs/0002-mount-api.md), [0003 packaging (accepted)](docs/specs/0003-packaging.md), [0004 association (accepted)](docs/specs/0004-association.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Test examples and provenance](examples/README.md)
@@ -59,6 +59,10 @@ mise run check
 ```
 
 Mise supplies Node.js 24, Go 1.27.3 and D2 0.9.0. Corepack provides the package-local pnpm versions: root `pnpm@12.14.0`, Studio `pnpm@11.25.0`. Use `mise exec -- <command>` for one-off commands. Do not use the imported starter's historical npm installer.
+
+### Worktrees
+
+Parallel work uses [worktrunk](https://worktrunk.dev) (`wt`). `wt switch --create <branch>` makes a worktree and runs the `pre-start` hooks in [.config/wt.toml](.config/wt.toml): `mise trust`, `wt step copy-ignored` (reuses the primary worktree's `node_modules/` and `imports/d2/`, as listed in [.worktreeinclude](.worktreeinclude)) and a frozen `pnpm install`. Worktrunk runs project hooks only after you approve them: run `wt config approvals add` once and read the three commands. Merging still goes through GitHub pull requests (`gh pr merge`), not `wt merge`; afterwards `wt remove <branch>` from another worktree. Run `mise run browser:install` once per machine, not per worktree.
 
 The existing Studio commands below are optional reference-consumer tooling, separate from d2web development:
 
