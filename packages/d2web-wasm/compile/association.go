@@ -261,26 +261,34 @@ func linkOwners(d *d2target.Diagram, doc *d2scene.Document, nodeOwner map[string
 	return out
 }
 
-// routeBox is the exact geometry box of everything a connection's node paints as paths: its route (which D2 splits in two for an animated
-// two-way connection), arrowheads included.
+// routeBox is the geometry box of everything a connection's node paints as paths: its route (which D2 splits in two for an animated
+// two-way connection) and arrowheads, each through its node transforms. When the diagram has a connection label, D2 puts those paths under a
+// masked `<id>:geometry` node. An arrowhead's box is transformed whole, so a diagonal one can widen the box by a few pixels.
 func routeBox(n *d2scene.Node) *d2scene.Box {
 	if n == nil {
 		return nil
 	}
 	var b d2scene.Bounds
-	for _, c := range n.Children {
-		if p, ok := c.Primitive.(d2scene.Path); ok {
-			pb, err := p.GeometryBounds()
-			if err != nil {
-				return nil
+	var add func(nodes []*d2scene.Node, m d2scene.Matrix) bool
+	add = func(nodes []*d2scene.Node, m d2scene.Matrix) bool {
+		for _, c := range nodes {
+			if c.ID == n.ID+":geometry" && !add(c.Children, m.Mul(c.Transform)) {
+				return false
 			}
-			b = b.Union(pb)
+			if p, ok := c.Primitive.(d2scene.Path); ok {
+				pb, err := p.GeometryBounds()
+				if err != nil {
+					return false
+				}
+				b = b.Union(pb.Transform(m.Mul(c.Transform)))
+			}
 		}
+		return true
 	}
-	if !b.Valid {
+	if !add(n.Children, n.Transform) || !b.Valid {
 		return nil
 	}
-	return &d2scene.Box{X: b.Min.X + n.Transform.E, Y: b.Min.Y + n.Transform.F, Width: b.Max.X - b.Min.X, Height: b.Max.Y - b.Min.Y}
+	return &d2scene.Box{X: b.Min.X, Y: b.Min.Y, Width: b.Max.X - b.Min.X, Height: b.Max.Y - b.Min.Y}
 }
 
 func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *Association {
