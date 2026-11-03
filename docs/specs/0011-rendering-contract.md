@@ -1,7 +1,7 @@
 # Spec 0011: prepared boards and DOM ownership
 
 Status: user-authorized implementation (2 November 2026). Extends [0001](0001-compile-protocol.md) and [0002](0002-mount-api.md) under [ADR 0009](../adr/0009-natural-web-forms.md). This records the rendering boundary requested after the browser bug fixes; it does not select a React implementation.
-Delivered: not audited item by item (4 November 2026). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
+Delivered: delivered as far as audited 4 November 2026 (`prepareBoard`, `RenderBoard`, `scene.ts`, `createDomView`, `render.test.mjs` exist); individual field claims not re-checked. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## Renderer input
 

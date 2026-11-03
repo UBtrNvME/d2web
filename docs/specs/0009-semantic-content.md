@@ -96,7 +96,7 @@ Checks in `semantic.spec.mjs` (already registered in `test:client`): real elemen
 
 Execution handoff:
 
-- Changed files: `src/{markdown.js,paint.js,paint.d.ts,mount.ts}`, `tests/markdown.test.mjs`, `tests/browser/semantic.spec.mjs` under `packages/d2web/`, root `mise.toml` (`test:unit` includes parser checks), and this spec. Initially clean working tree; all changes remain uncommitted. No dependencies, imports, baselines or thresholds changed.
+- Changed files: `src/{markdown.js,paint.js,paint.d.ts,mount.ts}`, `packages/d2web/tests/markdown.test.mjs`, `packages/d2web/tests/browser/semantic.spec.mjs` under `packages/d2web/`, root `mise.toml` (`test:unit` includes parser checks), and this spec. Initially clean working tree; all changes remain uncommitted. No dependencies, imports, baselines or thresholds changed.
 - `mise exec -- node --test packages/d2web/tests/markdown.test.mjs`: passed, three tests covering accepted markup, unsupported/ambiguous inputs, object identity, link overlay removal and whole-object fallback (including differing font stacks). Regressions were observed before implementation/fixes.
 - `mise exec -- node --check` on `src/{markdown.js,paint.js,mount.ts}` and both edited/new test files: passed after final code edits.
 - `mise run check`: passed after final code edits in 43.28 seconds; all 61 task definitions valid, including the new parser/painter tests, typecheck, native/Node-WASM and research gates. Log: `/tmp/d2web-stage-b-check-final.log`.
