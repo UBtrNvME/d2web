@@ -257,6 +257,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 		}
 	}
 	walk("", target, graph)
+	classes := boardClasses(req.Entry, source, fsys)
 	for path := range diagrams {
 		res.Available = append(res.Available, path)
 	}
@@ -294,6 +295,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 			res.Fonts[string(id)] = bytes
 		}
 		assoc := associate(graphs[path], &leaf, doc)
+		assoc.Classes = classes(path)
 		if req.LinkImages {
 			attachLinkedImages(assoc, doc, path, graphs[path], store)
 		}

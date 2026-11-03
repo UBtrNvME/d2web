@@ -1,7 +1,10 @@
 package compile
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -140,5 +143,45 @@ func TestShapePropertyAndSource(t *testing.T) {
 	}
 	if _, ok := props["c"]["shape"]; ok {
 		t.Errorf("c has no declared shape, got %v", props["c"]["shape"])
+	}
+}
+
+func TestClassesPerBoardAndCodeLanguage(t *testing.T) {
+	var req map[string]any
+	_ = json.Unmarshal(request(""), &req)
+	req["files"] = map[string]string{
+		"main.d2":   "...@shared\nclasses: {zone: {style.stroke-dash: 3}}\nsnip: |python print(1) |\nnote: |md # hi |\nvpc.class: [zone; shared]\nscenarios: {s: {classes: {extra: {style.fill: red}}}}\nlayers: {l: {x; classes: {mine: {style.fill: blue}}}}\n",
+		"shared.d2": "classes: {shared: {shape: cylinder}}\n",
+	}
+	req["boards"] = []string{"", "/scenarios/s", "/layers/l"}
+	raw, _ := json.Marshal(req)
+	var res map[string]any
+	if err := json.Unmarshal(Handle(context.Background(), raw), &res); err != nil || res["error"] != nil {
+		t.Fatal(err, res["error"])
+	}
+	got := map[string]string{}
+	languages, applied := map[string]any{}, map[string]any{}
+	for _, b := range res["boards"].([]any) {
+		board := b.(map[string]any)
+		assoc := board["association"].(map[string]any)
+		got[board["path"].(string)] = fmt.Sprint(assoc["classes"])
+		if board["path"] == "" {
+			for _, o := range assoc["objects"].([]any) {
+				obj := o.(map[string]any)
+				languages[obj["id"].(string)] = obj["language"]
+				applied[obj["id"].(string)] = obj["classes"]
+			}
+		}
+	}
+	// Imports count; scenarios and layers both carry the root's classes in D2 v0.9.0 (the IR copies them).
+	want := map[string]string{"": "[shared zone]", "/scenarios/s": "[extra shared zone]", "/layers/l": "[mine shared zone]"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("classes %v, want %v", got, want)
+	}
+	if fmt.Sprint(applied["vpc"]) != "[zone shared]" || applied["note"] != nil {
+		t.Errorf("applied classes %v", applied)
+	}
+	if languages["snip"] != "python" || languages["note"] != nil {
+		t.Errorf("languages %v", languages)
 	}
 }

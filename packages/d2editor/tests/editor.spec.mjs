@@ -154,7 +154,7 @@ test('dragging a shape on TALA writes top/left where it was dropped; again adds 
   await expect(page.locator('#src')).toHaveValue(text);
 });
 
-test('a nested shape beside a fixed sibling lands where dropped; empty space pans; other engines pan with a hint and no edit', async ({ page }) => {
+test('a nested shape beside a fixed sibling lands where dropped; on other engines a drop in its own parent returns with a hint and no edit', async ({ page }) => {
   await open(page);
   await type(page, 'c: {\n  d: {top: 30; left: 40}\n  e\n}\n');
   await select(page, 'c.e');
@@ -173,9 +173,153 @@ test('a nested shape beside a fixed sibling lands where dropped; empty space pan
   const at = await object(page, 'x').locator('[data-k]').first().boundingBox();
   await drag(page, 'x', 60, 0);
   await expect(page.locator('#status')).toContainText('need the TALA layout engine');
+  // Spec 0015 §3.3: the shape returns (it no longer pans the canvas).
   const moved = await object(page, 'x').locator('[data-k]').first().boundingBox();
-  expect(Math.round(moved.x - at.x)).toBe(60);
+  expect(Math.round(moved.x - at.x)).toBe(0);
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
+});
+
+// Spec 0015: palette, zones and drag-to-connect.
+const box = (page, id) => object(page, id).locator('[data-k]').first().boundingBox();
+async function dragTo(page, from, to) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+}
+const centre = b => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+// Hover a shape and press its right-hand handle (editor chrome in the scene, spec 0015 §3.4).
+async function fromHandle(page, id, to) {
+  const b = await box(page, id);
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  const handle = page.locator('#host .handle').nth(1);
+  await expect(handle).toBeVisible();
+  await dragTo(page, centre(await handle.boundingBox()), to);
+}
+
+test('palette entries write D2 under a free key, focus the name; Zone defines its class once; a typed class gets a button', async ({ page }) => {
+  await open(page);
+  await type(page, 'x\n');
+  await page.click('[data-entry="markdown"]');
+  await expect(page.locator('#src')).toHaveValue('x\nnote: |md # Note |\n');
+  await painted(page);
+  await expect(page.locator('#rename input')).toBeFocused();
+  await expect(page.locator('#selected')).toHaveText('Shape note');
+  await page.keyboard.press('Escape');
+  await page.click('[data-entry="code"]');
+  await expect(page.locator('#src')).toHaveValue(/code: \|python print\("hello"\) \|/);
+  await painted(page);
+  await expect(page.locator('#props [name="language"]')).toHaveValue('python');
+  await page.keyboard.press('Escape');
+  await page.click('[data-entry="icon"]');
+  await expect(page.locator('#src')).toHaveValue(/service: \{\n  icon: https:\/\/icons\.terrastruct\.com\/essentials\/112-server\.svg\n  shape: image\n\}/);
+  await painted(page);
+  await expect(page.locator('#host img')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.click('[data-entry="zone"]');
+  await expect(page.locator('#src')).toHaveValue(/classes\.zone\.style\.stroke-dash: 3[\s\S]*zone: \{class: zone\}/);
+  await painted(page);
+  await page.keyboard.press('Escape');
+  await page.click('[data-entry="zone"]');
+  await expect(page.locator('#src')).toHaveValue(/zone 2: \{class: zone\}/);
+  await painted(page);
+  expect((await source(page)).match(/stroke-dash/g)).toHaveLength(1);
+  // The inspector shows Language only for code blocks.
+  await select(page, 'note');
+  await expect(page.locator('#props [name="language"]')).toBeHidden();
+  await type(page, 'classes: {db: {shape: cylinder}}\nx\n');
+  await expect(page.locator('#classes button')).toHaveText(['db']);
+  await page.click('#classes button');
+  await expect(page.locator('#src')).toHaveValue(/db: \{class: db\}/);
+});
+
+test('Zone right after typing a zone class uses the current text, so the class keeps its own style', async ({ page }) => {
+  await open(page);
+  // No wait for the compile: the click comes while the typed text is still compiling.
+  await page.fill('#src', 'classes: {zone: {style.stroke: red}}\na\n');
+  await page.click('[data-entry="zone"]');
+  await expect(page.locator('#src')).toHaveValue('classes: {zone: {style.stroke: red}}\na\nzone: {class: zone}\n');
+});
+
+test('dropping a shape into a zone moves it there on any engine; out to empty space moves it to the root; leaves are not targets', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await type(page, 'classes: {zone: {style.stroke-dash: 3}}\nvpc: {class: zone}\nb\nnote: |md # hi |\nb -> note\n');
+  const count = await page.evaluate(() => traffic.edits.length);
+  await dragTo(page, centre(await box(page, 'b')), centre(await box(page, 'note')));
+  await expect(page.locator('#status')).toContainText('need the TALA layout engine');
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
+  await dragTo(page, centre(await box(page, 'b')), centre(await box(page, 'vpc')));
+  await expect(page.locator('#src')).toHaveValue(/vpc: \{\n  class: zone\n  b\n\}[\s\S]*vpc\.b -> note/);
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Shape vpc.b');
+  const view = await page.locator('#canvas').boundingBox();
+  await dragTo(page, centre(await box(page, 'vpc.b')), { x: view.x + view.width - 30, y: view.y + 30 });
+  await expect(page.locator('#src')).toHaveValue(/\nb -> note|\nb\n/);
+  expect(await source(page)).not.toContain('vpc.b');
+});
+
+test('a refused move returns the shape and shows the worker’s reason; the text is unchanged', async ({ page }) => {
+  await open(page);
+  const text = 'classes: {zone: {style.stroke-dash: 3}}\nvpc: {class: zone}\na\nscenarios: {s: {a -> c}}\n';
+  await type(page, text);
+  await dragTo(page, centre(await box(page, 'a')), centre(await box(page, 'vpc')));
+  await expect(page.locator('#status')).toContainText('referenced in scenarios/s');
+  await expect(page.locator('#src')).toHaveValue(text);
+});
+
+test('drag from a handle connects to a shape, creates a shape on empty space, and Escape cancels', async ({ page }) => {
+  await open(page);
+  await type(page, 'a\nb\n');
+  await fromHandle(page, 'a', centre(await box(page, 'b')));
+  await expect(page.locator('#src')).toHaveValue('a\nb\na -> b\n');
+  await painted(page);
+  const view = await page.locator('#canvas').boundingBox();
+  await fromHandle(page, 'b', { x: view.x + view.width - 40, y: view.y + 40 });
+  await expect(page.locator('#src')).toHaveValue('a\nb\na -> b\nshape 2\nb -> shape 2\n');
+  await painted(page);
+  await expect(page.locator('#rename input')).toBeFocused();
+  await page.keyboard.press('Escape');
+  // Escape during a handle drag cancels it.
+  const count = await page.evaluate(() => traffic.edits.length);
+  const b = await box(page, 'a');
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  const handle = centre(await page.locator('#host .handle').nth(1).boundingBox());
+  await page.mouse.move(handle.x, handle.y);
+  await page.mouse.down();
+  await page.mouse.move(view.x + 40, view.y + view.height - 40, { steps: 6 });
+  await expect(page.locator('#host .rubber-band')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect(page.locator('#host .rubber-band')).toHaveCount(0);
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
+});
+
+test('a 3-tier diagram from an empty canvas, typing only names', async ({ page }) => {
+  await open(page);
+  await type(page, 'x\n');
+  // An insert focuses the name once its shape is painted.
+  const name = async n => { await expect(page.locator('#rename input')).toBeFocused(); await page.locator('#rename input').fill(n); await page.locator('#rename input').press('Enter'); await painted(page); };
+  await page.click('[data-entry="zone"]');
+  await name('vpc');
+  for (const n of ['web', 'app', 'rds']) {
+    // The zone's corner (a dashed stroke paints as an SVG rect): its label sits under the hover handle at the top edge.
+    await object(page, 'vpc').locator('rect').first().click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('#selected')).toHaveText('Shape vpc');
+    await page.click('[data-entry="icon"]');
+    await name(n);
+  }
+  await page.keyboard.press('Escape');
+  await page.click('[data-entry="markdown"]');
+  await expect(page.locator('#rename input')).toBeFocused();
+  await fromHandle(page, 'vpc.web', centre(await box(page, 'vpc.app')));
+  await expect(page.locator('#src')).toHaveValue(/web -> app/);
+  await painted(page);
+  await fromHandle(page, 'vpc.app', centre(await box(page, 'vpc.rds')));
+  await expect(page.locator('#src')).toHaveValue(/app -> rds/);
+  await painted(page);
+  const text = await source(page);
+  for (const part of ['vpc: {', 'class: zone', 'web: {', 'app: {', 'rds: {', 'shape: image', 'note: |md', 'web -> app', 'app -> rds']) expect(text).toContain(part);
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
@@ -307,7 +451,7 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await patch(page, 'a: Keyboard\n', () => page.keyboard.press('Enter'));
   // Continue with Tab only, from the source through the canvas into the rename form.
   await page.locator('#src').focus();
-  for (let n = 0; n < 6; n++) await page.keyboard.press('Tab');
+  for (let n = 0; n < 7; n++) await page.keyboard.press('Tab'); // a, label, fill, stroke, shape, icon, name
   await expect(page.locator('#rename input')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('renamed');
