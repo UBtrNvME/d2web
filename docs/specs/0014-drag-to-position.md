@@ -1,7 +1,7 @@
 # Spec 0014: d2editor, drag to position
 
 Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` pass; the full `check:browser` was not run. Not checked: touch input; nested drops in containers TALA resizes or moves land off the drop point by design (section 3).
-Delivered: delivered, except the zoom unit case named in section 5. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
+Delivered: delivered (zoom is covered by the Chromium drag cases, not a unit case). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Objective
 
@@ -37,7 +37,7 @@ The association (spec 0004) gains `properties.top` and `properties.left` with th
 ## 5. Testing
 
 - Go: `top`/`left` appear with source when declared and are absent otherwise.
-- Node: the position rules (each of the four cases, clamping at 0, rounding, zoom).
+- Node: the position rules (each of the four cases, clamping at 0, rounding); zoom conversion lives in `main.ts` and is covered by the Chromium drag cases in `editor.spec.mjs`.
 - Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
 
 ## 6. Boundaries
