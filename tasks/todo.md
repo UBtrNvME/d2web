@@ -286,10 +286,10 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 
 - [x] HTML text selection fixed with a trailing newline per label; copy order is paint order, not semantic order.
 - [x] Accessibility grouping per D2 object: named focusable groups from scene IDs, pixel-identical, Tab order = paint order (`test:research:a11y`).
-- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), (done, spec 0006) names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy.
+- [ ] Accessibility, remaining: screen readers, find-in-page, tooltips, nesting (containers are flat siblings in the scene), (done, spec 0006) names for unlabeled connections and markdown/table content (an SVG `img` with no name or a run-together name), focus ring styling, arrow-key navigation policy. *Audited 4 November 2026: nesting and tooltips are built (spec 0006). Still open: real screen-reader output, an arrow-key policy; find-in-page is only logged, not asserted.*
 - [ ] Trace the HTML-only edge differences (pixel snapping of fractional borders; geometry 3.9%, jupyter_aws_eks 2.5%).
-- [ ] Remaining text: fallback fonts across the corpus (WASM resolves none; large bytes), bidi/RTL, bold/italic fallback, the 3% of runs that miss D2's advances, decoration, markdown/code as DOM structure, LaTeX vector in the browser.
-- [ ] Images and animation: not comparable yet (native SVG links files, scene embeds); animation not painted; dark theme not covered; non-root boards not painted.
+- [ ] Remaining text: fallback fonts across the corpus (WASM resolves none; large bytes), bidi/RTL, bold/italic fallback, the 3% of runs that miss D2's advances, decoration, markdown/code as DOM structure, LaTeX vector in the browser. *Audited 4 November 2026: consumer fonts, bold/italic, decoration and bidi are built (spec 0007). Not confirmed: the 3% of runs that miss D2 advances.*
+- [x] Images and animation: not comparable yet (native SVG links files, scene embeds); animation not painted; dark theme not covered; non-root boards not painted. *Audited 4 November 2026: stale. Images are inlined, animation is painted and compared with native (spec 0005), dark theme and non-root boards are covered (feature-map).*
 - [ ] Filters and blend as CSS, other browsers, hit-testing under masks, performance with 600+ masks on one page.
 - [ ] Replace the reflection-based scene dump with a designed bridge; it must carry compile-resolved render options (theme overrides and sketch were silently dropped once).
 
@@ -328,11 +328,11 @@ Out of this plan: fixing painter gaps (each becomes a slice), Firefox/Safari mea
 
 ## Capability coverage with no probe yet
 
-- [ ] Gradients, patterns and filters beyond the corpus counts, sketch correctness analysis, themes and dark mode, layers/scenarios/steps in the browser, the full 25-shape set, SQL tables and classes, grids and sequence layout, exports.
+- [x] Gradients, patterns and filters beyond the corpus counts, sketch correctness analysis, themes and dark mode, layers/scenarios/steps in the browser, the full 25-shape set, SQL tables and classes, grids and sequence layout, exports. *Audited 4 November 2026: gradients, effects, themes, 25 shapes, sql/class, grid, sequence and layers/scenarios/steps are ok in docs/feature-map.md; exports stay out of v1 scope.*
 
 ## Housekeeping
 
-- [ ] Nothing is committed; commit only when the user asks.
+- [x] Historical: the rule stands (commit only when the user asks). Work is merged through PRs.
 - [ ] Imported Studio lint fails (56 errors, 3 warnings); `studio:check` stays a separate gate.
 - [ ] Native corpus is 145/147 (two broken remote image URLs).
 - [ ] Go/Node WASM hang (about 1 in 20-50 runs under load) is worked around by a timeout and retry, cause unknown.
