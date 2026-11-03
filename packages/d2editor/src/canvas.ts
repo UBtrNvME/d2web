@@ -80,7 +80,7 @@ export function canvas(viewport: HTMLElement, content: HTMLElement, grid: HTMLEl
     // True while a press is down: pointer focus waits for the click, which a pan cancels.
     get pressed() { return Boolean(drag); },
     zoomBy,
-    // Move the view by screen pixels (the editor keeps a dropped shape under the pointer when the scene's origin shifts, spec 0015).
+    // Move the view by screen pixels (the editor keeps a dropped shape under the pointer when the scene's origin shifts, spec 0016).
     pan: (dx: number, dy: number) => set({ ...v, x: v.x + dx, y: v.y + dy }),
     reset: () => { const { px, py } = centre(); set(zoomAt(v, 1, px, py)); },
     fit: () => set(fit(content.offsetWidth, content.offsetHeight, viewport.clientWidth, viewport.clientHeight)),

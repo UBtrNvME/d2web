@@ -57,7 +57,7 @@ main.panning { cursor: grabbing; user-select: none; }
 #host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 
 #inspector { width: 248px; box-sizing: border-box; padding: 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; overflow: auto; background: var(--panel); }
-#inspector[hidden] { display: none; }
+#inspector[hidden], #inspector label[hidden], .tools[hidden] { display: none; }
 #inspector h2 { font-size: 14px; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-weight: 600; }
 #inspector h2 .kind { display: inline-block; margin-right: 4px; padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--muted); font: 11px system-ui, sans-serif; vertical-align: 1px; }
 #inspector h3 { margin: 4px 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }

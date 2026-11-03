@@ -21,7 +21,7 @@ function fakes(behave, ready = {}) {
   return { spawn, spawned };
 }
 const result = (m, extra = {}) => ({ v: 2, type: 'result', id: m.id, revision: m.revision, millis: 1, available: [''], boards: [], diagnostics: [], echo: {}, ...extra });
-const answer = (ms = 0) => (m, reply) => setTimeout(() => reply(result(m)), ms);
+const answer = (ms = 0) => (m, reply) => setTimeout(() => reply(m.type === 'fonts' ? { type: 'fonts', error: '' } : result(m)), ms);
 
 test('compile resolves with the worker result after ready', async () => {
   const { spawn, spawned } = fakes(answer());
@@ -167,10 +167,24 @@ test('a checksum mismatch or a failed fetch rejects the compile with FontError a
   }
 });
 
-test('the worker refusing the fonts rejects the compile with FontError', async () => {
-  const { spawn } = fakes((m, reply) => { if (m.type === 'fonts') reply({ type: 'fonts', error: 'font "F": not a font' }); });
+test('the worker refusing the fonts rejects this compile and every later one with FontError, and no compile is posted', async () => {
+  const { spawn, spawned } = fakes((m, reply) => { if (m.type === 'fonts') reply({ type: 'fonts', error: 'font "F": not a font' }); });
   const client = createClient({ spawn, fonts: [{ name: 'F', url: 'https://x.test/f.ttf' }], fetch: okFetch([]) });
   await assert.rejects(client.compile(input(1)), e => e instanceof FontError && /not a font/.test(e.message));
+  await assert.rejects(client.compile(input(2)), e => e instanceof FontError && /not a font/.test(e.message));
+  assert.deepEqual(spawned[0].sent.map(m => m.type), ['fonts', 'fonts']);
+  client.dispose();
+});
+
+test('a failed font fetch is retried by the next compile', async () => {
+  let failures = 1;
+  const calls = [];
+  const fetch = async url => { if (failures-- > 0) throw new Error('offline'); return okFetch(calls)(url); };
+  const { spawn } = fakes(answer());
+  const client = createClient({ spawn, fonts: [{ name: 'F', url: 'https://x.test/f.ttf', sha256: sha }], fetch });
+  await assert.rejects(client.compile(input(1)), e => e instanceof FontError && /offline/.test(e.message));
+  assert.equal((await client.compile(input(2))).revision, 2);
+  assert.deepEqual(calls, ['https://x.test/f.ttf']);
   client.dispose();
 });
 
@@ -234,7 +248,7 @@ test('an invalid edit rejects without reaching the worker', async () => {
   const { spawn, spawned } = fakes(both());
   const client = createClient({ spawn });
   await assert.rejects(client.edit({ ...editInput(1), ops: [] }), /1 to 256/);
-  await assert.rejects(client.edit({ ...editInput(1), ops: [{ op: 'move', key: 'a' }] }), /unknown operation/);
+  await assert.rejects(client.edit({ ...editInput(1), ops: [{ op: 'reconnect', key: 'a' }] }), /unknown operation/);
   await wait(5);
   assert.equal(spawned[0].sent.length, 0);
   client.dispose();

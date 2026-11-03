@@ -175,6 +175,12 @@ func fail(res *Result, code, message string, diagnostics []Diagnostic) {
 }
 
 func run(ctx context.Context, req *Request, res *Result) {
+	// A panic after layout (scene build, encoding, association) would stop the wasm, and the client would see only a timeout.
+	defer func() {
+		if r := recover(); r != nil {
+			fail(res, "internal", fmt.Sprint("panic: ", r), nil)
+		}
+	}()
 	if req.V != ProtocolVersion || req.Type != "compile" {
 		fail(res, "internal", fmt.Sprintf("unsupported message v=%d type=%q", req.V, req.Type), nil)
 		return
@@ -257,6 +263,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 		}
 	}
 	walk("", target, graph)
+	classes := boardClasses(req.Entry, source, fsys)
 	for path := range diagrams {
 		res.Available = append(res.Available, path)
 	}
@@ -294,6 +301,7 @@ func run(ctx context.Context, req *Request, res *Result) {
 			res.Fonts[string(id)] = bytes
 		}
 		assoc := associate(graphs[path], &leaf, doc)
+		assoc.Classes = classes(path)
 		if req.LinkImages {
 			attachLinkedImages(assoc, doc, path, graphs[path], store)
 		}

@@ -49,7 +49,13 @@ export function normalizeFonts(value: unknown): FontSpec[] {
 }
 
 const fail = (message: string): never => { throw new ProtocolError(message); };
-const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// Shared by compile and edit requests: text files and an entry among them.
+function filesAndEntry(files: unknown, entry: unknown) {
+  if (!isObject(files) || !Object.values(files).every(f => typeof f === 'string')) fail('files must map paths to text');
+  if (typeof entry !== 'string' || !Object.hasOwn(files as object, entry)) fail('entry must name one of the files');
+}
 
 function integer(value: unknown, name: string, min: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min) fail(`${name} must be an integer >= ${min}`);
@@ -115,8 +121,7 @@ export function normalizeCompileRequest(input: unknown): NormalizedRequest {
   if (input.v !== PROTOCOL_VERSION) fail(`unsupported protocol version ${String(input.v)}`);
   if (input.type !== 'compile') fail(`unexpected message type ${String(input.type)}`);
   const { files, entry, layout } = input;
-  if (!isObject(files) || !Object.values(files).every(f => typeof f === 'string')) fail('files must map paths to text');
-  if (typeof entry !== 'string' || !Object.hasOwn(files as object, entry)) fail('entry must name one of the files');
+  filesAndEntry(files, entry);
   if (layout !== undefined && !ENGINES.includes(layout as Engine)) fail(`unknown layout engine ${String(layout)}`);
   return {
     v: PROTOCOL_VERSION, type: 'compile', id: integer(input.id, 'id', 0), revision: integer(input.revision, 'revision', 0),
@@ -134,8 +139,7 @@ export function normalizeEditRequest(input: unknown): EditRequest {
   if (input.v !== PROTOCOL_VERSION) fail(`unsupported protocol version ${String(input.v)}`);
   if (input.type !== 'edit') fail(`unexpected message type ${String(input.type)}`);
   const { files, entry, board = '', ops } = input;
-  if (!isObject(files) || !Object.values(files).every(f => typeof f === 'string')) fail('files must map paths to text');
-  if (typeof entry !== 'string' || !Object.hasOwn(files as object, entry)) fail('entry must name one of the files');
+  filesAndEntry(files, entry);
   if (typeof board !== 'string') fail('board must be a compile result path');
   if (!Array.isArray(ops) || ops.length < 1 || ops.length > MAX_OPS) fail(`ops must hold 1 to ${MAX_OPS} operations`);
   (ops as unknown[]).forEach((op, i) => {
@@ -143,6 +147,7 @@ export function normalizeEditRequest(input: unknown): EditRequest {
     if (!isObject(op) || typeof op.key !== 'string') return bad('needs a string key');
     if (op.op === 'set') { if (op.value !== null && typeof op.value !== 'string') bad('set needs a string or null value'); if (op.tag !== undefined && typeof op.tag !== 'string') bad('tag must be a string'); }
     else if (op.op === 'rename') { if (typeof op.name !== 'string') bad('rename needs a string name'); }
+    else if (op.op === 'move') { if (typeof op.parent !== 'string') bad('move needs a string parent ("" for the root)'); }
     else if (op.op !== 'create' && op.op !== 'delete') bad(`unknown operation ${String(op.op)}`);
   });
   return {

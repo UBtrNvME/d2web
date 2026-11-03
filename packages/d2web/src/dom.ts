@@ -22,9 +22,8 @@ export function createDomView(board: RenderBoard, options: DomOptions): DomView 
   const owners = new WeakMap<Element, string>();
   for (const [id, el] of frames) owners.set(el, id);
   for (const a of fragment.querySelectorAll<HTMLElement>('a[data-k=link]')) {
-    const [x, y, w, h] = [a.style.left, a.style.top, a.style.width, a.style.height].map(parseFloat);
-    const link = board.links.find(l => Math.abs(l.region.Box.X - x) < .0001 && Math.abs(l.region.Box.Y - y) < .0001 && Math.abs(l.region.Box.Width - w) < .0001 && Math.abs(l.region.Box.Height - h) < .0001);
-    if (link?.objectId) owners.set(a, link.objectId);
+    const owner = board.links[Number(a.dataset.link)]?.objectId;
+    if (owner) owners.set(a, owner);
   }
   const targets = animations.flatMap((list, i) => {
     const el = fragment.querySelector(`[data-d2-anim="${i}"]`);

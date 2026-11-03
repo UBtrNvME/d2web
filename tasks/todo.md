@@ -2,13 +2,13 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
-## Slice: d2editor drag past the origin (spec 0015, accepted by the user 3 November 2026)
+## Slice: d2editor drag past the origin (spec 0016, accepted by the user 3 November 2026)
 
-Builds [spec 0015](../docs/specs/0015-drag-past-origin.md): a drop up or left of D2's `top`/`left` minimum shifts the container's other shapes instead of stopping the drag.
+Builds [spec 0016](../docs/specs/0016-drag-past-origin.md): a drop up or left of D2's `top`/`left` minimum shifts the container's other shapes instead of stopping the drag.
 
 - [x] 1. (3 November 2026) Measure (subagent, native compile, TALA seed 1): unpinned shapes drift up to 5 px when pinned ones shift; one `client.edit` takes several `top`/`left` pairs; painted position equals `left`/`top`.
-- [x] 2. (3 November 2026) Spec 0015 and `docs/ideas/drag-past-origin.md`.
-- [x] 3. (3 November 2026) Build: `placeShifting` (`position.ts`; unpinned siblings are pinned at their painted position, only on an overshoot; user: "Yes"), scene `overflow` override, `camera.pan` plus `keepInPlace`, a second `mark.side` colour, refusal for a drop fully outside the container. Verify: `position.test.mjs`, two `editor.spec.mjs` cases, `mise run check`, `test:editor` 21/21 (x, y and nested drops, held-compile virtual state, per-frame no-jump sampling, diff size 8 lines), a fix for an in-flight compile wiping a drop's preview.
+- [x] 2. (3 November 2026) Spec 0016 and `docs/ideas/drag-past-origin.md`.
+- [x] 3. (3 November 2026) Build: `placeShifting` (`position.ts`; unpinned siblings are pinned at their painted position, only on an overshoot; user: "Yes"), scene `overflow` override, `camera.pan` plus `keepInPlace`, a second `mark.side` colour, refusal for a drop fully outside the container (superseded by spec 0015's `move` after merging `main`). Verify: `position.test.mjs`, two `editor.spec.mjs` cases, `mise run check`, `test:editor` 21/21 (x, y and nested drops, held-compile virtual state, per-frame no-jump sampling, diff size 8 lines), a fix for an in-flight compile wiping a drop's preview.
 
 Handoff (3 November 2026): uncommitted on `editor-improvements-v2`. Not run: `check:browser`, WASM or several-seed measurements of the drift, touch input. Open: reparent by dragging out (needs a `move` edit, spec 0012); the camera and snap timing is checked by position only, not by pixels per frame.
 

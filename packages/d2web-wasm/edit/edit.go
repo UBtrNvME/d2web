@@ -14,14 +14,16 @@ import (
 	"github.com/d2lang/d2/d2format"
 	"github.com/d2lang/d2/d2graph"
 	"github.com/d2lang/d2/d2oracle"
+	"github.com/d2lang/d2/d2parser"
 )
 
 type Op struct {
-	Op    string  `json:"op"` // set | create | delete | rename
-	Key   string  `json:"key"`
-	Value *string `json:"value,omitempty"` // set: nil removes the value
-	Tag   *string `json:"tag,omitempty"`
-	Name  string  `json:"name,omitempty"` // rename
+	Op     string  `json:"op"` // set | create | delete | rename | move
+	Key    string  `json:"key"`
+	Value  *string `json:"value,omitempty"` // set: nil removes the value
+	Tag    *string `json:"tag,omitempty"`
+	Name   string  `json:"name,omitempty"`   // rename
+	Parent string  `json:"parent,omitempty"` // move: the new parent's key, "" for the board's root
 }
 
 type Request struct {
@@ -127,7 +129,7 @@ func Apply(req Request) (res Result) {
 		}
 	}
 	for i, op := range req.Ops {
-		code, err := run(&g, board, op, &res.IDs)
+		code, err := run(&g, board, req.Entry, op, &res.IDs)
 		if err != nil {
 			res.Error = &Error{Code: code, Message: err.Error(), Op: &i}
 			return
@@ -278,7 +280,7 @@ func compile(req Request, text string) (*d2graph.Graph, error) {
 }
 
 // run applies one operation; d2oracle does not guard its own nil dereferences, so a panic becomes an error.
-func run(g **d2graph.Graph, board []string, op Op, ids *IDs) (code string, err error) {
+func run(g **d2graph.Graph, board []string, entry string, op Op, ids *IDs) (code string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			code, err = "panic", fmt.Errorf("%v", r)
@@ -308,6 +310,8 @@ func run(g **d2graph.Graph, board []string, op Op, ids *IDs) (code string, err e
 				ids.follow(deltas)
 			}
 		}
+	case "move":
+		next, err = move(*g, board, entry, op, ids)
 	default:
 		err = fmt.Errorf("unknown operation %q", op.Op)
 	}
@@ -316,6 +320,134 @@ func run(g **d2graph.Graph, board []string, op Op, ids *IDs) (code string, err e
 	}
 	*g = next
 	return "", nil
+}
+
+// move reparents an object with its descendants (docs/ideas/palette-primitives.md, findings 1-6). d2oracle.Move overflows the Go stack on a move into
+// the object itself or a descendant (not recoverable), writes nothing for an imported object while its deltas claim a move, renames on a name
+// collision (`a 2`) and leaves references in inheriting boards (scenarios, steps) behind as new objects; each is refused here instead.
+func move(g *d2graph.Graph, board []string, entry string, op Op, ids *IDs) (*d2graph.Graph, error) {
+	bg := d2oracle.GetBoardGraph(g, board)
+	if bg == nil {
+		return nil, fmt.Errorf("board %v not found", board)
+	}
+	find := func(key string) (*d2graph.Object, error) {
+		if key == "" {
+			return bg.Root, nil
+		}
+		mk, err := d2parser.ParseMapKey(key)
+		if err != nil || mk.Key == nil || len(mk.Edges) > 0 {
+			return nil, fmt.Errorf("%q is not a shape key", key)
+		}
+		if obj, ok := bg.Root.HasChild(d2graph.Key(mk.Key)); ok {
+			return obj, nil
+		}
+		return nil, fmt.Errorf("%q not found", key)
+	}
+	obj, err := find(op.Key)
+	if err != nil || obj == bg.Root {
+		return nil, fmt.Errorf("move needs a shape: %v", err)
+	}
+	parent, err := find(op.Parent)
+	if err != nil {
+		return nil, err
+	}
+	if obj.Parent == parent {
+		return g, nil
+	}
+	for p := parent; p != nil; p = p.Parent {
+		if p == obj {
+			return nil, fmt.Errorf("cannot move %s into itself", obj.AbsID())
+		}
+	}
+	if file := imported(bg, obj, entry); file != "" {
+		return nil, fmt.Errorf("%s or one of its children or connections is declared in the imported file %s; move it there", obj.AbsID(), file)
+	}
+	if other, ok := parent.HasChild([]string{obj.ID}); ok && other != obj {
+		return nil, fmt.Errorf("%s already has a %s", parent.AbsID(), obj.ID)
+	}
+	old := obj.AbsID()
+	key, err := d2oracle.ReparentIDDelta(g, board, op.Key, op.Parent)
+	if err != nil {
+		return nil, err
+	}
+	deltas, err := d2oracle.MoveIDDeltas(bg, op.Key, key, true)
+	if err != nil {
+		return nil, err
+	}
+	next, err := d2oracle.Move(g, board, op.Key, key, true)
+	if err != nil {
+		return nil, err
+	}
+	nb := d2oracle.GetBoardGraph(next, board)
+	if name := inherited(nb, old, ""); name != "" {
+		return nil, fmt.Errorf("%s is referenced in %s, which inherits this board; moving it would leave a separate %s there", old, name, old)
+	}
+	// Pins inside the old parent are meaningless in the new one and stretch it (finding 6); TALA places the shape instead.
+	if mk, err := d2parser.ParseMapKey(key); err != nil {
+		return nil, err
+	} else if moved, ok := nb.Root.HasChild(d2graph.Key(mk.Key)); ok {
+		for name, pin := range map[string]*d2graph.Scalar{"top": moved.Top, "left": moved.Left} {
+			// shortcut: a pin set by a class or glob is not the object's own and stays; delete then fails and is skipped.
+			if pin != nil {
+				if unpinned, err := d2oracle.Delete(next, board, key+"."+name); err == nil {
+					next = unpinned
+				}
+			}
+		}
+	}
+	ids.follow(deltas)
+	return next, nil
+}
+
+// imported names a file other than entry that declares obj, a descendant or a connection touching them: d2oracle.Move rewrites only the entry,
+// so that declaration would stay behind as a second object.
+// shortcut: also refuses an import spread inside obj (`svc: {...@x}`), which Move carries along correctly; tell the spread's site apart if that is needed.
+func imported(g *d2graph.Graph, obj *d2graph.Object, entry string) string {
+	within := func(o *d2graph.Object) bool {
+		for ; o != nil; o = o.Parent {
+			if o == obj {
+				return true
+			}
+		}
+		return false
+	}
+	for _, o := range g.Objects {
+		if within(o) {
+			for _, r := range o.References {
+				if r.Key.Range.Path != entry {
+					return r.Key.Range.Path
+				}
+			}
+		}
+	}
+	for _, e := range g.Edges {
+		if within(e.Src) || within(e.Dst) {
+			for _, r := range e.References {
+				if r.Edge.Range.Path != entry {
+					return r.Edge.Range.Path
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// inherited names the first scenario or step under g (recursively) that holds id or one of its descendants.
+func inherited(g *d2graph.Graph, id, path string) string {
+	for kind, boards := range map[string][]*d2graph.Graph{"scenarios": g.Scenarios, "steps": g.Steps} {
+		for _, b := range boards {
+			name := strings.TrimPrefix(path+"/"+kind+"/"+b.Name, "/")
+			for _, o := range b.Objects {
+				if o.AbsID() == id || strings.HasPrefix(o.AbsID(), id+".") {
+					return name
+				}
+			}
+			if n := inherited(b, id, name); n != "" {
+				return n
+			}
+		}
+	}
+	return ""
 }
 
 // follow records old -> new IDs across the transaction, composing chained renames.

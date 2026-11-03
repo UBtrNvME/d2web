@@ -17,10 +17,10 @@ The origin is invisible (the board is cropped to its content), so only relative 
 Top level and nested shift, visible overflow, optimistic DOM prediction, camera compensation, two diff marks, Chromium cases.
 
 ## Not Doing (and Why)
-- Reparenting by dragging out of a container: needs a `move` op; a hint for now.
+- Reparenting by dragging out of a container: spec 0015's `move`, decided by where the shape is released.
 - Pinning unpinned siblings by default: freezes autolayout; only if drift forces it.
 - A visible origin marker or a hard stop: breaks the infinite illusion.
 - dagre/ELK positions: they ignore `top`/`left`.
 
 ## Open Questions
-- Is the container's padding band inside (shift) or outside (reparent)?
+- (Settled: released in its own parent, padding band included, is a shift.)

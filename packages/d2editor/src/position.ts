@@ -35,7 +35,7 @@ export function place(objects: readonly AssocObject[], id: string, dx: number, d
   return at && { top: Math.max(0, at.top), left: Math.max(0, at.left) };
 }
 
-// Spec 0015: D2 cannot write a negative `top`/`left`, but the origin is never seen, only positions relative to each other. A drop past it sits at 0
+// Spec 0016: D2 cannot write a negative `top`/`left`, but the origin is never seen, only positions relative to each other. A drop past it sits at 0
 // and the container's other pinned shapes move by the overshoot (ox, oy), so the layout the author drew is kept.
 // Unpinned siblings are pinned where they are painted, only on an overshoot: TALA drifts them up to 5 px when pinned ones move, and with nothing
 // pinned yet the dragged shape would otherwise land off the drop point relative to them.
@@ -48,8 +48,3 @@ export function placeShifting(objects: readonly AssocObject[], id: string, dx: n
   const pinned = (o: AssocObject) => written(o) ?? { top: Math.round(o.box!.Y - at.origin.y), left: Math.round(o.box!.X - at.origin.x) };
   return { top: at.top + oy, left: at.left + ox, ox, oy, siblings: siblings.map(o => ({ id: o.id, top: pinned(o).top + oy, left: pinned(o).left + ox })) };
 }
-
-// Spec 0015: a shape dropped (dx, dy) from its box is a reparent only when it no longer overlaps its container's box at all. The container's
-// padding band is inside the box, so a drop there (even left of the origin) is a shift.
-export const leaves = (box: { X: number; Y: number; Width: number; Height: number }, parent: { X: number; Y: number; Width: number; Height: number }, dx: number, dy: number) =>
-  box.X + dx >= parent.X + parent.Width || box.X + dx + box.Width <= parent.X || box.Y + dy >= parent.Y + parent.Height || box.Y + dy + box.Height <= parent.Y;
