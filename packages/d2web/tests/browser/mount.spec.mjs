@@ -128,3 +128,21 @@ test('a font the engine rejects is reported in the update report and the board s
   expect(out.second.rejectedFonts.map(f => f.id)).toEqual(['font:fallback:bogus']);
   expect(out.painted).toBeGreaterThan(0);
 });
+
+test('updates paint in call order: a later result is not painted over by an earlier one still loading fonts', async ({ page }) => {
+  await open(page, { body: host });
+  const label = await page.evaluate(async source => {
+    const first = await compile(source);
+    const later = await compile('later: Later\n');
+    // Every font of the first result loads slowly; the later one brings none to load.
+    const Face = FontFace;
+    window.FontFace = class extends Face { load() { return new Promise(r => setTimeout(r, 300)).then(() => super.load()); } };
+    const m = d2web.mount(document.getElementById('a'));
+    const slow = m.update(first);
+    await m.update({ ...later, fonts: {} });
+    await slow;
+    window.FontFace = Face;
+    return [...document.getElementById('a').shadowRoot.querySelectorAll('[data-k=text]')].map(t => t.textContent.trim()).join(' ');
+  }, source);
+  expect(label).toBe('Later');
+});
