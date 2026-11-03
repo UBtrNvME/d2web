@@ -565,7 +565,8 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await patch(page, 'a: Keyboard\n', () => page.keyboard.press('Enter'));
   // Continue with Tab only, from the source through the canvas into the rename form.
   await page.locator('#src').focus();
-  for (let n = 0; n < 7; n++) await page.keyboard.press('Tab'); // a, label, fill, stroke, shape, icon, name
+  // a, label, fill, stroke, shape, icon, then every advertised style field (spec 0017), then name.
+  for (let n = 0; n < 80 && !(await page.locator('#rename input').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#rename input')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('renamed');
@@ -718,4 +719,40 @@ test('assembled Pages site serves the demo at / and the editor and worker depend
   await page.goto('https://pages.test/editor/');
   await painted(page);
   await visible(page, 'api');
+});
+
+test('the inspector advertises every style field with D2\'s values; a change is one edit, Reset removes it, an unavailable field says why (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\nb: B\n');
+  await select(page, 'a');
+  const field = k => page.locator(`#fields [data-path="a.style.${k}"]`);
+  await expect(field('opacity')).toHaveAttribute('max', '1');
+  await expect(field('stroke-width')).toHaveAttribute('max', '15');
+  await expect(field('fill-pattern').locator('option')).toHaveText(["D2's default", 'none', 'dots', 'lines', 'grain', 'paper']);
+  await expect(field('shadow').locator('option')).toHaveText(["D2's default", 'true', 'false']);
+  await expect(field('3d')).toBeEnabled();
+
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const change = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await change(() => field('fill-pattern').selectOption('dots'));
+  await expect.poll(() => source(page)).toContain('fill-pattern: dots');
+
+  await change(async () => { await field('opacity').fill('0.5'); await field('opacity').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('opacity: 0.5');
+  await expect(field('opacity')).toHaveValue('0.5');
+
+  await change(() => page.locator('#fields [data-reset="a.style.opacity"]').click());
+  await expect.poll(() => source(page)).not.toContain('opacity');
+  expect(await source(page)).toContain('fill-pattern: dots');
+
+  // 3d is D2's rectangle, square and hexagon only.
+  await change(() => page.locator('#props [name="shape"]').selectOption('circle'));
+  await expect(field('3d')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="a.style.3d"]')).toContainText('only to rectangle, square, hexagon');
+  expect(errors).toEqual([]);
 });

@@ -7,6 +7,8 @@ import { leaves, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
+import { capabilities } from './capabilities.ts';
+import { HAND_BUILT, renderFields } from './inspector.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -427,6 +429,7 @@ function inspect() {
   for (const el of form.querySelectorAll<HTMLElement>('[data-code-only]')) el.hidden = object.content !== 'code';
   if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
+  renderFields($('fields'), capabilities(object, { board: boardOf()!.association, engine: layout() }).fields.filter(f => !HAND_BUILT.has(f.keyword)));
   // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
   $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {
     const source = object.properties[name]?.source;
@@ -454,6 +457,17 @@ $<HTMLFormElement>('props').addEventListener('change', event => {
   if (input.name === 'language') { if (value) void edit([{ op: 'set', key: id, value: objectOf(id)!.label, tag: value }]); return; }
   const key = { label: id, fill: `${id}.style.fill`, stroke: `${id}.style.stroke`, shape: `${id}.shape`, icon: `${id}.icon` }[input.name];
   if (key) void edit([{ op: 'set', key, value }]);
+});
+// Generated fields (spec 0017): the control's data-path is the edit key; an empty value removes the declaration.
+$('fields').addEventListener('change', event => {
+  const input = event.target as HTMLInputElement;
+  // A blank control removes the declaration (`delete`); `set` with no value would leave a bare `style.x` line.
+  const value = input.value.trim();
+  if (input.dataset.path) void edit([value ? { op: 'set', key: input.dataset.path, value } : { op: 'delete', key: input.dataset.path }]);
+});
+$('fields').addEventListener('click', event => {
+  const key = (event.target as HTMLElement).dataset.reset;
+  if (key) void edit([{ op: 'delete', key }]);
 });
 $<HTMLFormElement>('props').addEventListener('submit', event => event.preventDefault());
 $('props').addEventListener('keydown', event => {
