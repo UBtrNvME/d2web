@@ -1,7 +1,7 @@
 # Spec 0007: fallback fonts, right-to-left text and font styles
 
 Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [ADR 0006](../adr/0006-font-delivery.md) (consumer-approved fonts, never fetched or substituted by the library), [spec 0001](0001-compile-protocol.md) (`result.fonts`, scenes carry glyph assets) and [ADR 0009](../adr/0009-natural-web-forms.md) (D2 owns semantics; d2web translates).
-Delivered: delivered as far as audited 4 November 2026 (named symbols exist); measured figures not re-run. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
+Delivered: delivered. Named symbols exist and `text-scripts.spec.mjs` passes in Chromium (`check:browser`) and WebKit (`test:webkit`) on 4 November 2026; Firefox was not re-run. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
 ## 1. Research baseline (before consumer font support)
 
