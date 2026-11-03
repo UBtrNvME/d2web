@@ -317,6 +317,13 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 		if o.Shape.MapKey != nil {
 			out.Properties["shape"] = scalar(&o.Shape)
 		}
+		// A locked position (spec 0014), when declared.
+		if o.Top != nil {
+			out.Properties["top"] = scalar(o.Top)
+		}
+		if o.Left != nil {
+			out.Properties["left"] = scalar(o.Left)
+		}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}

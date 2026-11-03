@@ -84,6 +84,30 @@ func TestShapeBoxIsD2sBox(t *testing.T) {
 }
 
 // Spec 0004 amendment (2 November 2026, for the d2editor inspector): a declared shape and its declaration; D2's default rectangle is absent.
+// Spec 0014: the editor reads the written top/left to move a shape exactly.
+func TestTopLeftPropertyAndSource(t *testing.T) {
+	res := compileText(t, "a: {\n  top: 100\n  left: 200\n}\nb\n")
+	props := map[string]map[string]any{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		props[obj["id"].(string)] = obj["properties"].(map[string]any)
+	}
+	for name, want := range map[string]struct {
+		value string
+		line  float64
+	}{"top": {"100", 1}, "left": {"200", 2}} {
+		p, ok := props["a"][name].(map[string]any)
+		if !ok || p["value"] != want.value || p["source"].(map[string]any)["start"].(map[string]any)["line"] != want.line {
+			t.Errorf("a %s %v, want %s declared on line %v", name, props["a"][name], want.value, want.line)
+		}
+	}
+	for _, name := range []string{"top", "left"} {
+		if _, ok := props["b"][name]; ok {
+			t.Errorf("b has no %s, got %v", name, props["b"][name])
+		}
+	}
+}
+
 func TestShapePropertyAndSource(t *testing.T) {
 	res := compileText(t, "classes: {db: {shape: cylinder}}\na: {shape: person}\nb.class: db\nc\n")
 	props := map[string]map[string]any{}

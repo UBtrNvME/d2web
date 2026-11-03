@@ -84,15 +84,17 @@ test('built page loads its real worker and wasm and paints the starter diagram',
   await expect(object(page, 'api')).toHaveCount(0);
 });
 
-test('the canvas pans by dragging without selecting, zooms with the controls, and a click still selects', async ({ page }) => {
+test('the canvas pans by dragging empty space without selecting, zooms with the controls, and a click still selects', async ({ page }) => {
   await open(page);
   const scale = () => page.locator('#host').evaluate(el => +el.style.transform.match(/scale\(([\d.]+)\)/)[1]);
   const box = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
-  await page.mouse.move(box.x + 5, box.y + 5);
+  const canvas = await page.locator('#canvas').boundingBox();
+  await page.mouse.move(canvas.x + 10, canvas.y + 10);
   await page.mouse.down();
-  await page.mouse.move(box.x + 80, box.y + 45, { steps: 5 });
+  await page.mouse.move(canvas.x + 85, canvas.y + 50, { steps: 5 });
   await page.mouse.up();
   await expect(page.locator('#inspector')).toBeHidden();
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(0);
   const moved = await object(page, 'api').locator('[data-k="rect"]').first().boundingBox();
   expect([Math.round(moved.x - box.x), Math.round(moved.y - box.y)]).toEqual([75, 40]);
   // The idle recompile (default seeds) may change the layout's size after load; wait for it, then fit.
@@ -117,6 +119,63 @@ test('the canvas pans by dragging without selecting, zooms with the controls, an
   await object(page, 'db').first().evaluate(el => el.focus());
   const view = await page.locator('#canvas').boundingBox(), shape = await object(page, 'db').locator('path').first().boundingBox();
   expect(shape.y >= view.y && shape.y + shape.height <= view.y + view.height).toBe(true);
+});
+
+// Spec 0014: the painted box of the selected object (its outline is drawn at D2's box) and a drag in screen pixels.
+const outline = page => page.locator('#host .selection').evaluate(el => ({ X: parseFloat(el.style.left), Y: parseFloat(el.style.top) }));
+const zoom = page => page.locator('#host').evaluate(el => +el.style.transform.match(/scale\(([\d.]+)\)/)[1]);
+async function drag(page, id, dx, dy) {
+  const b = await object(page, id).locator('[data-k]').first().boundingBox();
+  await page.mouse.move(b.x + 4, b.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 4 + dx, b.y + 4 + dy, { steps: 6 });
+  await page.mouse.up();
+}
+
+test('dragging a shape on TALA writes top/left where it was dropped; again adds the distance; Undo restores the text', async ({ page }) => {
+  await open(page);
+  const text = 'a: A\nb: B\na -> b\n';
+  await type(page, text);
+  await select(page, 'a');
+  const before = await outline(page), k = await zoom(page);
+  const count = await page.evaluate(() => traffic.edits.length);
+  await drag(page, 'a', 90, 60);
+  await expect.poll(() => page.evaluate(() => traffic.edits.length)).toBe(count + 1);
+  const left = Math.round(before.X + 90 / k), top = Math.round(before.Y + 60 / k);
+  await expect(page.locator('#src')).toHaveValue(new RegExp(`top: ${top}[\\s\\S]*left: ${left}|left: ${left}[\\s\\S]*top: ${top}`));
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Shape a');
+  expect(await outline(page)).toEqual({ X: left, Y: top });
+  await drag(page, 'a', -30, 15);
+  await expect(page.locator('#src')).toHaveValue(new RegExp(`top: ${top + Math.round(15 / k)}`));
+  await painted(page);
+  await page.click('#undo');
+  await page.click('#undo');
+  await expect(page.locator('#src')).toHaveValue(text);
+});
+
+test('a nested shape beside a fixed sibling lands where dropped; empty space pans; other engines pan with a hint and no edit', async ({ page }) => {
+  await open(page);
+  await type(page, 'c: {\n  d: {top: 30; left: 40}\n  e\n}\n');
+  await select(page, 'c.e');
+  const before = await outline(page), k = await zoom(page);
+  await drag(page, 'c.e', 50, 80);
+  await expect(page.locator('#src')).toHaveValue(/e: \{|e\.top|top: \d+[\s\S]*top: \d+/);
+  await painted(page);
+  const after = await outline(page);
+  expect(Math.abs(after.X - (before.X + 50 / k))).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.Y - (before.Y + 80 / k))).toBeLessThanOrEqual(1);
+  // dagre ignores positions, as D2's library does (only the d2 CLI refuses them).
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await type(page, 'x: X\ny: Y\n');
+  const count = await page.evaluate(() => traffic.edits.length);
+  const at = await object(page, 'x').locator('[data-k]').first().boundingBox();
+  await drag(page, 'x', 60, 0);
+  await expect(page.locator('#status')).toContainText('need the TALA layout engine');
+  const moved = await object(page, 'x').locator('[data-k]').first().boundingBox();
+  expect(Math.round(moved.x - at.x)).toBe(60);
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {

@@ -6,15 +6,19 @@ export function pairBoxes(before: Association, after: Association, renamed: Edit
   return after.objects.filter(object => object.box).map(object => ({ object, before: old.get(object.id) }));
 }
 
+// An object's outer owned nodes: translating nested paint nodes twice would move labels off their shapes.
+export function outerNodes(elements: (HTMLElement | SVGElement)[], object: Association['objects'][number]) {
+  const owned = elements.filter(el => object.nodes.includes(el.getAttribute('data-id')!));
+  return owned.filter(el => !owned.some(parent => parent !== el && parent.contains(el)));
+}
+
 export function snap(root: ShadowRoot, before: Association, after: Association, ids?: EditResult['ids'], changed: string[] = []) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const elements = [...root.querySelectorAll<HTMLElement | SVGElement>('[data-id]')];
   const pulse = new Set([...changed.map(id => ids?.renamed[id] ?? id), ...(ids?.created ?? []), ...Object.values(ids?.renamed ?? {})]);
   for (const pair of pairBoxes(before, after, ids?.renamed)) {
     const { object, before: old } = pair, box = object.box!;
-    const owned = elements.filter(el => object.nodes.includes(el.getAttribute('data-id')!));
-    // Animate only outer owned nodes: translating nested paint nodes twice would move labels off their shapes.
-    const targets = owned.filter(el => !owned.some(parent => parent !== el && parent.contains(el)));
+    const targets = outerNodes(elements, object);
     for (const el of targets) {
       if (!old) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
       else if (old.X !== box.X || old.Y !== box.Y || old.Width !== box.Width || old.Height !== box.Height) {

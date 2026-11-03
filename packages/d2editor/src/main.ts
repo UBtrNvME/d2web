@@ -1,8 +1,9 @@
 // d2editor (spec 0013): the D2 text is the only document; canvas actions become d2web edits (spec 0012) and land in it as checked patches.
 import { createClient, getObject, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
 import { createHistory } from './history.ts';
-import { snap } from './snap.ts';
-import { canvas } from './canvas.ts';
+import { outerNodes, snap } from './snap.ts';
+import { canvas, type Grab } from './canvas.ts';
+import { place } from './position.ts';
 import { decodeScript, encodeScript } from './share.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -32,7 +33,7 @@ try {
 const client = createClient({ spawn: spawnWorker() });
 const view = mount($('host'));
 const history = createHistory(initial);
-const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; });
+const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; }, grab);
 // Fit the next painted board: on load, an opened file, and a board switch.
 let fitNext = true;
 // `painted` is the revision the canvas shows.
@@ -41,7 +42,8 @@ type Range = { start: number; end: number; text: string };
 let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, compileRun = 0;
 // A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
 let notice = '';
-let pending: { revision: number; ids: EditResult['ids']; changed: string[] } | undefined;
+// `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was.
+let pending: { revision: number; ids: EditResult['ids']; changed: string[]; moved?: { id: string; dx: number; dy: number } } | undefined;
 
 function status(message: string, error = false) {
   $('status').textContent = message;
@@ -83,15 +85,18 @@ async function compile(seeds?: number[]) {
     return;
   }
   $<HTMLSelectElement>('board').replaceChildren(...result.available.map(path => new Option(path || 'root', path, false, path === state.board)));
-  const before = state.result?.boards?.find(b => b.path === board)?.association;
+  const change = pending?.revision === revision ? pending : undefined, moved = change?.moved;
+  const old = state.result?.boards?.find(b => b.path === board)?.association;
+  const before = old && moved ? { ...old, objects: old.objects.map(o => within(o.id, moved.id) && o.box ? { ...o, box: { ...o.box, X: o.box.X + moved.dx, Y: o.box.Y + moved.dy } } : o) } : old;
   const focused = $('host').shadowRoot?.activeElement?.getAttribute('data-id');
   outline?.remove();
+  for (const el of dragged) el.style.translate = '';
+  dragged = [];
   try { await view.update(result, board); } catch (error) { status(String(error), true); return; }
   if (revision !== state.revision || run !== compileRun) return;
   paintCanvas(result.boards!.find(b => b.path === board)!.scene);
   if (fitNext) { fitNext = false; camera.fit(); }
   const after = result.boards!.find(b => b.path === board)!.association;
-  const change = pending?.revision === revision ? pending : undefined;
   if (before) snap($('host').shadowRoot!, before, after, change?.ids, change?.changed);
   pending = undefined;
   state.result = result;
@@ -189,6 +194,34 @@ function select(id: string) {
   inspect();
 }
 view.on('click', e => select(e.id));
+
+// Dragging a shape (spec 0014). The shape under the pointer comes from mount's hover events; on TALA a press on it previews the move by
+// translating its painted nodes (and its children's) and the drop sets D2's `top` and `left` in one edit. Other engines ignore positions.
+let hovered = '', dragged: (HTMLElement | SVGElement)[] = [], hint = false;
+view.on('hover', e => { if (e.domEvent.type === 'pointerover') hovered = e.id; else if (hovered === e.id) hovered = ''; });
+const within = (id: string, ancestor: string) => id === ancestor || id.startsWith(`${ancestor}.`);
+function grab(): Grab | undefined {
+  const object = objectOf(hovered), board = state.result?.boards?.find(b => b.path === state.board);
+  hint = object?.kind === 'shape' && layout() !== 'tala';
+  if (object?.kind !== 'shape' || !board || hint) return;
+  const elements = [...$('host').shadowRoot!.querySelectorAll<HTMLElement | SVGElement>('[data-id]')];
+  const nodes = board.association.objects.filter(o => within(o.id, object.id)).flatMap(o => outerNodes(elements, o));
+  const reset = () => { for (const el of nodes) el.style.translate = ''; };
+  return {
+    move(dx, dy) { dragged = nodes; for (const el of nodes) el.style.translate = `${dx}px ${dy}px`; },
+    cancel: reset,
+    drop(dx, dy) {
+      const at = place(board.association.objects, object.id, dx, dy)!;
+      state.selected = object.id;
+      void edit([{ op: 'set', key: `${object.id}.top`, value: String(at.top) }, { op: 'set', key: `${object.id}.left`, value: String(at.left) }]).then(result => {
+        if (!result) return reset();
+        if (pending) pending.moved = { id: object.id, dx, dy };
+      });
+    },
+  };
+}
+// A drag on a shape pans on other engines; say why once it moves.
+$('canvas').addEventListener('pointermove', () => { if (hint && $('canvas').classList.contains('panning')) { hint = false; status('Positions need the TALA layout engine; this drag pans the canvas.'); } });
 view.on('focus', e => { if (camera.pressed) return; state.selected = e.id; camera.reveal(e.domEvent.target as Element); inspect(); });
 
 function objectOf(id: string) {
