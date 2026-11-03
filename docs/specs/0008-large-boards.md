@@ -1,9 +1,9 @@
 # Spec 0008: large boards (cost, budgets and honest limits)
 
 Status: **accepted with the recommended answers to questions 1-4** (user, 31 October 2026). Builds on [spec 0001](0001-compile-protocol.md) (worker, latest-wins, abort by respawn, budgets), [ADR 0003](../adr/0003-runtime-shape.md) and [ADR 0009](../adr/0009-natural-web-forms.md): d2web adds no layout policy or hidden fallback of its own.
-Delivered: delivered as far as audited 4 November 2026 (budgets exist); measured timings not re-run. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
+Delivered: delivered (budgets and `TimeoutError` exist and are tested). The table in section 1 is a dated baseline from one machine (31 October 2026), not a guarantee and not re-run; current limits are in [layout-limits](../layout-limits.md). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user. (Audited 4 November 2026.)
 
-## 1. What is known (research probes, Chromium WASM, synthetic boards)
+## 1. What is known (research probes, Chromium WASM, synthetic boards; dated baseline, see the Delivered line)
 
 | Nodes | TALA | dagre | ELK |
 | --- | --- | --- | --- |
