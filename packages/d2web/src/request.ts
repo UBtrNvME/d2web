@@ -143,6 +143,7 @@ export function normalizeEditRequest(input: unknown): EditRequest {
     if (!isObject(op) || typeof op.key !== 'string') return bad('needs a string key');
     if (op.op === 'set') { if (op.value !== null && typeof op.value !== 'string') bad('set needs a string or null value'); if (op.tag !== undefined && typeof op.tag !== 'string') bad('tag must be a string'); }
     else if (op.op === 'rename') { if (typeof op.name !== 'string') bad('rename needs a string name'); }
+    else if (op.op === 'move') { if (typeof op.parent !== 'string') bad('move needs a string parent ("" for the root)'); }
     else if (op.op !== 'create' && op.op !== 'delete') bad(`unknown operation ${String(op.op)}`);
   });
   return {

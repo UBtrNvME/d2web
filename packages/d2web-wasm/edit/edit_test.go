@@ -90,7 +90,7 @@ func TestFailuresPublishNothing(t *testing.T) {
 	}{
 		{"a -> \n{", []Op{{Op: "create", Key: "b"}}, "compile", -1},
 		{"a\n", []Op{{Op: "create", Key: "b"}, {Op: "set", Key: "a.style.opacity", Value: str("2")}}, "edit", 1},
-		{"a\n", []Op{{Op: "move", Key: "a"}}, "edit", 0},
+		{"a\n", []Op{{Op: "reconnect", Key: "a"}}, "edit", 0},
 		// d2oracle.Delete dereferences nil here unless docs/upstream/d2oracle-delete-glob-index.patch is applied (research/transaction.test.mjs).
 		{"x -> y\nx -> y\n(* -> *)[*].style.opacity: 0.8\n", []Op{{Op: "delete", Key: "(x -> y)[0]"}}, "panic", 0},
 	}
@@ -218,5 +218,66 @@ func TestDeletingEverythingLeavesAnEmptyFile(t *testing.T) {
 	res := apply(t, "a: A\n", Op{Op: "delete", Key: "a"})
 	if res.Error != nil || res.Patch.Text != "" || applyEdits("a: A\n", res.Patch.Edits) != "" {
 		t.Fatalf("%+v %+v", res.Patch, res.Error)
+	}
+}
+
+func TestMove(t *testing.T) {
+	for _, c := range []struct{ name, text, key, parent, want, renamed string }{
+		{"into a container rewrites connections", "vpc\na\ndb\na -> db\n", "a", "vpc", "vpc: {\n  a\n}\n\ndb\nvpc.a -> db\n", "a=vpc.a"},
+		{"carries descendants", "vpc\nsvc: {a; b; a -> b}\nsvc.a -> db\n", "svc", "vpc", "vpc: {\n  svc: {a; b; a -> b}\n}\n\nvpc.svc.a -> db\n", "svc.a=vpc.svc.a"},
+		{"out to the root", "vpc: {a}\ndb\nvpc.a -> db\n", "vpc.a", "", "vpc\ndb\na -> db\na\n", "vpc.a=a"},
+		{"clears pins", "vpc\na: {top: 40; left: 60; style.fill: red}\n", "a", "vpc", "vpc: {\n  a: {style.fill: red}\n}\n", "a=vpc.a"},
+		{"same parent is a no-op", "vpc: {a}\n", "vpc.a", "vpc", "vpc: {a}\n", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			res := apply(t, c.text, Op{Op: "move", Key: c.key, Parent: c.parent})
+			if res.Error != nil {
+				t.Fatal(res.Error)
+			}
+			if res.Patch.Text != c.want {
+				t.Fatalf("got %q", res.Patch.Text)
+			}
+			if c.renamed != "" {
+				from, to, _ := strings.Cut(c.renamed, "=")
+				if res.IDs.Renamed[from] != to {
+					t.Fatalf("renamed %v", res.IDs.Renamed)
+				}
+			}
+		})
+	}
+}
+
+func TestMoveRefusals(t *testing.T) {
+	files := map[string]string{"shared.d2": "a -> x\n"}
+	for _, c := range []struct{ name, text, key, parent, want string }{
+		{"into itself", "vpc: {sub}\n", "vpc", "vpc", "into itself"},
+		{"into a descendant (d2oracle overflows the stack)", "vpc: {sub}\n", "vpc", "vpc.sub", "into itself"},
+		{"imported object", "...@shared\nvpc\n", "a", "vpc", "imported file"},
+		{"imported object with a local override", "...@shared\nvpc\na.style.fill: red\n", "a", "vpc", "imported file"},
+		{"imported connection to a local object", "...@shared\nvpc\nx\n", "x", "vpc", "imported file"},
+		{"imported descendant", "svc: {...@shared}\nsvc.local\nvpc\n", "svc", "vpc", "imported file"},
+		{"name collision", "vpc: {a}\na\n", "a", "vpc", "already has a a"},
+		{"referenced in a scenario", "vpc\na\nscenarios: {s: {a -> b}}\n", "a", "vpc", "referenced in scenarios/s"},
+		{"referenced in a nested step", "vpc\na\nsteps: {1: {b}; 2: {a.style.fill: red}}\n", "a", "vpc", "referenced in steps/2"},
+		{"a connection", "a -> b\nvpc\n", "(a -> b)[0]", "vpc", "not a shape key"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := map[string]string{"main.d2": c.text}
+			for k, v := range files {
+				f[k] = v
+			}
+			res := Apply(Request{Files: f, Entry: "main.d2", Ops: []Op{{Op: "move", Key: c.key, Parent: c.parent}}})
+			if res.Error == nil || res.Patch != nil || !strings.Contains(res.Error.Message, c.want) {
+				t.Fatalf("error %+v patch %+v", res.Error, res.Patch)
+			}
+		})
+	}
+}
+
+func TestMoveLeavesLayersAlone(t *testing.T) {
+	// Layers do not inherit, so their own `a` is a different object and stays.
+	res := apply(t, "vpc\na\nlayers: {l: {a -> b}}\n", Op{Op: "move", Key: "a", Parent: "vpc"})
+	if res.Error != nil || !strings.Contains(res.Patch.Text, "layers: {l: {a -> b}}") {
+		t.Fatalf("%+v %+v", res.Error, res.Patch)
 	}
 }

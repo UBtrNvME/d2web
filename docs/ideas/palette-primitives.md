@@ -44,7 +44,7 @@ Probe: [research/palette.go](../../research/palette.go) against D2 v0.9.0 (`cd i
 1. **`Move` rewrites root-board references.** `a -> db` becomes `vpc.a -> db`; moving a container with descendants carries its inner connections; moving out to the root works; `MoveIDDeltas` reports the new IDs. A connection declared inside the old parent is kept there as `svc: {_.vpc.a -> b}`: correct, but awkward text.
 2. **Scenarios and steps are not rewritten.** With `scenarios: { s: { a -> b } }`, moving `a` leaves the scenario's `a -> b`, which now creates a second `a` there (scenarios inherit the base board). Layers are separate boards, so leaving them is correct. The `move` op must reject a move whose key is referenced in an inheriting board until this is handled.
 3. **Moving into itself or its own descendant crashes the Go runtime** (stack overflow in `d2graph` `AbsID`). That is a fatal error, not a panic: the edit API's `recover` cannot catch it, and in WASM it kills the worker. The `move` op must check this before calling `Move`.
-4. **Imported objects and name collisions.** Moving an object defined in an imported file writes nothing, but the deltas still report it as moved: reject imported keys. Moving `a` into a container that already has an `a` silently renames it to `a 2`: surface that, or reject it.
+4. **Imported objects and name collisions.** Moving an object defined in an imported file writes nothing, but the deltas still report it as moved; with a local override (`a.style.fill` in the entry) only the override moves, duplicating `a`; an imported connection to a local shape does the same. Reject a move when any declaration of the shape, its descendants or their connections is in another file. Moving `a` into a container that already has an `a` silently renames it to `a 2`: surface that, or reject it.
 5. **Which shapes hold children.** D2 compiles children under every shape except `image`, which fails with "image shapes cannot have children". But under `sql_table` and `class` a child becomes a row or field, and `text`, `code` or a `|md|` block with a child becomes a plain container whose content is replaced by its label. So Container excludes all six. Every shape tested can be a connection end.
 6. **Pins after a reparent distort the zone.** Keeping `top: 900; left: 900` grew the VPC on TALA to 1073×1086; without pins TALA packs it at 246×186. Nested pins are offset by the container's padding (40/60 landed at 100/120). So `move` clears `top`/`left`.
 7. **Palette entries work through existing ops.** `Set` with a tag writes `|md …|` and `|go …|` blocks; classes and `class:` set fine (the definition is written flattened as `classes.zone.style.stroke-dash: 3`); `Create "a -> b"` works. Order matters for icons: `shape: image` before `icon` fails to recompile ("image shape must include an icon field") and returns a nil graph, so the entry's ops set `icon` first.
@@ -57,7 +57,7 @@ In:
 
 1. `move` edit op wrapping d2oracle `Move`, specified as an addendum to spec 0012, with guards from findings 2–4 and pin clearing from finding 6.
 2. Worker reports the document's class names (finding 9).
-3. Palette entries: markdown (`|md|`), code, icon shape (`shape: image` plus `icon:`, via icon search), zone.
+3. Palette entries: markdown (`|md|`), code, icon shape (`shape: image` plus a placeholder `icon:` until the curated set exists), zone.
 4. Class-derived palette entries from the document's `classes`.
 5. Traits: Container, Reparentable, Connectable, Text-editable; Movable already exists.
 6. Drop-to-reparent: dropping a shape into a zone emits `move`, on every engine.
@@ -79,7 +79,14 @@ Done when: from an empty canvas, a 3-tier AWS diagram (VPC zone; ALB, EC2 and RD
 
 - `move` is its own edit op, so `rename` keeps its meaning.
 - A zone's look is a generated `classes: { zone: … }` block added on first use, so the user restyles it in D2.
-- The icon manifest is vendored as names and URLs only (no images), after checking terrastruct's licence.
+- ~~The icon manifest is vendored as names and URLs only~~ (superseded below).
+- **Icons: our own curated set, later.** For now the icon entry inserts a placeholder icon; the curated list replaces it in a later slice, which also settles the licence question (finding 8). Every curated icon ships a sketched variant beside its plain one, used when the diagram renders in sketch mode.
+- **The editor offers D2's sketch look.** A Sketch toggle sends `render.sketch` (already supported by d2web), is restored on reload and carried in share links (`sketch=1`).
 - The code entry's language is picked in the inspector, starting from a plain code block.
 
-No open questions remain. Research is done (findings above); the next step is the `move` op with its guards and Go tests.
+## Status (3 November 2026)
+
+- Done: MVP step 1, the `move` edit op (`packages/d2web-wasm/edit/edit.go`, row in spec 0012, `EditOp` in `packages/d2web/src/protocol.ts`), with Go tests for the rewrites, pin clearing and every refusal, and a WASM-equals-native case in `edit.spec.mjs`.
+- Done: the editor's Sketch toggle (`packages/d2editor`), covered in `editor.spec.mjs`.
+- Next: MVP step 2, the worker reporting class names, then the palette entries.
+- Verified: `mise run check` and `mise run check:browser` pass. One earlier `check` run failed a WASM test with a 61 s timeout under parallel load (the hang `tests/examples.mjs` documents); the rerun passed.

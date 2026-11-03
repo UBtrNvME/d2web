@@ -116,7 +116,8 @@ export type EditOp =
   | { op: 'set'; key: string; value: string | null; tag?: string }
   | { op: 'create'; key: string }
   | { op: 'delete'; key: string }
-  | { op: 'rename'; key: string; name: string };
+  | { op: 'rename'; key: string; name: string }
+  | { op: 'move'; key: string; parent: string };
 export interface EditRequest { v: typeof PROTOCOL_VERSION; type: 'edit'; id: number; revision: number; files: Record<string, string>; entry: string; board?: string; ops: EditOp[] }
 export type EditErrorCode = 'compile' | 'edit' | 'panic' | 'recompile' | 'unchecked' | 'internal' | 'stale';
 export interface EditResult {

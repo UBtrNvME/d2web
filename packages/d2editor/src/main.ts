@@ -14,8 +14,9 @@ const dark = matchMedia('(prefers-color-scheme: dark)');
 // D2's themes (d2themescatalog), for the Theme menu; Auto picks D2's own default light or dark theme.
 const THEMES: [number, string][] = [[0, 'Neutral default'], [1, 'Neutral grey'], [3, 'Flagship Terrastruct'], [4, 'Cool classics'], [5, 'Mixed berry blue'], [6, 'Grape soda'], [7, 'Aubergine'], [8, 'Colorblind clear'], [100, 'Vanilla Nitro Cola'], [101, 'Orange creamsicle'], [102, 'Shirley temple'], [103, 'Earth tones'], [104, 'Everglade green'], [105, 'Buttered toast'], [200, 'Dark Mauve'], [201, 'Dark Flagship Terrastruct'], [300, 'Terminal'], [301, 'Terminal Grayscale'], [302, 'Origami'], [303, 'C4']];
 const themeSelect = document.getElementById('theme') as HTMLSelectElement, layoutSelect = document.getElementById('layout') as HTMLSelectElement;
+const sketchBox = document.getElementById('sketch') as HTMLInputElement;
 themeSelect.append(new Option('Auto (follow system)', 'auto'), ...THEMES.map(([id, name]) => new Option(`${name} (${id})`, String(id))));
-const render = () => ({ themeId: themeSelect.value === 'auto' ? (dark.matches ? 200 : 0) : +themeSelect.value, sketch: false, pad: 24, scale: 1, center: false });
+const render = () => ({ themeId: themeSelect.value === 'auto' ? (dark.matches ? 200 : 0) : +themeSelect.value, sketch: sketchBox.checked, pad: 24, scale: 1, center: false });
 const layout = () => layoutSelect.value as Engine;
 // D2's shapes (d2target), for the inspector.
 const SHAPES = ['rectangle', 'square', 'page', 'parallelogram', 'document', 'cylinder', 'queue', 'package', 'step', 'callout', 'stored_data', 'person', 'diamond', 'oval', 'circle', 'hexagon', 'cloud', 'text', 'code', 'class', 'sql_table', 'image', 'sequence_diagram', 'c4-person', 'hierarchy'];
@@ -28,6 +29,7 @@ try {
   // Restore only values the menus offer.
   const view = JSON.parse(localStorage.getItem(VIEW) ?? '{}');
   for (const [select, value] of [[themeSelect, view.theme], [layoutSelect, view.layout]] as const) if ([...select.options].some(o => o.value === value)) select.value = value;
+  sketchBox.checked = view.sketch === true;
 } catch { /* storage is optional */ }
 
 const client = createClient({ spawn: spawnWorker() });
@@ -376,20 +378,21 @@ $('download').addEventListener('click', () => {
 
 dark.addEventListener('change', () => { if (themeSelect.value === 'auto') { status('Compiling…'); void compile(); } });
 // A new engine changes the geometry, so the board is fitted again; a theme keeps the view.
-for (const select of [themeSelect, layoutSelect]) select.addEventListener('change', () => {
-  try { localStorage.setItem(VIEW, JSON.stringify({ theme: themeSelect.value, layout: layoutSelect.value })); } catch { /* storage is optional */ }
+for (const select of [themeSelect, layoutSelect, sketchBox]) select.addEventListener('change', () => {
+  try { localStorage.setItem(VIEW, JSON.stringify({ theme: themeSelect.value, layout: layoutSelect.value, sketch: sketchBox.checked })); } catch { /* storage is optional */ }
   if (select === layoutSelect) fitNext = true;
   notice = '';
   status('Compiling…');
   void compile();
 });
-// A shared link (`?script=` in D2's URL encoding, with optional `layout` and `theme`) opens on top of this browser's text, so Undo brings that
+// A shared link (`?script=` in D2's URL encoding, with optional `layout`, `theme` and `sketch`) opens on top of this browser's text, so Undo brings that
 // text back. The query is then dropped, so a reload keeps the user's edits rather than resetting to the link.
 const params = new URLSearchParams(location.search);
 let shared: string | undefined, sharedError = '';
 if (params.has('script')) {
   try { shared = await decodeScript(params.get('script')!); } catch (error) { sharedError = `The shared link could not be opened: ${(error as Error).message}`; }
   for (const [select, value] of [[themeSelect, params.get('theme')], [layoutSelect, params.get('layout')]] as const) if ([...select.options].some(o => o.value === value)) select.value = value!;
+  if (params.has('sketch')) sketchBox.checked = params.get('sketch') === '1';
   window.history.replaceState(null, '', location.pathname + location.hash);
 }
 
@@ -403,6 +406,7 @@ $('share').addEventListener('click', async () => {
   url.searchParams.set('script', await encodeScript(state.text));
   url.searchParams.set('layout', layoutSelect.value);
   if (themeSelect.value !== 'auto') url.searchParams.set('theme', themeSelect.value);
+  if (sketchBox.checked) url.searchParams.set('sketch', '1');
   try { await navigator.clipboard.writeText(url.href); status(`Link copied (${url.href.length} characters)`); }
   catch { status(`Copy this link: ${url.href}`); }
 });
