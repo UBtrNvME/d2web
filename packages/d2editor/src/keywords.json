@@ -44,6 +44,11 @@
     {
       "name": "3d",
       "style": true,
+      "only": [
+        "rectangle",
+        "square",
+        "hexagon"
+      ],
       "domain": {
         "kind": "boolean"
       }
@@ -101,6 +106,12 @@
     {
       "name": "double-border",
       "style": true,
+      "only": [
+        "rectangle",
+        "square",
+        "oval",
+        "circle"
+      ],
       "domain": {
         "kind": "boolean"
       }
@@ -137,8 +148,13 @@
     {
       "name": "font",
       "style": true,
+      "validated": true,
       "domain": {
-        "kind": "text"
+        "kind": "enum",
+        "values": [
+          "default",
+          "mono"
+        ]
       }
     },
     {
@@ -236,6 +252,13 @@
     {
       "name": "multiple",
       "style": true,
+      "not": [
+        "text",
+        "code",
+        "class",
+        "sql_table",
+        "image"
+      ],
       "domain": {
         "kind": "boolean"
       }

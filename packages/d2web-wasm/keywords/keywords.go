@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/d2lang/d2/d2ast"
+	"github.com/d2lang/d2/d2renderers/d2fonts"
 	"github.com/d2lang/d2/d2target"
 )
 
@@ -21,6 +22,9 @@ type Keyword struct {
 	Name      string `json:"name"`
 	Style     bool   `json:"style"`               // written as style.<name>
 	Validated bool   `json:"validated,omitempty"` // D2 rejects a value outside the domain
+	// Only: D2 accepts the keyword on these shapes alone (the compiler refuses it elsewhere). Not: the scene builder refuses it on these.
+	Only []string `json:"only,omitempty"`
+	Not  []string `json:"not,omitempty"`
 	Domain    Domain `json:"domain"`
 }
 
@@ -42,6 +46,15 @@ var (
 )
 
 func enum(v []string) Domain { return Domain{Kind: "enum", Values: v} }
+
+func fonts() []string {
+	out := make([]string, 0, len(d2fonts.D2_FONT_TO_FAMILY))
+	for f := range d2fonts.D2_FONT_TO_FAMILY {
+		out = append(out, string(f))
+	}
+	sort.Strings(out)
+	return out
+}
 
 func Table() Result {
 	arrowheads := make([]string, 0, len(d2target.Arrowheads))
@@ -77,7 +90,7 @@ func Table() Result {
 		{Name: "stroke-width", Style: true, Domain: num(f(0), f(15))},
 		{Name: "stroke-dash", Style: true, Domain: num(f(0), f(10))},
 		{Name: "border-radius", Style: true, Domain: num(f(0), nil)},
-		{Name: "font", Style: true, Domain: text},
+		{Name: "font", Style: true, Validated: true, Domain: enum(fonts())},
 		{Name: "font-size", Style: true, Domain: num(f(8), f(100))},
 		{Name: "font-color", Style: true, Domain: color},
 		{Name: "bold", Style: true, Domain: boolean},
@@ -85,9 +98,9 @@ func Table() Result {
 		{Name: "underline", Style: true, Domain: boolean},
 		{Name: "text-transform", Style: true, Validated: true, Domain: enum(d2ast.TextTransforms)},
 		{Name: "shadow", Style: true, Domain: boolean},
-		{Name: "multiple", Style: true, Domain: boolean},
-		{Name: "double-border", Style: true, Domain: boolean},
-		{Name: "3d", Style: true, Domain: boolean},
+		{Name: "multiple", Style: true, Not: []string{"text", "code", "class", "sql_table", "image"}, Domain: boolean},
+		{Name: "double-border", Style: true, Only: []string{"rectangle", "square", "oval", "circle"}, Domain: boolean},
+		{Name: "3d", Style: true, Only: []string{"rectangle", "square", "hexagon"}, Domain: boolean},
 		{Name: "animated", Style: true, Domain: boolean},
 		{Name: "filled", Style: true, Domain: boolean},
 	}

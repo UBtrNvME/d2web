@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -73,6 +74,22 @@ func TestDomainsMatchD2(t *testing.T) {
 			}
 			if k.Validated && accepts(decl(k, "no-such-value")) {
 				t.Errorf("%s: D2 accepts a value outside the enum", k.Name)
+			}
+		}
+	}
+	// Shape restrictions: the compiler accepts a restricted keyword on exactly the listed shapes (Not is checked by the editor test, which compiles the scene).
+	for _, k := range Table().Keywords {
+		if len(k.Only) == 0 {
+			continue
+		}
+		for _, s := range Table().Shapes {
+			icon := ""
+			if s == "image" {
+				icon = "\nicon: https://example.com/i.svg"
+			}
+			ok := accepts(fmt.Sprintf("x: {shape: %s%s\nstyle.%s: true}", s, icon, k.Name))
+			if want := slices.Contains(k.Only, s); ok != want {
+				t.Errorf("%s on %s: D2 accepts %v, table says %v", k.Name, s, ok, want)
 			}
 		}
 	}
