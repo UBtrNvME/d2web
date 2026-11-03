@@ -81,7 +81,7 @@ test('actions: add-child follows the container trait and says why not', () => {
 
 test('every advertised connection field changes a real compile', () => {
   const ctx = context('a -> b\n'), connection = ctx.board.objects.find(o => o.kind === 'connection');
-  for (const field of capabilities(connection, ctx).fields.filter(f => f.path.includes('.style.'))) {
+  for (const field of capabilities(connection, ctx).fields.filter(f => f.path.includes('.style.') && !f.keyword.includes('arrowhead'))) {
     assert.ok(field.available, field.path);
     const result = compile(`a -> b\n${field.path}: ${sample(field)}\n`);
     assert.equal(result.error, undefined, `${field.path}: ${result.error?.message}`);
@@ -133,7 +133,7 @@ test('near constants are for root shapes only; top and left need TALA; a connect
     assert.equal(layout('x\n').find(f => f.keyword === keyword).available, true);
   }
   const ctx = context('a -> b\n');
-  const connection = capabilities(ctx.board.objects.find(o => o.kind === 'connection'), ctx).fields.filter(f => !f.path.includes('.style.') && f.keyword !== 'label');
+  const connection = capabilities(ctx.board.objects.find(o => o.kind === 'connection'), ctx).fields.filter(f => !f.path.includes('.style.') && f.keyword !== 'label' && !f.keyword.includes('arrowhead'));
   assert.deepEqual(connection.map(f => f.keyword), ['link']);
   assert.ok(compile('a -> b: { tooltip: hi }\n').error, 'D2 refuses a connection tooltip');
 });
@@ -148,4 +148,25 @@ test('top and left are written together, because D2 refuses one alone', () => {
   const width = fields.find(f => f.keyword === 'width');
   assert.deepEqual(setOps(width, '50', fields), [{ op: 'set', key: 'x.width', value: '50' }]);
   assert.equal(compile('x: { top: 1 }\n').error.message.includes('together'), true);
+});
+
+const edit = (source, ops) => JSON.parse(goRun(binary, [JSON.stringify({ v: 2, type: 'edit', id: 1, revision: 1, files: { 'main.d2': source }, entry: 'main.d2', ops })]));
+
+test('a connection advertises its endpoints and both arrowheads; the worker reports them and each can be written', () => {
+  const source = 'a -> b\n';
+  const ctx = context(source), connection = ctx.board.objects.find(o => o.kind === 'connection');
+  const caps = capabilities(connection, ctx);
+  assert.deepEqual(caps.endpoints, { source: 'a', target: 'b' });
+  const heads = caps.fields.filter(f => f.keyword.includes('arrowhead'));
+  assert.deepEqual(heads.map(f => f.keyword), ['source-arrowhead', 'source-arrowhead.filled', 'target-arrowhead', 'target-arrowhead.filled']);
+  assert.deepEqual(heads.find(f => f.keyword === 'target-arrowhead').domain.values, table.arrowheads);
+  assert.equal(heads.find(f => f.keyword === 'target-arrowhead.filled').domain.kind, 'boolean');
+  for (const f of heads) {
+    const value = f.domain.kind === 'boolean' ? 'false' : 'diamond';
+    const result = edit(source, [{ op: 'set', key: f.path, value }]);
+    assert.equal(result.error, undefined, `${f.path}: ${result.error?.message}`);
+    const after = context(result.patch.text).board.objects.find(o => o.kind === 'connection');
+    assert.equal(after.properties[f.keyword]?.value, value, `${f.path} was not reported back`);
+    assert.ok(after.properties[f.keyword].source, `${f.path} has no source`);
+  }
 });

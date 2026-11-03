@@ -32,7 +32,7 @@ const CONNECTION_LAYOUT = new Set(['link']); // D2's scene builder refuses a con
 const property = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
 const list = (items: string[]) => items.join(', ');
 
-export function capabilities(object: AssocObject, ctx: Context): { fields: Field[]; actions: Action[] } {
+export function capabilities(object: AssocObject, ctx: Context): { fields: Field[]; actions: Action[]; endpoints?: { source: string; target: string } } {
   const connection = object.kind === 'connection';
   const shape = object.properties.shape?.value ?? 'rectangle';
   const field = (keyword: string, path: string, domain: Domain, prop: string, extra: { available?: boolean; reason?: string } = {}): Field => {
@@ -56,6 +56,12 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
     if (k.name === 'left') f.pair = `${object.id}.top`;
     fields.push(f);
   }
+  if (connection) {
+    for (const side of ['source', 'target']) {
+      fields.push(field(`${side}-arrowhead`, `${object.id}.${side}-arrowhead.shape`, { kind: 'enum', values: table.arrowheads }, `${side}-arrowhead`));
+      fields.push(field(`${side}-arrowhead.filled`, `${object.id}.${side}-arrowhead.style.filled`, keywords.find(k => k.name === 'filled')!.domain, `${side}-arrowhead.filled`));
+    }
+  }
   const childless = container.applies(object, ctx) ? undefined
     : shape === 'image' ? 'D2 refuses children under image shapes'
     : shape === 'sql_table' || shape === 'class' ? `D2 turns the children of a ${shape} into rows`
@@ -67,7 +73,7 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
       { id: 'add-child', label: 'Add child', available: !childless, reason: childless },
       { id: 'delete', label: 'Delete', available: true },
     ];
-  return { fields, actions };
+  return { fields, actions, endpoints: connection && object.src && object.dst ? { source: object.src, target: object.dst } : undefined };
 }
 
 /** The edit ops for setting a field (a blank value deletes the declaration); top and left always travel together. */

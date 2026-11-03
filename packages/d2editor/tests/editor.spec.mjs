@@ -788,3 +788,24 @@ test('layout fields: top and left are written together and need TALA; near is fo
   await expect(page.locator('#fields [data-reason="q.top"]')).toContainText('TALA');
   expect(errors).toEqual([]);
 });
+
+test('a connection lists its ends as buttons and both arrowheads with D2\'s shapes; an arrowhead edit is one patch (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a -> b\n');
+  await page.locator('#host [data-id="(a -> b)[0]"]').focus();
+  await expect(page.locator('#selected')).toHaveText('Connection (a -> b)[0]');
+  await expect(page.locator('#endpoints button')).toHaveText(['From: a', 'To: b']);
+  const head = page.locator('#fields [data-path="(a -> b)[0].target-arrowhead.shape"]');
+  await expect(head.locator('option')).toHaveText(["D2's default", 'arrow', 'box', 'cf-many', 'cf-many-required', 'cf-one', 'cf-one-required', 'circle', 'cross', 'diamond', 'none', 'triangle']);
+  await expect(page.locator('#fields [data-path="(a -> b)[0].style.shadow"]')).toHaveCount(0);
+  const n = await page.evaluate(() => traffic.edits.length);
+  await head.selectOption('diamond');
+  await expect.poll(() => page.evaluate(() => traffic.edits.length), { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('target-arrowhead');
+  await expect(head).toHaveValue('diamond');
+  await page.locator('#endpoints button', { hasText: 'To: b' }).click();
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await expect(page.locator('#endpoints')).toBeHidden();
+  expect(errors).toEqual([]);
+});

@@ -35,6 +35,13 @@ func TestCoversEveryReservedKeyword(t *testing.T) {
 	for k := range d2ast.StyleKeywords {
 		want[k] = true
 	}
+	// The arrowhead holders are composite keywords; the rest of the composites are keywords already listed or not fields.
+	for _, k := range []string{"source-arrowhead", "target-arrowhead"} {
+		if _, ok := d2ast.CompositeReservedKeywords[k]; !ok {
+			t.Errorf("%s is no longer a D2 composite keyword", k)
+		}
+		want[k] = true
+	}
 	for _, k := range Table().Keywords {
 		if !want[k.Name] {
 			t.Errorf("%s is not a D2 keyword", k.Name)

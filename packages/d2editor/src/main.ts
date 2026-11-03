@@ -431,7 +431,11 @@ function inspect() {
   for (const el of form.querySelectorAll<HTMLElement>('[data-code-only]')) el.hidden = object.content !== 'code';
   if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
-  shown = capabilities(object, { board: boardOf()!.association, engine: layout() }).fields.filter(f => !HAND_BUILT.has(f.keyword));
+  const caps = capabilities(object, { board: boardOf()!.association, engine: layout() }), ends = caps.endpoints;
+  shown = caps.fields.filter(f => !HAND_BUILT.has(f.keyword));
+  // A connection names its ends; each is a button that selects it.
+  $('endpoints').hidden = !ends;
+  $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
   renderFields($('fields'), shown);
   // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
   $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {

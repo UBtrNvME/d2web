@@ -119,6 +119,23 @@ func properties(label d2graph.Scalar, style d2graph.Style, attrs *d2graph.Attrib
 	return out
 }
 
+// edgeProperties adds each arrowhead's shape and fill to a connection's properties, named source-arrowhead, source-arrowhead.filled, ... (spec 0017).
+func edgeProperties(e *d2graph.Edge) map[string]Property {
+	out := properties(e.Label, e.Style, &e.Attributes)
+	for name, a := range map[string]*d2graph.Attributes{"source-arrowhead": e.SrcArrowhead, "target-arrowhead": e.DstArrowhead} {
+		if a == nil {
+			continue
+		}
+		if a.Shape.Value != "" {
+			out[name] = scalar(&a.Shape)
+		}
+		if a.Style.Filled != nil {
+			out[name+".filled"] = scalar(a.Style.Filled)
+		}
+	}
+	return out
+}
+
 func content(o *d2graph.Object) string {
 	switch {
 	case o.SQLTable != nil:
@@ -383,7 +400,7 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 		a.Objects = append(a.Objects, out)
 	}
 	for _, e := range g.Edges {
-		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Properties: properties(e.Label, e.Style, &e.Attributes), Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
+		out := AssocObject{ID: e.AbsID(), Kind: "connection", Label: e.Label.Value, Nodes: nodes[e.AbsID()], References: []Source{}, Properties: edgeProperties(e), Src: e.Src.AbsID(), Dst: e.Dst.AbsID()}
 		if out.Nodes == nil {
 			out.Nodes = []string{}
 		}

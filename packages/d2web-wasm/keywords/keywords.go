@@ -83,6 +83,8 @@ func Table() Result {
 		{Name: "horizontal-gap", Domain: num(f(0), nil)},
 		{Name: "class", Domain: text},
 		{Name: "vars", Domain: text},
+		{Name: "source-arrowhead", Domain: enum(arrowheads)},
+		{Name: "target-arrowhead", Domain: enum(arrowheads)},
 		{Name: "opacity", Style: true, Domain: num(f(0), f(1))},
 		{Name: "stroke", Style: true, Domain: color},
 		{Name: "fill", Style: true, Domain: color},

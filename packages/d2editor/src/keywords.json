@@ -332,6 +332,26 @@
       }
     },
     {
+      "name": "source-arrowhead",
+      "style": false,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "arrow",
+          "box",
+          "cf-many",
+          "cf-many-required",
+          "cf-one",
+          "cf-one-required",
+          "circle",
+          "cross",
+          "diamond",
+          "none",
+          "triangle"
+        ]
+      }
+    },
+    {
       "name": "stroke",
       "style": true,
       "domain": {
@@ -354,6 +374,26 @@
         "kind": "number",
         "min": 0,
         "max": 15
+      }
+    },
+    {
+      "name": "target-arrowhead",
+      "style": false,
+      "domain": {
+        "kind": "enum",
+        "values": [
+          "arrow",
+          "box",
+          "cf-many",
+          "cf-many-required",
+          "cf-one",
+          "cf-one-required",
+          "circle",
+          "cross",
+          "diamond",
+          "none",
+          "triangle"
+        ]
       }
     },
     {
