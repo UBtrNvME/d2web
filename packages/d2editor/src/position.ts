@@ -37,21 +37,20 @@ export function step(written: number, painted: number, target: number, prev?: { 
 }
 
 // A nested drop still being measured: the drop point relative to the container's painted corner, tries left, the best attempt so far, and the
-// last single-axis move (its slope is only trusted for that axis while the other one stayed put).
-export type Aim = { X: number; Y: number; tries: number; best?: { top: number; left: number; miss: number }; moved?: { axis: 'X' | 'Y'; written: number; painted: number } };
+// previous attempt (for the secant slopes).
+export type Aim = { X: number; Y: number; tries: number; best?: { top: number; left: number; miss: number }; prev?: { top: number; left: number; X: number; Y: number } };
 
-// The next top/left toward `aim`, given where TALA painted them, or undefined when done. Moving one container child grows or shifts the container
-// on both axes, so each attempt moves only the axis that misses more; when out of tries or stuck it settles on the best attempt seen.
+// The next top/left toward `aim`, given where TALA painted them, or undefined when done: both axes step with the slope measured from the previous
+// attempt (`step`). Moving a child can grow or shift its container, so an attempt can get worse; when out of tries or stuck it settles on the best
+// attempt seen, so the result is never worse than the best try.
 export function attempt(at: { top: number; left: number }, painted: { X: number; Y: number }, aim: Aim): { top: number; left: number; aim: Aim } | undefined {
-  const miss = { X: aim.X - painted.X, Y: aim.Y - painted.Y }, worst = Math.max(Math.abs(miss.X), Math.abs(miss.Y));
+  const worst = Math.max(Math.abs(aim.X - painted.X), Math.abs(aim.Y - painted.Y));
   if (worst <= 1) return;
   const best = !aim.best || worst < aim.best.miss ? { ...at, miss: worst } : aim.best;
   const settle = () => (best.top === at.top && best.left === at.left ? undefined : { top: best.top, left: best.left, aim: { X: aim.X, Y: aim.Y, tries: 0, best } });
   if (aim.tries <= 1) return settle();
-  for (const axis of Math.abs(miss.X) >= Math.abs(miss.Y) ? ['X', 'Y'] as const : ['Y', 'X'] as const) {
-    const key = axis === 'X' ? 'left' : 'top';
-    const value = step(at[key], painted[axis], aim[axis], aim.moved?.axis === axis ? aim.moved : undefined);
-    if (value !== at[key]) return { ...at, [key]: value, aim: { X: aim.X, Y: aim.Y, tries: aim.tries - 1, best, moved: { axis, written: at[key], painted: painted[axis] } } };
-  }
-  return settle();
+  const left = step(at.left, painted.X, aim.X, aim.prev && { written: aim.prev.left, painted: aim.prev.X });
+  const top = step(at.top, painted.Y, aim.Y, aim.prev && { written: aim.prev.top, painted: aim.prev.Y });
+  if (left === at.left && top === at.top) return settle();
+  return { top, left, aim: { X: aim.X, Y: aim.Y, tries: aim.tries - 1, best, prev: { ...at, ...painted } } };
 }
