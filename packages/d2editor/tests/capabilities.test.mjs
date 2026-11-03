@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { goEnv, goRun, root } from '../../../tests/examples.mjs';
 import { normalizeCompileRequest } from '../../d2web/src/request.ts';
-import { capabilities } from '../src/capabilities.ts';
+import { capabilities, setOps } from '../src/capabilities.ts';
 
 const table = JSON.parse(readFileSync(join(root, 'packages/d2editor/src/keywords.json'), 'utf8'));
 const output = join(root, 'artifacts/d2editor-capabilities');
@@ -87,4 +87,65 @@ test('every advertised connection field changes a real compile', () => {
     assert.equal(result.error, undefined, `${field.path}: ${result.error?.message}`);
     assert.ok(result.boards[0].association.objects.find(o => o.kind === 'connection').properties[property(field.keyword)], `${field.path} left no property`);
   }
+});
+
+const layoutSample = f => (f.keyword === 'link' ? 'https://example.com' : { number: String(Math.max(f.domain.min ?? 1, 1)), boolean: 'true', color: 'red', text: 'sample', enum: f.domain.values?.[0] }[f.domain.kind]);
+const layout = (source, id = 'x', engine = 'tala') => {
+  const ctx = context(source, engine);
+  return capabilities(ctx.board.objects.find(o => o.id === id), ctx).fields.filter(f => !f.path.includes('.style.') && !['label', 'shape'].includes(f.keyword));
+};
+
+test('the worker reports layout keywords with their sources', () => {
+  const ctx = context('x: { top: 10\nleft: 20\nwidth: 100\ndirection: right\ngrid-rows: 2\ntooltip: hi }\n');
+  const p = ctx.board.objects.find(o => o.id === 'x').properties;
+  assert.equal(p.top.value, '10');
+  assert.equal(p.left.value, '20');
+  assert.equal(p.width.value, '100');
+  assert.equal(p.direction.value, 'right');
+  assert.equal(p['grid-rows'].value, '2');
+  assert.equal(p.tooltip.value, 'hi');
+  assert.equal(p.top.source.start.line, 0);
+});
+
+test('every advertised layout field compiles; the unavailable ones are refused or ignored for the reason given', () => {
+  for (const [name, source, id] of [['shape', 'x\n', 'x'], ['container', 'x: { child }\n', 'x'], ['image', 'x: { shape: image\nicon: https://example.com/i.svg }\n', 'x'], ['sql_table', 'x: { shape: sql_table }\n', 'x']]) {
+    const fields = layout(source, id);
+    assert.ok(fields.some(f => f.keyword === 'width') && fields.some(f => f.keyword === 'grid-rows'), name);
+    for (const f of fields.filter(f => f.available)) {
+      const pair = f.keyword === 'top' ? '\nx.left: 0' : f.keyword === 'left' ? '\nx.top: 0' : '';
+      const result = compile(`${source}${f.path}: ${layoutSample(f)}${pair}\n`);
+      assert.equal(result.error, undefined, `${name} ${f.path}: ${result.error?.message}`);
+      assert.ok(result.boards[0].association.objects.find(o => o.id === 'x').properties[f.keyword], `${name} ${f.path} left no property`);
+    }
+  }
+});
+
+test('near constants are for root shapes only; top and left need TALA; a connection offers link only', () => {
+  const nested = layout('p: { x }\n', 'p.x'), near = nested.find(f => f.keyword === 'near');
+  assert.equal(near.available, false);
+  assert.match(near.reason, /root level shapes/);
+  assert.equal(compile('p: { x: { near: top-center } }\n').error.message.includes('root level'), true);
+  assert.equal(layout('x\n').find(f => f.keyword === 'near').available, true);
+  for (const keyword of ['top', 'left']) {
+    const f = layout('x\n', 'x', 'dagre').find(f => f.keyword === keyword);
+    assert.equal(f.available, false);
+    assert.match(f.reason, /TALA/);
+    assert.equal(layout('x\n').find(f => f.keyword === keyword).available, true);
+  }
+  const ctx = context('a -> b\n');
+  const connection = capabilities(ctx.board.objects.find(o => o.kind === 'connection'), ctx).fields.filter(f => !f.path.includes('.style.') && f.keyword !== 'label');
+  assert.deepEqual(connection.map(f => f.keyword), ['link']);
+  assert.ok(compile('a -> b: { tooltip: hi }\n').error, 'D2 refuses a connection tooltip');
+});
+
+test('top and left are written together, because D2 refuses one alone', () => {
+  const ctx = context('x\n'), fields = capabilities(ctx.board.objects.find(o => o.id === 'x'), ctx).fields;
+  const top = fields.find(f => f.keyword === 'top');
+  assert.deepEqual(setOps(top, '12', fields), [{ op: 'set', key: 'x.top', value: '12' }, { op: 'set', key: 'x.left', value: '0' }]);
+  assert.deepEqual(setOps(top, '', fields), [{ op: 'delete', key: 'x.top' }, { op: 'delete', key: 'x.left' }]);
+  const both = context('x: { top: 1\nleft: 2 }\n'), declared = capabilities(both.board.objects.find(o => o.id === 'x'), both).fields;
+  assert.deepEqual(setOps(declared.find(f => f.keyword === 'top'), '12', declared), [{ op: 'set', key: 'x.top', value: '12' }]);
+  const width = fields.find(f => f.keyword === 'width');
+  assert.deepEqual(setOps(width, '50', fields), [{ op: 'set', key: 'x.width', value: '50' }]);
+  assert.equal(compile('x: { top: 1 }\n').error.message.includes('together'), true);
 });

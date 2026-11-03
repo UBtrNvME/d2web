@@ -2,7 +2,8 @@
 // Names, domains and shape restrictions come from keywords.json (generated from D2, ADR 0014); nothing is typed in here.
 import type { Association } from '../../d2web/src/index.ts';
 import table from './keywords.json' with { type: 'json' };
-import { container, type Context } from './traits.ts';
+import type { EditOp } from '../../d2web/src/index.ts';
+import { container, movable, type Context } from './traits.ts';
 
 type AssocObject = Association['objects'][number];
 export type Domain = { kind: 'enum' | 'number' | 'boolean' | 'color' | 'text'; values?: string[]; min?: number; max?: number };
@@ -17,12 +18,17 @@ export type Field = {
   source?: Source;
   available: boolean;
   reason?: string;
+  /** D2 refuses one of top/left without the other, so an edit to either writes both (see setOps). */
+  pair?: string;
 };
 export type Action = { id: string; label: string; available: boolean; reason?: string };
 
 const keywords = table.keywords as { name: string; style?: boolean; only?: string[]; not?: string[]; domain: Domain }[];
 // Style keywords D2 applies to a connection; `filled` belongs to an arrowhead, not to either.
 const CONNECTION_STYLE = new Set(['opacity', 'stroke', 'stroke-width', 'stroke-dash', 'animated', 'font', 'font-size', 'font-color', 'bold', 'italic', 'underline', 'text-transform']);
+// Layout keywords the inspector advertises, per object kind; icon, constraint, class and vars have their own controls or are not fields.
+const SHAPE_LAYOUT = new Set(['tooltip', 'link', 'near', 'width', 'height', 'direction', 'top', 'left', 'grid-rows', 'grid-columns', 'grid-gap', 'vertical-gap', 'horizontal-gap']);
+const CONNECTION_LAYOUT = new Set(['link']); // D2's scene builder refuses a connection tooltip
 const property = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
 const list = (items: string[]) => items.join(', ');
 
@@ -41,6 +47,15 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
     if (!connection && k.not?.includes(shape)) reason = `D2 cannot draw ${k.name} on ${shape} shapes`;
     fields.push(field(k.name, `${object.id}.style.${k.name}`, k.domain, property(k.name), { available: !reason, reason }));
   }
+  for (const k of keywords.filter(k => !k.style && (connection ? CONNECTION_LAYOUT : SHAPE_LAYOUT).has(k.name))) {
+    let reason: string | undefined;
+    if (k.name === 'near' && object.parent) reason = 'D2 allows constant near keys only on root level shapes';
+    if ((k.name === 'top' || k.name === 'left') && !movable.applies(object, ctx)) reason = 'Only the TALA layout engine honours top and left';
+    const f = field(k.name, `${object.id}.${k.name}`, k.domain, k.name, { available: !reason, reason });
+    if (k.name === 'top') f.pair = `${object.id}.left`;
+    if (k.name === 'left') f.pair = `${object.id}.top`;
+    fields.push(f);
+  }
   const childless = container.applies(object, ctx) ? undefined
     : shape === 'image' ? 'D2 refuses children under image shapes'
     : shape === 'sql_table' || shape === 'class' ? `D2 turns the children of a ${shape} into rows`
@@ -53,4 +68,17 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
       { id: 'delete', label: 'Delete', available: true },
     ];
   return { fields, actions };
+}
+
+/** The edit ops for setting a field (a blank value deletes the declaration); top and left always travel together. */
+export function setOps(f: Field, value: string, fields: Field[]): EditOp[] {
+  const v = value.trim(), op = (key: string): EditOp => (v ? { op: 'set', key, value: v } : { op: 'delete', key });
+  const ops = [op(f.path)];
+  if (f.pair) {
+    const other = fields.find(o => o.path === f.pair);
+    // Setting adds the companion at 0 only when the text does not declare it; clearing removes both.
+    if (!v) ops.push({ op: 'delete', key: f.pair });
+    else if (other && other.value === undefined) ops.push({ op: 'set', key: f.pair, value: '0' });
+  }
+  return ops;
 }

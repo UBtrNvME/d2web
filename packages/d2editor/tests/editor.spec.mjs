@@ -756,3 +756,35 @@ test('the inspector advertises every style field with D2\'s values; a change is 
   await expect(page.locator('#fields [data-reason="a.style.3d"]')).toContainText('only to rectangle, square, hexagon');
   expect(errors).toEqual([]);
 });
+
+test('layout fields: top and left are written together and need TALA; near is for root shapes; a connection offers link only (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'p: { x }\nq\n');
+  const field = (id, k) => page.locator(`#fields [data-path="${id}.${k}"]`);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const change = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await select(page, 'q');
+  await expect(field('q', 'direction').locator('option')).toHaveText(["D2's default", 'up', 'down', 'right', 'left']);
+  await expect(field('q', 'near')).toBeEnabled();
+  await change(async () => { await field('q', 'top').fill('30'); await field('q', 'top').press('Tab'); });
+  await expect.poll(() => source(page)).toMatch(/top: 30[\s\S]*left: 0|left: 0[\s\S]*top: 30/);
+  await expect(field('q', 'left')).toHaveValue('0');
+  await change(() => page.locator('#fields [data-reset="q.top"]').click());
+  await expect.poll(() => source(page)).not.toMatch(/top|left/);
+
+  await select(page, 'p.x');
+  await expect(field('p.x', 'near')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="p.x.near"]')).toContainText('root level shapes');
+
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await select(page, 'q');
+  await expect(field('q', 'top')).toBeDisabled();
+  await expect(page.locator('#fields [data-reason="q.top"]')).toContainText('TALA');
+  expect(errors).toEqual([]);
+});
