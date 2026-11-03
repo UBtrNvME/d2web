@@ -18,6 +18,8 @@ export type Field = {
   source?: Source;
   available: boolean;
   reason?: string;
+  /** Set when the value is declared in an imported file: an edit overrides it here, but Reset cannot remove it. */
+  note?: string;
   /** D2 refuses one of top/left without the other, so an edit to either writes both (see setOps). */
   pair?: string;
 };
@@ -37,7 +39,11 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
   const shape = object.properties.shape?.value ?? 'rectangle';
   const field = (keyword: string, path: string, domain: Domain, prop: string, extra: { available?: boolean; reason?: string } = {}): Field => {
     const held = object.properties[prop];
-    return { keyword, path, domain, value: held?.value, source: held?.source, available: extra.available ?? true, reason: extra.reason };
+    const imported = ctx.entry && held?.source && held.source.path !== ctx.entry ? held.source.path : undefined;
+    return {
+      keyword, path, domain, value: held?.value, source: held?.source, available: extra.available ?? true, reason: extra.reason,
+      note: imported && `Declared in ${imported}: an edit overrides it here; Reset cannot remove it`,
+    };
   };
   const fields = [field('label', object.id, { kind: 'text' }, 'label')];
   if (!connection) fields.push(field('shape', `${object.id}.shape`, { kind: 'enum', values: table.shapes }, 'shape'));

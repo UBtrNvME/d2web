@@ -170,3 +170,25 @@ test('a connection advertises its endpoints and both arrowheads; the worker repo
     assert.ok(after.properties[f.keyword].source, `${f.path} has no source`);
   }
 });
+
+test('a value declared in an imported file says so: an edit overrides it locally, and Reset cannot remove it', () => {
+  const files = { 'main.d2': 'x: { ...@lib }\n', 'lib.d2': 'style.fill: red\n' };
+  const request = ops => JSON.stringify(ops ? { v: 2, type: 'edit', id: 1, revision: 1, files, entry: 'main.d2', ops }
+    : normalizeCompileRequest({ v: 2, type: 'compile', id: 1, revision: 1, files, entry: 'main.d2', layout: 'tala', seeds: [1], render: { themeId: 0, sketch: false, pad: 0, scale: 1, center: false } }));
+  const compiled = JSON.parse(goRun(binary, [request()]));
+  assert.equal(compiled.error, undefined, compiled.error?.message);
+  const ctx = { board: compiled.boards[0].association, engine: 'tala', entry: 'main.d2' };
+  const fields = capabilities(ctx.board.objects.find(o => o.id === 'x'), ctx).fields;
+  const fill = fields.find(f => f.keyword === 'fill'), opacity = fields.find(f => f.keyword === 'opacity');
+  assert.equal(fill.value, 'red');
+  assert.match(fill.note, /lib\.d2/);
+  assert.equal(opacity.note, undefined);
+  // The note is true: a set shadows the import, and a delete changes nothing.
+  assert.match(JSON.parse(goRun(binary, [request([{ op: 'set', key: 'x.style.fill', value: 'blue' }])])).patch.text, /style\.fill: blue/);
+  assert.equal(JSON.parse(goRun(binary, [request([{ op: 'delete', key: 'x.style.fill' }])])).patch.text, files['main.d2']);
+});
+
+test('the actions say why one is unavailable', () => {
+  const ctx = context('t: { shape: sql_table }\n'), actions = capabilities(ctx.board.objects.find(o => o.id === 't'), ctx).actions;
+  assert.match(actions.find(a => a.id === 'add-child').reason, /rows/);
+});

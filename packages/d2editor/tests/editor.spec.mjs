@@ -809,3 +809,14 @@ test('a connection lists its ends as buttons and both arrowheads with D2\'s shap
   await expect(page.locator('#endpoints')).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('the inspector lists the actions of the selection and says why one is unavailable (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 't: { shape: sql_table }\nb\n');
+  await object(page, 'b').focus();
+  await expect(page.locator('#actions')).toContainText('Add child');
+  await expect(page.locator('#actions dd').nth(1)).toHaveText('available');
+  await object(page, 't').focus();
+  await expect(page.locator('#actions dd').nth(1)).toContainText('into rows');
+  expect(errors).toEqual([]);
+});

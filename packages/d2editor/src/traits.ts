@@ -1,7 +1,8 @@
 import type { Association, Engine } from '../../d2web/src/index.ts';
 
 type AssocObject = Association['objects'][number];
-export type Context = { board: Association; engine: Engine };
+/** `entry` is the file the editor writes; a value declared elsewhere is an import (spec 0017). */
+export type Context = { board: Association; engine: Engine; entry?: string };
 export type Trait = { name: string; applies(object: AssocObject, ctx: Context): boolean };
 
 // D2 refuses image children and turns table/class children into rows; content elements stay excluded by ADR 0013.
