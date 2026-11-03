@@ -1,6 +1,6 @@
 # Spec 0014: d2editor, drag to position
 
-Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: touch input; icon containers were measured by hand (within 1 px) but have no test.
+Status: **accepted** (user, 3 November 2026: "Approve, build it", including the section 4 d2web change); **built** 3 November 2026 in four commits on `claude/d2editor-idea-probes` (`c158330`, `abb1dc1`, `ccadad4` and the docs commit): `mise run check` and `test:editor` (17 Chromium cases) pass; the full `check:browser` was not run. Not checked: touch input; nested drops in containers TALA resizes or moves land off the drop point by design (section 3).
 
 ## 1. Objective
 
@@ -23,7 +23,9 @@ The author drags a shape on the canvas and it stays where they drop it. The posi
   3. else top level: origin (0, 0) (exact);
   4. else (nested, first fixed shape in its container): the container's box corner + 60, an estimate.
 
-  Only the top level is exact by arithmetic. Inside a container the origin moves with the container: TALA's padding depends on the container's shape (a quarter for circles), icons, inside labels and size, and pinning a child can grow or move the container (in a circle, one unit of `left` moved the shape about 1.17 px). A connection into a container can also make TALA move the whole container. So after a nested drop the editor measures where TALA painted the shape **relative to its container's painted corner** (the container may move; the child should stay where it was put inside it) and steps `top`/`left` toward the drop point (`attempt` in `position.ts`): both axes with the slope measured from the previous attempt (a secant step, `step`), up to eight attempts, stopping within 1 px, and ending on the best attempt seen if it runs out or gets stuck, so the result is never worse than its best try. (A one-axis-at-a-time variant was tried and left an oval drop 3 px off; reverted.) A drag and its corrections compile with the default seeds at once (the one-seed pass can lay the container out differently) and are one Undo step. A reachable drop lands within 2 px (measured by hand: ovals within 1 px; circle drops either within 1 to 2 px or at a 0 clamp). Some points cannot be reached at all: TALA keeps a circle's children inside it and grows the circle as a child moves outward, so a drop into a circle's lower-left region ends about 20 px off under every loop tried, at the closest attempt; a drop above or left of the origin ends at `top`/`left` 0, the nearest D2 allows. Found by two reviews after the first build: one estimate missed by about 59 px in a circle, and a full-miss correction left 3 to 30 px in circles and ovals and about 160 px when the container moved.
+  Only the top level is exact. Rules 1, 2 and 4 assume the container keeps its place and TALA's rectangle padding, but TALA's padding depends on the container's shape (a quarter for circles), icons, inside labels and size, and pinning a child can grow or move the container (a connection into it can move it whole). So a nested drop can land off the drop point: measured about 59 px in a circle on a first drop, and about 160 px when a connected container moved. Rule 2 beside a fixed sibling in a plain rectangle landed within 1 px.
+
+  A measure-and-correct loop (up to eight secant steps against the container's painted corner, best attempt kept, one Undo step) was built on 3 November 2026 after stop-time reviews and brought most nested drops within 1 to 2 px, but some circle positions stayed about 20 px off under every variant (TALA keeps a circle's children inside it). The user chose to simplify instead ("Simplify instead"): the loop was removed and the code is the task 3 version. Measuring and correcting remains the upgrade path if nested accuracy matters.
 - Distances are in diagram units: screen pixels divided by the zoom.
 - Undo restores the text before the drag (each drag is one history step). Removing a position is a text edit (or Undo).
 
@@ -35,7 +37,7 @@ The association (spec 0004) gains `properties.top` and `properties.left` with th
 
 - Go: `top`/`left` appear with source when declared and are absent otherwise.
 - Node: the position rules (each of the four cases, clamping at 0, rounding, zoom).
-- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; in a circle container and in a container TALA moves, a reachable drop lands within 2 px of the drop point relative to the container and an unreachable one ends at `top: 0`, each one Undo step; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
+- Chromium (`test:editor`): dragging a top-level shape writes exactly `top`/`left` by the patch; a second drag adds the distance; a nested shape beside a fixed sibling lands exactly; empty-space drag pans with no edit; on dagre a diagram with positions still compiles, and a shape drag makes no edit, pans and shows the hint; Undo restores the text.
 
 ## 6. Boundaries
 
