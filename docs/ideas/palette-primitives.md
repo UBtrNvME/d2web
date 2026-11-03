@@ -1,6 +1,6 @@
 # Palette primitives and traits for d2editor
 
-Idea one-pager, 3 November 2026. Not an accepted ADR or spec; see [ADR 0012](../adr/0012-editing-in-scope.md), [spec 0012](../specs/0012-edit-api.md), [spec 0013](../specs/0013-d2editor.md) and [spec 0014](../specs/0014-drag-to-position.md) for what exists.
+Idea one-pager, 3 November 2026. Carried into [ADR 0013](../adr/0013-editor-traits-from-d2.md) and [spec 0015](../specs/0015-palette.md) (both accepted 3 November 2026). Not itself an accepted ADR or spec; see [ADR 0012](../adr/0012-editing-in-scope.md), [spec 0012](../specs/0012-edit-api.md), [spec 0013](../specs/0013-d2editor.md) and [spec 0014](../specs/0014-drag-to-position.md) for what exists.
 
 ## Problem statement
 
@@ -88,5 +88,6 @@ Done when: from an empty canvas, a 3-tier AWS diagram (VPC zone; ALB, EC2 and RD
 
 - Done: MVP step 1, the `move` edit op (`packages/d2web-wasm/edit/edit.go`, row in spec 0012, `EditOp` in `packages/d2web/src/protocol.ts`), with Go tests for the rewrites, pin clearing and every refusal, and a WASM-equals-native case in `edit.spec.mjs`.
 - Done: the editor's Sketch toggle (`packages/d2editor`), covered in `editor.spec.mjs`.
-- Next: MVP step 2, the worker reporting class names, then the palette entries.
+- Done (3 November 2026): the rest of the MVP per [spec 0015](../specs/0015-palette.md): palette entries, class buttons, drop into a zone, drag-to-connect, worker class lists and code language.
+- Next: the curated icon set with sketched variants (its own spec).
 - Verified: `mise run check` and `mise run check:browser` pass. One earlier `check` run failed a WASM test with a 61 s timeout under parallel load (the hang `tests/examples.mjs` documents); the rerun passed.

@@ -2,13 +2,17 @@ package compile
 
 import (
 	"bytes"
+	"io/fs"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
 
 	"github.com/d2lang/d2/d2ast"
 	"github.com/d2lang/d2/d2graph"
+	"github.com/d2lang/d2/d2ir"
+	"github.com/d2lang/d2/d2parser"
 	"github.com/d2lang/d2/d2renderers/d2scene"
 	"github.com/d2lang/d2/d2target"
 	"github.com/d2lang/d2/lib/textmeasure"
@@ -36,11 +40,15 @@ type Property struct {
 }
 
 type AssocObject struct {
-	ID         string              `json:"id"`
-	Kind       string              `json:"kind"`
-	Parent     string              `json:"parent,omitempty"`
-	Label      string              `json:"label"`
-	Content    string              `json:"content,omitempty"`
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Parent  string `json:"parent,omitempty"`
+	Label   string `json:"label"`
+	Content string `json:"content,omitempty"`
+	// Classes are the classes applied to the object (`class: zone`), as D2 resolved them (spec 0015).
+	Classes []string `json:"classes,omitempty"`
+	// Language is a code block's tag (`|go ...|` is "go"), for content "code" only (spec 0015).
+	Language   string              `json:"language,omitempty"`
 	Nodes      []string            `json:"nodes"`
 	References []Source            `json:"references"`
 	Properties map[string]Property `json:"properties"`
@@ -65,6 +73,8 @@ type AssocImage struct {
 
 type Association struct {
 	Objects []AssocObject `json:"objects"`
+	// Classes names the classes the board defines (its `classes` map after imports and inheritance), sorted (spec 0015).
+	Classes []string `json:"classes"`
 }
 
 func source(r d2ast.Range) Source {
@@ -318,9 +328,13 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 	for i, id := range linkOwners(d, doc, nodeOwner) {
 		links[id] = append(links[id], i)
 	}
-	a := &Association{Objects: []AssocObject{}}
+	a := &Association{Objects: []AssocObject{}, Classes: []string{}}
 	for _, o := range g.Objects {
 		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style)}
+		if out.Content == "code" {
+			out.Language = o.Language
+		}
+		out.Classes = o.Classes
 		// Only a declared shape: D2 fills in "rectangle" without a key, and a default is absent from properties (spec 0004).
 		if o.Shape.MapKey != nil {
 			out.Properties["shape"] = scalar(&o.Shape)
@@ -367,4 +381,33 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 		a.Objects = append(a.Objects, out)
 	}
 	return a
+}
+
+// boardClasses lists, per compile result path, the classes each board defines. D2's graph keeps only the classes applied to objects, so this
+// reads the IR, where imports and scenario/step inheritance are already resolved. An IR error leaves the lists empty: d2lib reported it already.
+func boardClasses(entry, source string, fsys fs.FS) func(path string) []string {
+	var ir *d2ir.Map
+	if ast, err := d2parser.Parse(entry, strings.NewReader(source), &d2parser.ParseOptions{UTF16Pos: true}); err == nil {
+		ir, _, _ = d2ir.Compile(ast, &d2ir.CompileOptions{UTF16Pos: true, FS: fsys})
+	}
+	return func(path string) []string {
+		names := []string{}
+		var board []string
+		for i, part := range strings.Split(strings.TrimPrefix(path, "/"), "/") {
+			if i%2 == 1 {
+				board = append(board, part)
+			}
+		}
+		root := ir.FindBoardRoot(board)
+		if root == nil {
+			return names
+		}
+		if f := root.GetField(d2ast.FlatUnquotedString("classes")); f != nil && f.Map() != nil {
+			for _, c := range f.Map().Fields {
+				names = append(names, c.Name.ScalarString())
+			}
+		}
+		sort.Strings(names)
+		return names
+	}
 }

@@ -147,6 +147,10 @@ export interface AssociationObject {
   parent?: string;
   label: string;
   content?: 'markdown' | 'code' | 'latex' | 'sql_table' | 'class';
+  // The classes applied to the object (`class: zone`), as D2 resolved them (spec 0015).
+  classes?: string[];
+  // A code block's tag (`|go …|` is 'go'), for content 'code' only (spec 0015).
+  language?: string;
   nodes: string[];
   references: Source[];
   properties: Record<string, { value: string; source: Source | null }>;
@@ -161,4 +165,5 @@ export interface AssociationObject {
   // Indices into the scene's Links that D2 added for this object.
   links?: number[];
 }
-export interface Association { objects: AssociationObject[] }
+// `classes`: the names the board defines (spec 0015).
+export interface Association { objects: AssociationObject[]; classes: string[] }
