@@ -1,0 +1,14 @@
+# Provision a new worktree (wt switch --create). Each step waits for the one before it.
+# Project hooks need a one-time approval by the user: wt config approvals add
+
+# mise.toml is untrusted in every new worktree until trusted; without this no `mise run ...` works there.
+[[pre-start]]
+trust = "mise trust"
+
+# Reuse the primary worktree's gitignored dependencies and the pinned D2 v0.9.0 source (imports/d2); .worktreeinclude limits what is copied.
+[[pre-start]]
+copy = "wt step copy-ignored"
+
+# Brings the copied node_modules in line with this branch's lockfile (the lockfile is the sole Node.js lockfile, AGENTS.md).
+[[pre-start]]
+install = "mise exec -- pnpm install --frozen-lockfile"
