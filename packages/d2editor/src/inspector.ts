@@ -1,5 +1,5 @@
 // Renders the fields capabilities() advertises (spec 0017 §3.3): a control per D2 domain, its reason when unavailable, and Reset.
-import type { Action, Field } from './capabilities.ts';
+import type { Action, Field, Interaction } from './capabilities.ts';
 
 // Controls the page builds by hand (colour pickers, shape list); they move here as their tests are ported.
 export const HAND_BUILT = new Set(['label', 'shape', 'fill', 'stroke']);
@@ -61,4 +61,9 @@ export function renderActions(host: HTMLElement, actions: Action[]) {
     dd.classList.toggle('default', a.available);
     return [Object.assign(document.createElement('dt'), { textContent: a.label }), dd];
   }));
+}
+
+/** The gestures that work on the selection, in words. */
+export function renderInteractions(host: HTMLElement, interactions: Interaction[]) {
+  host.replaceChildren(...interactions.flatMap(i => [Object.assign(document.createElement('dt'), { textContent: i.gesture }), Object.assign(document.createElement('dd'), { textContent: i.result })]));
 }

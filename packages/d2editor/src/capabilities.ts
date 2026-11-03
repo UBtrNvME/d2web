@@ -3,7 +3,8 @@
 import type { Association } from '../../d2web/src/index.ts';
 import table from './keywords.json' with { type: 'json' };
 import type { EditOp } from '../../d2web/src/index.ts';
-import { container, movable, type Context } from './traits.ts';
+import { NUDGE } from './position.ts';
+import { container, movable, press, type Context } from './traits.ts';
 
 type AssocObject = Association['objects'][number];
 export type Domain = { kind: 'enum' | 'number' | 'boolean' | 'color' | 'text'; values?: string[]; min?: number; max?: number };
@@ -23,6 +24,8 @@ export type Field = {
   /** D2 refuses one of top/left without the other, so an edit to either writes both (see setOps). */
   pair?: string;
 };
+/** A gesture that works on the selection, from the press arbiter (ADR 0013). */
+export type Interaction = { region: 'handle' | 'body' | 'keyboard'; action: 'connect' | 'move' | 'reparent'; gesture: string; result: string };
 export type Action = { id: string; label: string; available: boolean; reason?: string };
 
 const keywords = table.keywords as { name: string; style?: boolean; only?: string[]; not?: string[]; domain: Domain }[];
@@ -34,7 +37,7 @@ const CONNECTION_LAYOUT = new Set(['link']); // D2's scene builder refuses a con
 const property = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
 const list = (items: string[]) => items.join(', ');
 
-export function capabilities(object: AssocObject, ctx: Context): { fields: Field[]; actions: Action[]; endpoints?: { source: string; target: string } } {
+export function capabilities(object: AssocObject, ctx: Context): { fields: Field[]; actions: Action[]; interactions: Interaction[]; endpoints?: { source: string; target: string } } {
   const connection = object.kind === 'connection';
   const shape = object.properties.shape?.value ?? 'rectangle';
   const field = (keyword: string, path: string, domain: Domain, prop: string, extra: { available?: boolean; reason?: string } = {}): Field => {
@@ -79,7 +82,13 @@ export function capabilities(object: AssocObject, ctx: Context): { fields: Field
       { id: 'add-child', label: 'Add child', available: !childless, reason: childless },
       { id: 'delete', label: 'Delete', available: true },
     ];
-  return { fields, actions, endpoints: connection && object.src && object.dst ? { source: object.src, target: object.dst } : undefined };
+  const interactions: Interaction[] = [];
+  if (press(object, ctx, 'handle') === 'connect') interactions.push({ region: 'handle', action: 'connect', gesture: 'Drag from an edge handle', result: 'onto a shape connects to it; onto empty space creates a shape there' });
+  const body = press(object, ctx, 'body');
+  if (body === 'move') interactions.push({ region: 'body', action: 'move', gesture: 'Drag the shape', result: 'writes top and left; onto a container moves it into that container' });
+  if (body === 'reparent') interactions.push({ region: 'body', action: 'reparent', gesture: 'Drag the shape onto a container', result: 'moves it into that container (positions need the TALA engine)' });
+  if (body === 'move') interactions.push({ region: 'keyboard', action: 'move', gesture: 'Arrow keys', result: `move by ${NUDGE} (Shift: 1) and write top and left` });
+  return { fields, actions, interactions, endpoints: connection && object.src && object.dst ? { source: object.src, target: object.dst } : undefined };
 }
 
 /** The edit ops for setting a field (a blank value deletes the declaration); top and left always travel together. */

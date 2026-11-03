@@ -1,7 +1,7 @@
 # Spec 0017: d2editor, advertised fields, actions and interactions
 
-Status: **accepted** (user, 4 November 2026: "Accept"), with ADR 0014 and the proposed defaults for §6: a "not drawn yet" note and a build-time JSON export. Not built.
-Delivered: not delivered. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user.
+Status: **accepted** (user, 4 November 2026: "Accept"), with ADR 0014 and the proposed defaults for §6: a "not drawn yet" note and a build-time JSON export. **Built** 4 November 2026 on `capabilities-0017` except the reverse action and arrow direction (blocked, see the Delivered line); `mise run check` and `test:editor` (32 cases) pass.
+Delivered: partly delivered (4 November 2026). Built: keyword table from D2 with probed domains, `capabilities()` for shapes, containers and connections (fields, sources, reasons, actions, gestures), generated inspector fields with Reset, layout fields, arrowheads and endpoints, arrow-key moves. Not delivered: §3.5 reverse and arrow direction, which need a `reconnect` edit op the spec forbids in this slice (decision recorded in `tasks/todo-0017.md` 5b). Not drawn-yet notes were not needed: every style keyword is `ok` in `docs/feature-map.md`. Deviations: the worker also reports layout and arrowhead keywords in `association.properties` (additive); the table test is Go; a blank control uses `delete`, not `set`.
 
 ## 1. Objective
 

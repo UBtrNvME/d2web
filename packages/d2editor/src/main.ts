@@ -3,12 +3,12 @@ import { createClient, getObject, type Association, mount, spawnWorker, type Com
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
-import { leaves, placeShifting } from './position.ts';
+import { leaves, moveOps, NUDGE, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { HAND_BUILT, renderActions, renderFields } from './inspector.ts';
+import { HAND_BUILT, renderActions, renderFields, renderInteractions } from './inspector.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -314,8 +314,7 @@ function grab(e: PointerEvent): Grab | undefined {
       if (!movable.applies(object, { board: board.association, engine: layout() })) { dropping = -1; reset(); status('Positions need the TALA layout engine; drop a shape into a zone to move it there.'); return; }
       const at = placeShifting(objects, object.id, dx, dy)!;
       const rect = screenCorner(nodes);
-      const pin = (id: string, top: number, left: number): EditOp[] => [{ op: 'set', key: `${id}.top`, value: String(top) }, { op: 'set', key: `${id}.left`, value: String(left) }];
-      const ops = [...pin(object.id, at.top, at.left), ...at.siblings.flatMap(s => pin(s.id, s.top, s.left))];
+      const ops = moveOps(object.id, at);
       void edit(ops, objects.filter(o => at.siblings.some(s => s.id === o.id)), object).then(result => {
         dropping = -1;
         if (!result) return reset();
@@ -438,6 +437,7 @@ function inspect() {
   $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
   renderFields($('fields'), shown);
   renderActions($('actions'), caps.actions);
+  renderInteractions($('interactions'), caps.interactions);
   // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
   $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {
     const source = object.properties[name]?.source;
@@ -548,6 +548,13 @@ $('zoom-in').addEventListener('click', () => camera.zoomBy(1.25));
 $('zoom-out').addEventListener('click', () => camera.zoomBy(0.8));
 $('zoom').addEventListener('click', () => camera.reset());
 $('fit').addEventListener('click', () => camera.fit());
+// Whether arrow keys can move this object; off TALA they say why instead of doing nothing.
+function connectableMove(object: NonNullable<ReturnType<typeof objectOf>>, board: NonNullable<ReturnType<typeof boardOf>>) {
+  if (object.kind !== 'shape') return false;
+  if (movable.applies(object, { board: board.association, engine: layout() })) return true;
+  status('Positions need the TALA layout engine; use Tab and the inspector, or drop a shape into a zone.');
+  return false;
+}
 const typingIn = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { connectAbort?.(); connecting(false); select(''); return; }
@@ -555,6 +562,17 @@ document.addEventListener('keydown', event => {
   if (!typingIn(event.target) && !event.ctrlKey && !event.metaKey && !event.altKey) {
     const action = { '+': () => camera.zoomBy(1.25), '=': () => camera.zoomBy(1.25), '-': () => camera.zoomBy(0.8), '!': () => camera.fit(), ')': () => camera.reset() }[event.key];
     if (action) { event.preventDefault(); action(); return; }
+  }
+  // Arrow keys move the focused shape like a drag does (spec 0017 §3.4); a keyboard user has no other way to place one.
+  const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+  if (arrow && event.target === $('host') && state.selected && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const board = boardOf(), object = objectOf(state.selected);
+    if (board && object && connectableMove(object, board)) {
+      event.preventDefault();
+      const n = event.shiftKey ? 1 : NUDGE, at = placeShifting(board.association.objects, object.id, arrow[0] * n, arrow[1] * n);
+      if (at) void edit(moveOps(object.id, at), board.association.objects.filter(o => at.siblings.some(s => s.id === o.id)), object);
+    }
+    return;
   }
   if (event.key === 'Enter' && event.target === $('host') && state.connectFrom) { event.preventDefault(); select(state.selected); return; }
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z' || $<HTMLDialogElement>('unchecked').open) return;

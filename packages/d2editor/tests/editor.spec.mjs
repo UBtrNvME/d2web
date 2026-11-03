@@ -820,3 +820,32 @@ test('the inspector lists the actions of the selection and says why one is unava
   await expect(page.locator('#actions dd').nth(1)).toContainText('into rows');
   expect(errors).toEqual([]);
 });
+
+test('arrow keys move a focused shape on TALA by one checked edit, Undo restores it; other engines say positions need TALA; the panel lists the gestures (spec 0017)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a\nb\n');
+  await object(page, 'a').focus();
+  await expect(page.locator('#interactions')).toContainText('edge handle');
+  await expect(page.locator('#interactions')).toContainText('Arrow keys');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/left: 10/);
+  const moved = await source(page);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await page.click('#undo');
+  await expect.poll(() => source(page)).toBe(moved);
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await object(page, 'a').focus();
+  await expect(page.locator('#interactions')).not.toContainText('Arrow keys');
+  const m = await edits();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#status')).toContainText('TALA');
+  expect(await edits()).toBe(m);
+  expect(errors).toEqual([]);
+});

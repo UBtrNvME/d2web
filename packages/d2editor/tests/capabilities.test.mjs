@@ -192,3 +192,13 @@ test('the actions say why one is unavailable', () => {
   const ctx = context('t: { shape: sql_table }\n'), actions = capabilities(ctx.board.objects.find(o => o.id === 't'), ctx).actions;
   assert.match(actions.find(a => a.id === 'add-child').reason, /rows/);
 });
+
+test('interactions follow the press arbiter: connect from a handle, move on TALA, reparent elsewhere, nothing for a connection', () => {
+  const on = (source, engine, id = 'x') => { const ctx = context(source, engine); return capabilities(ctx.board.objects.find(o => o.id === id), ctx).interactions; };
+  const tala = on('x\n', 'tala'), dagre = on('x\n', 'dagre');
+  assert.deepEqual(tala.map(i => `${i.region}:${i.action}`), ['handle:connect', 'body:move', 'keyboard:move']);
+  assert.deepEqual(dagre.map(i => `${i.region}:${i.action}`), ['handle:connect', 'body:reparent']);
+  assert.ok(tala.every(i => i.gesture && i.result));
+  const ctx = context('a -> b\n');
+  assert.deepEqual(capabilities(ctx.board.objects.find(o => o.kind === 'connection'), ctx).interactions, []);
+});
