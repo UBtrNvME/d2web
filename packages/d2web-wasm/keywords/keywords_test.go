@@ -1,0 +1,107 @@
+package keywords
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/d2lang/d2/d2ast"
+	"github.com/d2lang/d2/d2compiler"
+)
+
+const golden = "../../d2editor/src/keywords.json"
+
+func accepts(src string) bool {
+	_, _, err := d2compiler.Compile("", strings.NewReader(src), nil)
+	return err == nil
+}
+
+func decl(k Keyword, value string) string {
+	if k.Style {
+		return fmt.Sprintf("x: {style.%s: %s}", k.Name, value)
+	}
+	return fmt.Sprintf("x: {%s: %s}", k.Name, value)
+}
+
+// Every keyword D2 reserves has a domain here, and none is invented: an upstream addition fails this test.
+func TestCoversEveryReservedKeyword(t *testing.T) {
+	want := map[string]bool{}
+	for k := range d2ast.SimpleReservedKeywords {
+		want[k] = true
+	}
+	for k := range d2ast.StyleKeywords {
+		want[k] = true
+	}
+	for _, k := range Table().Keywords {
+		if !want[k.Name] {
+			t.Errorf("%s is not a D2 keyword", k.Name)
+		}
+		delete(want, k.Name)
+	}
+	for k := range want {
+		t.Errorf("D2 keyword %s has no domain", k)
+	}
+}
+
+// Each domain is checked against D2's own validator, at and just outside its edges.
+func TestDomainsMatchD2(t *testing.T) {
+	for _, k := range Table().Keywords {
+		d := k.Domain
+		switch d.Kind {
+		case "number":
+			// Only style numbers are validated by D2; half a unit outside each edge must be refused.
+			if !k.Style {
+				continue
+			}
+			if d.Min != nil && (!accepts(decl(k, fmt.Sprint(*d.Min))) || accepts(decl(k, fmt.Sprint(*d.Min-0.5)))) {
+				t.Errorf("%s: minimum %v", k.Name, *d.Min)
+			}
+			if d.Max != nil && (!accepts(decl(k, fmt.Sprint(*d.Max))) || accepts(decl(k, fmt.Sprint(*d.Max+0.5)))) {
+				t.Errorf("%s: maximum %v", k.Name, *d.Max)
+			}
+		case "boolean":
+			if k.Style && (!accepts(decl(k, "true")) || !accepts(decl(k, "false")) || accepts(decl(k, "maybe"))) {
+				t.Errorf("%s: boolean", k.Name)
+			}
+		case "enum":
+			for _, v := range d.Values {
+				if k.Style && !accepts(decl(k, v)) {
+					t.Errorf("%s: D2 rejects %s", k.Name, v)
+				}
+			}
+			if k.Validated && accepts(decl(k, "no-such-value")) {
+				t.Errorf("%s: D2 accepts a value outside the enum", k.Name)
+			}
+		}
+	}
+	for _, s := range Table().Shapes {
+		if !accepts("x: {shape: " + s + "\nicon: https://example.com/i.svg}") { // image needs an icon
+			t.Errorf("shape %s", s)
+		}
+	}
+	for _, a := range Table().Arrowheads {
+		if !accepts("a -> b: {target-arrowhead: {shape: " + a + "}}") {
+			t.Errorf("arrowhead %s", a)
+		}
+	}
+}
+
+// The editor imports a checked-in copy so it needs no fetch; UPDATE=1 rewrites it.
+func TestGoldenIsCurrent(t *testing.T) {
+	got, err := json.MarshalIndent(Table(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = append(got, '\n')
+	if os.Getenv("UPDATE") != "" {
+		if err := os.WriteFile(golden, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil || string(want) != string(got) {
+		t.Fatalf("%s is stale: run UPDATE=1 go test ./keywords", golden)
+	}
+}
