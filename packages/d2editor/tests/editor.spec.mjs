@@ -941,3 +941,40 @@ test('turning a shape with children into an Image asks first; Cancel changes not
   await expect.poll(() => source(page), { timeout: 90_000 }).toContain('112-server.svg');
   expect(errors).toEqual([]);
 });
+
+test('double-click edits a label on the canvas; the toolbar sits on the selection and sets colours and deletes (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\nb: B\n');
+  await expect(page.locator('#toolbar')).toBeHidden();
+  await select(page, 'a');
+  await expect(page.locator('#toolbar')).toBeVisible();
+  await expect(page.locator('#toolbar [data-tool="fill"]')).toBeVisible();
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  // Escape in the field cancels; Enter saves as one edit.
+  await object(page, 'a').locator('[data-k="rect"], [data-k="text"], svg').first().dblclick({ position: { x: 5, y: 5 } });
+  const field = page.locator('#host .label-edit, .label-edit').first();
+  await expect(field).toBeVisible();
+  await field.fill('discard');
+  await page.keyboard.press('Escape');
+  await expect(field).toHaveCount(0);
+  expect(await edits()).toBe(n);
+  expect(await source(page)).toBe('a: A\nb: B\n');
+  await expect(page.locator('#toolbar')).toBeVisible();
+  await object(page, 'a').locator('[data-k="rect"], [data-k="text"], svg').first().dblclick({ position: { x: 5, y: 5 } });
+  await field.fill('Renamed');
+  await page.keyboard.press('Enter');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toBe('a: Renamed\nb: B\n');
+  n = await edits();
+  await page.locator('#toolbar [data-tool="fill"] input').fill('#ff0000');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('fill: "#ff0000"');
+  await page.click('#tool-delete');
+  await expect.poll(() => source(page), { timeout: 90_000 }).not.toContain('Renamed');
+  await painted(page);
+  await expect(page.locator('#toolbar')).toBeHidden();
+  expect(errors).toEqual([]);
+});

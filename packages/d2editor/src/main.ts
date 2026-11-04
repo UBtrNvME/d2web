@@ -43,7 +43,7 @@ try {
 const client = createClient({ spawn: spawnWorker(), images: { mode: 'link' } });
 const view = mount($('host'));
 const history = createHistory(initial);
-const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; }, grab);
+const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; placeToolbar(); }, grab);
 // Fit the next painted board: on load, an opened file, and a board switch.
 let fitNext = true;
 // `painted` is the revision the canvas shows.
@@ -409,6 +409,52 @@ function highlight(object: ReturnType<typeof objectOf>) {
   node.parentElement.append(outline);
 }
 
+// The toolbar sits on the selection's outline in screen space (it does not scale with zoom) and follows pan, zoom and repaints.
+function placeToolbar() {
+  const bar = $('toolbar'), object = objectOf(state.selected), at = outline?.getBoundingClientRect(), page = $('canvas').getBoundingClientRect();
+  bar.hidden = !object || !at || !object.box;
+  if (bar.hidden || !at || !object) return;
+  const edge = object.kind === 'connection';
+  bar.querySelector<HTMLElement>('[data-tool="fill"]')!.hidden = edge;
+  const width = bar.offsetWidth, top = at.top - page.top - bar.offsetHeight - 10;
+  bar.style.top = `${top < 4 ? at.bottom - page.top + 10 : top}px`;
+  bar.style.left = `${Math.max(4, Math.min(page.width - width - 4, at.left - page.left + at.width / 2 - width / 2))}px`;
+  for (const tool of ['fill', 'stroke']) {
+    const hex = object.properties[tool]?.value ?? '', input = bar.querySelector<HTMLInputElement>(`[data-tool="${tool}"] input`)!;
+    if (/^#[0-9a-f]{6}$/i.test(hex)) input.value = hex;
+  }
+}
+$('toolbar').addEventListener('change', event => {
+  const input = event.target as HTMLInputElement, tool = input.closest<HTMLElement>('[data-tool]')?.dataset.tool;
+  if (tool && state.selected) void edit([{ op: 'set', key: `${state.selected}.style.${tool}`, value: input.value }]);
+});
+$('tool-delete').addEventListener('click', () => { if (state.selected) void edit([{ op: 'delete', key: state.selected }]); });
+
+// Double-click edits a shape's label where it is drawn: Enter or leaving saves, Escape cancels. A text node edits in the inspector.
+$('canvas').addEventListener('dblclick', () => {
+  const object = objectOf(state.selected), parent = sceneParent();
+  if (!object?.box || object.kind !== 'shape' || !parent) return;
+  if (kindOf(object)?.id === 'text') { ($<HTMLFormElement>('props').elements.namedItem('content') as HTMLTextAreaElement).focus(); return; }
+  if (kindOf(object)?.id !== 'shape') return;
+  const { X, Y, Width, Height } = object.box, input = document.createElement('input');
+  input.className = 'label-edit';
+  input.value = object.label;
+  input.setAttribute('aria-label', `Label of ${object.id}`);
+  input.style.cssText = `left:${X}px;top:${Y + Height / 2 - 16}px;width:${Math.max(Width, 80)}px;height:32px`;
+  let done = false;
+  const finish = (save: boolean) => {
+    if (done) return;
+    done = true;
+    input.remove();
+    if (save && input.value !== object.label) void edit([{ op: 'set', key: object.id, value: input.value }]);
+  };
+  input.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  input.addEventListener('blur', () => finish(true));
+  parent.append(input);
+  input.select();
+  input.focus();
+});
+
 // The layered inspector (ADR 0015, spec 0018): the sections of the selection's inheritance chain, only the controls D2 honours for it.
 // `shown` is every generated field on screen; the edits go through setOps over them.
 let shown: Field[] = [];
@@ -416,6 +462,7 @@ const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language', 'c
 function inspect() {
   const object = objectOf(state.selected);
   highlight(object);
+  placeToolbar();
   $('inspector').hidden = !object;
   if (!object) return;
   const form = $<HTMLFormElement>('props');

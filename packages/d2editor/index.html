@@ -47,6 +47,11 @@
 <main id="canvas" aria-label="Diagram canvas: click or Tab to an object to select it, Escape to clear; drag or scroll to pan, Ctrl/Cmd+scroll to zoom">
   <div id="grid" aria-hidden="true"></div>
   <div id="host"></div>
+  <div id="toolbar" role="toolbar" aria-label="Selection" hidden>
+    <label class="swatch" data-tool="fill" title="Fill"><input type="color" aria-label="Fill colour" value="#ffffff"></label>
+    <label class="swatch" data-tool="stroke" title="Stroke"><input type="color" aria-label="Stroke colour" value="#000000"></label>
+    <button type="button" id="tool-delete" title="Delete (Backspace)" aria-label="Delete"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2m-6 0 1 12h6l1-12"/></svg></button>
+  </div>
 </main>
 <section id="inspector" aria-label="Selected object" hidden>
   <h2 id="selected"></h2>
