@@ -7,7 +7,9 @@ import type { Kind } from './types.ts';
 const OTHER = new Set(['sql_table', 'class', 'image', 'sequence_diagram', 'hierarchy']);
 
 /** D2 cannot remove a `shape:` line through the edit API (TestKindDeleteLimits), so leaving a kind that owns one writes an explicit rectangle. */
-export const resetShape = (o: AssociationObject): EditOp[] => (OTHER.has(o.properties.shape?.value ?? '') ? [{ op: 'set', key: `${o.id}.shape`, value: 'rectangle' }] : []);
+// Rows would turn into child shapes once the shape changes, so a node that leaves a table or class deletes them first.
+export const leaveRows = (o: AssociationObject): EditOp[] => (o.rows ?? []).map(r => ({ op: 'row-delete' as const, key: o.id, name: r.name }));
+export const resetShape = (o: AssociationObject): EditOp[] => [...leaveRows(o), ...(OTHER.has(o.properties.shape?.value ?? '') ? [{ op: 'set' as const, key: `${o.id}.shape`, value: 'rectangle' }] : [])];
 // Leaving a grid drops its grid keywords (`delete` of a reserved keyword changes nothing; `unset` removes it, spec 0019).
 const resetGrid = (o: AssociationObject): EditOp[] => (['grid-rows', 'grid-columns', 'grid-gap'] as const).filter(k => o.properties[k]).map(k => ({ op: 'unset' as const, key: `${o.id}.${k}` }));
 /** What a plain-shape or text target clears from the kind it leaves. */

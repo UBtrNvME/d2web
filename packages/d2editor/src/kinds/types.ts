@@ -2,7 +2,9 @@
 import type { Association, AssociationObject, EditOp } from '../../../d2web/src/index.ts';
 
 /** What every node kind can hold; a conversion is `to.write(from.read(object))`, so N kinds need N descriptors. Rows join in slice 2. */
-export type Canonical = { text: string; /** An image's source. */ icon?: string; /** Ids of the node's direct children, for kinds that cannot hold them. */ children?: string[]; /** A block string's tag (`md`, `latex`, a code language); absent for a plain label. */ tag?: string };
+/** A table column or class member, as the association reports it. */
+export type Row = { name: string; type: string; constraint?: string[] };
+export type Canonical = { text: string; /** An image's source. */ icon?: string; /** The table columns or class members. */ rows?: Row[]; /** Ids of the node's direct children, for kinds that cannot hold them. */ children?: string[]; /** A block string's tag (`md`, `latex`, a code language); absent for a plain label. */ tag?: string };
 /** A titled group of controls, named by D2 keyword. Hand-built controls (label, fill, stroke, shape, icon, language) are matched by `data-keyword` in the page; the rest are generated. */
 export type Section = { id: string; title: string; controls: Control[] };
 /** `title` is the label shown; a toggle writes `on` (default `true`) when checked and removes the declaration when unchecked. */
@@ -15,6 +17,8 @@ export type Kind = {
   /** The kind's own section, shown after the inherited Element and Node sections. */
   section: Section;
   actions?: KindAction[];
+  /** Set for kinds whose body is rows; the inspector shows the row editor for that flavor. */
+  rows?: 'table' | 'class';
   /** Most specific wins; the registry order is only a tie-break, so detections should not overlap. */
   detect(object: AssociationObject): boolean;
   read(object: AssociationObject): Canonical;

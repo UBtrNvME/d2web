@@ -788,9 +788,9 @@ test('a connection shows the Element and Edge sections with its ends and both ar
   expect(errors).toEqual([]);
 });
 
-test('a node with no kind yet (a table) shows Element and Node only; a text node shows Content and no shape controls (spec 0018)', async ({ page }) => {
+test('a node with no kind yet (a hierarchy) shows Element and Node only; a text node shows Content and no shape controls (spec 0018)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
-  await type(page, 't: { shape: sql_table\n  id: int\n}\nn: |md # Hi |\n');
+  await type(page, 't: { shape: hierarchy }\nn: |md # Hi |\n');
   await object(page, 't').focus();
   await expect(page.locator('#selected')).toHaveText('Node t');
   await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Node']);
@@ -831,9 +831,9 @@ test('arrow keys move a focused shape on TALA by one checked edit, Undo restores
 
 test('the Type picker turns a shape into a text node and back as one edit each, keeping style and children; Undo restores it (spec 0018)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
-  await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: sql_table\n  id: int\n}\n');
+  await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: hierarchy }\n');
   await select(page, 'a');
-  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence', 'Grid']);
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence', 'Grid', 'Table', 'Class']);
   await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
@@ -1053,5 +1053,46 @@ test('a selected connection has an end dot on each side; dragging one onto anoth
   await painted(page);
   await expect.poll(() => source(page)).toContain('b -> c');
   await expect(page.locator('#selected')).toHaveText('Connection (b -> c)[0]');
+  expect(errors).toEqual([]);
+});
+
+test('a table edits its columns in place: type, constraint chips, rename, add, delete, drag to reorder; each is one edit; Table to Class keeps the columns (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 't: {\n  shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar\n}\n');
+  await object(page, 't').focus();
+  await expect(page.locator('#selected')).toHaveText('Table t');
+  const rows = page.locator('#props [data-section="table"] .row-line');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('.chips [aria-pressed="true"]')).toHaveText(['PK']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const once = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await once(async () => { await rows.nth(1).locator('.r-type').fill('text'); await rows.nth(1).locator('.r-type').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('name: text');
+  expect(await source(page)).not.toMatch(/name: varchar/);
+  await once(() => rows.nth(1).locator('.chips button', { hasText: 'UNQ' }).click());
+  await expect.poll(() => source(page)).toMatch(/name: text[^\n]*unique/);
+  await once(async () => { await rows.nth(1).locator('.r-name').fill('title'); await rows.nth(1).locator('.r-name').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('title: text');
+  await once(() => page.locator('#props .r-add').click());
+  await expect(rows).toHaveCount(3);
+  await once(() => rows.nth(2).locator('.r-del').click());
+  await expect(rows).toHaveCount(2);
+  // Drag the second column above the first.
+  await once(() => rows.nth(1).dragTo(rows.nth(0)));
+  await expect.poll(() => source(page)).toMatch(/title: text[\s\S]*id: int/);
+  await expect(rows.nth(0).locator('.r-name')).toHaveValue('title');
+  // To a Class: the columns stay (as members); its constraints are named in the sheet.
+  await page.locator('#type button', { hasText: 'Class' }).click();
+  await expect(page.locator('#confirm-body')).toContainText("the columns' constraints");
+  await page.locator('#confirm-ok').click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('shape: class');
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Class t');
+  await expect(page.locator('#props [data-section="class"] .row-line')).toHaveCount(2);
   expect(errors).toEqual([]);
 });

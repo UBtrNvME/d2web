@@ -111,3 +111,13 @@ menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; }
 .label-edit { position: absolute; box-sizing: border-box; text-align: center; font: 16px system-ui, sans-serif; border: 2px solid #3975d5; border-radius: 4px; background: #fff; color: #000; }
 #inspector .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #inspector .actions:empty { display: none; }
+.rows { display: flex; flex-direction: column; gap: 4px; }
+.row-line { display: flex; align-items: center; gap: 4px; }
+.row-line .grip { color: var(--muted); cursor: grab; font-size: 12px; }
+.row-line input { flex: 1; min-width: 0; }
+.row-line .r-type { flex: 0 0 64px; }
+.row-line .chips { display: flex; gap: 2px; }
+.row-line .chips button { font-size: 10px; padding: 1px 4px; }
+.row-line .chips button[aria-pressed="true"] { background: var(--hover); font-weight: 700; }
+.row-line .r-del { flex: none; padding: 0 6px; }
+.rows .r-add { align-self: flex-start; }

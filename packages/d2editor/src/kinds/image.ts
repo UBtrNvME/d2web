@@ -1,3 +1,4 @@
+import { leaveRows } from './shape.ts';
 import type { Kind } from './types.ts';
 
 // The icon the palette's Icon entry uses; an image needs a source, and converting to Image has none to carry.
@@ -11,6 +12,7 @@ export const image: Kind = {
   detect: o => o.kind === 'shape' && o.properties.shape?.value === 'image',
   read: o => ({ text: o.label, icon: o.image?.source ?? o.properties.icon?.value }),
   write: (c, o) => [
+    ...leaveRows(o),
     ...(c.children ?? []).map(child => ({ op: 'delete' as const, key: child })),
     // A block string label would keep the node a Text node, so the words become a plain label.
     { op: 'set', key: o.id, value: c.text },

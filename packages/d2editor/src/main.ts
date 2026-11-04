@@ -9,7 +9,7 @@ import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
 import { actionsOf, convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
-import { renderFields } from './inspector.ts';
+import { renderFields, renderRows } from './inspector.ts';
 import keywordTable from './keywords.json' with { type: 'json' };
 
 
@@ -567,6 +567,9 @@ function inspect() {
     });
     shown.push(...fields);
     renderFields(el.querySelector<HTMLElement>('.fields')!, fields, controls);
+    // A table or class edits its rows in place.
+    const flavor = kinds.find(k => k.section.id === section.id)?.rows;
+    if (flavor) renderRows(el.querySelector<HTMLElement>('.rows')!, object, flavor, ops => void edit(ops));
     // A kind's actions are buttons under its controls, only where they apply.
     const host = el.querySelector<HTMLElement>('.actions') ?? el.appendChild(Object.assign(document.createElement('div'), { className: 'actions' }));
     host.replaceChildren(...actionsOf(section.id).filter(a => a.when?.(object, boardOf()!.association) ?? true)

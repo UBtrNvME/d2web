@@ -1,14 +1,16 @@
 // The kind registry (spec 0018 §3): the one place a node kind is added. Selections resolve to a path from Element; unknown nodes fall back to Element + Node.
 import type { Association, AssociationObject } from '../../../d2web/src/index.ts';
+import { classKind } from './class.ts';
 import { grid } from './grid.ts';
 import { image } from './image.ts';
 import { sequence } from './sequence.ts';
 import { shape } from './shape.ts';
+import { table } from './table.ts';
 import { text } from './text.ts';
 import type { Kind, KindAction, Section } from './types.ts';
 
-export type { Canonical, Control, Kind, KindAction, Section } from './types.ts';
-export const kinds: Kind[] = [shape, text, image, sequence, grid];
+export type { Canonical, Control, Kind, KindAction, Row, Section } from './types.ts';
+export const kinds: Kind[] = [shape, text, image, sequence, grid, table, classKind];
 
 // Inherited sections: every element has these (spec 0018 §2).
 const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', title: 'Opacity', widget: 'range' }, { keyword: 'stroke-width', title: 'Width', widget: 'number' }] };
@@ -34,7 +36,9 @@ export function convert(object: AssociationObject, to: Kind, board?: Association
   const from = kindOf(object);
   const children = board?.objects.filter(o => o.parent === object.id).map(o => o.id);
   const canonical = { ...(from ?? shape).read(object), children };
-  return { ops: to.write(canonical, object), loss: to.loss(canonical, object) };
+  // A kind without rows drops the table's columns or the class's members.
+  const rows = !to.rows && canonical.rows?.length ? [`${canonical.rows.length} ${from?.rows === 'class' ? 'members' : 'columns'}`] : [];
+  return { ops: to.write(canonical, object), loss: [...rows, ...to.loss(canonical, object)] };
 }
 
 /** The sections a selection renders, root first (the inheritance chain). A node with no registered kind gets Element and Node only. */

@@ -31,9 +31,11 @@ const nodes = {
   image: ['x: { shape: image\n  icon: https://example.com/i.svg\n}\n'],
   sequence: ['x: { shape: sequence_diagram\n  a -> b\n}\n'],
   grid: ['x: {\n  grid-columns: 2\n  a\n  b\n}\n'],
+  table: ['x: {\n  shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar\n}\n'],
+  class: ['x: {\n  shape: class\n  +name: string\n  "+run(x int)": bool\n}\n'],
   text: ['x: |md\n  # Title\n\n  body\n|\n', 'x: |python\n  print(1)\n  print(2)\n|\n', 'x: |latex\n  x^2\n|\n', 'x: |md\n  hi\n| { style.fill: red }\n'],
 };
-const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: hierarchy }\n'];
+const others = ['x: { shape: hierarchy }\n'];
 
 test('every selection resolves to a path from Element: node kinds, the fallback and edges', () => {
   for (const [id, sources] of Object.entries(nodes)) for (const source of sources) {
@@ -53,26 +55,32 @@ test('read then write of the same kind leaves the object as it was', () => {
     const kind = kinds.find(k => k.id === id), before = object(source);
     const after = find(compile(edit(source, kind.write(kind.read(before), before))), 'x');
     for (const key of ['label', 'content', 'language', 'kind']) assert.equal(after[key], before[key], `${source} ${key}`);
+    assert.deepEqual(after.rows, before.rows, `${source} rows`);
     const values = o => Object.fromEntries(Object.entries(o.properties).map(([k, v]) => [k, v.value]));
     assert.deepEqual(values(after), values(before), source);
   }
 });
 
-test('every ordered pair of node kinds converts: D2 accepts it, name and style survive, children survive unless the target is an image, the kind changes', () => {
+test('every ordered pair of node kinds converts: D2 accepts it, name and style survive, the kind changes, and the loss names what disappeared', () => {
+  const noChildren = id => ['image', 'table', 'class'].includes(id), plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   for (const from of kinds) for (const to of kinds) for (const source of nodes[from.id]) {
-    // An image cannot have children, so a source that is one is converted bare.
-    const text = from.id === 'image' ? source : `${source}x.child\n`, association0 = compile(text), before = find(association0, 'x');
+    // Images, tables and classes cannot have children, so a source of those kinds is converted bare.
+    const text = noChildren(from.id) ? source : `${source}x.child\n`, association0 = compile(text), before = find(association0, 'x');
     const { ops, loss } = convert(before, to, association0);
     const association = compile(edit(text, ops)), after = find(association, 'x');
     assert.equal(kindOf(after)?.id, to.id, `${from.id} to ${to.id}: ${source}`);
-    if (to.id === 'image') {
-      const n = association0.objects.filter(o => o.parent === 'x').length;
-      assert.deepEqual(loss, from.id === 'image' ? [] : [`${n} child ${n === 1 ? 'shape' : 'shapes'}`], `${from.id} to image names what it removes`);
-      assert.equal(association.objects.filter(o => o.parent === 'x').length, 0, `${from.id} to image removes every child`);
-    } else {
-      assert.deepEqual(loss, [], `${from.id} to ${to.id} loses nothing`);
-      if (from.id !== 'image') assert.ok(find(association, 'x.child'), `${from.id} to ${to.id} keeps its child`);
-    }
+    const children = association0.objects.filter(o => o.parent === 'x').length, rows = before.rows ?? [];
+    const expected = [
+      ...(!to.rows && rows.length ? [`${rows.length} ${from.id === 'class' ? 'members' : 'columns'}`] : []),
+      ...(noChildren(to.id) && children ? [plural(children, 'child shape', 'child shapes')] : []),
+      ...(['table', 'class'].includes(to.id) && before.label.includes('\n') ? ['the text after its first line'] : []),
+      ...(to.id === 'class' && rows.some(r => r.constraint?.length) ? ["the columns' constraints"] : []),
+    ];
+    assert.deepEqual(loss, expected, `${from.id} to ${to.id} names what it removes`);
+    if (noChildren(to.id)) assert.equal(association.objects.filter(o => o.parent === 'x').length, 0, `${from.id} to ${to.id} leaves no child shapes`);
+    else if (children) assert.ok(find(association, 'x.child'), `${from.id} to ${to.id} keeps its child`);
+    if (to.rows && from.rows) assert.deepEqual((after.rows ?? []).map(r => [r.name, r.type]), rows.map(r => [r.name, r.type]), `${from.id} to ${to.id} keeps the rows`);
+    if (!to.rows) assert.equal(after.rows, undefined, `${from.id} to ${to.id} leaves no rows behind`);
     assert.equal(after.properties.fill?.value, before.properties.fill?.value, `${from.id} to ${to.id} keeps fill`);
   }
 });
@@ -89,6 +97,8 @@ test('sections follow the inheritance chain and list only curated keywords', () 
   assert.deepEqual(ids(object('x: Hi\n')), ['element', 'node', 'shape']);
   assert.deepEqual(ids(object(nodes.image[0])), ['element', 'node', 'image']);
   assert.deepEqual(ids(object(nodes.grid[0])), ['element', 'node', 'grid']);
+  assert.deepEqual(ids(object(nodes.table[0])), ['element', 'node', 'table']);
+  assert.deepEqual(ids(object(nodes.class[0])), ['element', 'node', 'class']);
   assert.deepEqual(ids(object('x: |md\n  hi\n|\n')), ['element', 'node', 'text']);
   assert.deepEqual(ids(object(others[0])), ['element', 'node']);
   assert.deepEqual(ids(find(compile('x -> y\n'), '(x -> y)[0]')), ['element', 'edge']);
