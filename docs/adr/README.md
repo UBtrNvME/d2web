@@ -42,3 +42,4 @@ Consequences: what it commits us to, what stays open, what would reverse it
 | [0012](0012-editing-in-scope.md) | Editing enters scope: d2web owns a worker edit API that publishes checked patches; one file and its boards | accepted |
 | [0013](0013-editor-traits-from-d2.md) | d2editor components: palette entries as data, traits derived from D2, edit ops the only write path | accepted |
 | [0014](0014-advertised-capabilities.md) | Elements advertise fields, actions and values, derived from D2 | accepted |
+| [0015](0015-editor-kinds-inheritance.md) | d2editor shows an element's kind and inheritance, and omits what does not apply | accepted |
