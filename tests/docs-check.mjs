@@ -29,3 +29,15 @@ test('every spec states whether it is delivered', () => {
   const bad = files.filter(f => f.startsWith('docs/specs/') && !/^Delivered: /m.test(readFileSync(f, 'utf8')));
   assert.deepEqual(bad, []);
 });
+
+test('learnings cite only paths and ADRs that exist', () => {
+  const dir = '.trail/learnings';
+  if (!existsSync(dir)) return;
+  const bad = [];
+  for (const f of readdirSync(dir).filter(n => n.endsWith('.md'))) {
+    const text = readFileSync(join(dir, f), 'utf8');
+    for (const [, p] of text.matchAll(/\b((?:packages|docs|tests|research|tasks)\/[A-Za-z0-9_./-]*[A-Za-z0-9_-])/g)) if (!existsSync(p)) bad.push(`${f}: ${p}`);
+    for (const [, n] of text.matchAll(/\bADR (\d{4})\b/g)) if (!readdirSync('docs/adr').some(a => a.startsWith(n))) bad.push(`${f}: ADR ${n}`);
+  }
+  assert.deepEqual(bad, []);
+});

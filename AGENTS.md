@@ -83,3 +83,50 @@ At a completed task boundary, record the accepted scope and decisions, current s
 - Translate imported skills' `AskUserQuestion` / `askUserQuestions` calls to `request_user_input_async` when available, otherwise a permitted structured input tool or text. Batch independent questions; defer questions that depend on pending answers.
 - Async questions remain pending until the user replies. Continue independent work, but never treat silence or preselected choices as acceptance. Question tools do not grant execution approval.
 - Translate a skill's `Skill` tool references to loading the named skill from the available catalog and reading its instructions. Do not invent unavailable tools or claim a missing skill was loaded. Preserve the skill's substantive workflow, research, and completion rules within current user instructions and tool restrictions.
+
+## Trail learnings
+
+- ADRs and specs are authoritative. A learning in `.trail/learnings/` that disagrees with an accepted ADR loses; replace it with `trail note --replaces <id>`. Learnings record only what the ADRs, specs and code cannot say (dead ends, gotchas, why a choice was made). Cite an ADR or spec by number only when needed, and only one that exists on `main`.
+- Where the Trail section below says to use trail before reading files, the "Start here" rules above still apply: read the named docs first, then use trail to locate code.
+
+<!-- trail:start -->
+## Trail — repo context graph
+
+This repo is indexed in `.trail/cache/`: small linked markdown nodes that explain each
+system and carry exact file:line spans, kept in sync with the code through git.
+
+For ANY task here — understanding how something works, finding where code lives,
+or scoping a change — get context from the graph before grepping or opening
+source files. Re-ask freely (it's cheap) and reuse literal identifiers you
+already have (symbol, error string, file name) as the query. New to this repo?
+Run `trail map` first — a token-budgeted orientation (dir clusters, hubs,
+hotspots), no LLM, no key.
+
+- Run `trail ask "<your question>" --source` → ranked nodes with the relevant
+  code spans inlined (each hit's ≤8-line crux by default; `--full` for whole
+  definitions when the crux isn't enough). Match the tool to the task shape:
+  for understanding or editing, the top node IS the answer — cite its
+  `covers:` file:line spans and edit straight from `--source`. For
+  exhaustive tasks ("every occurrence / every caller of this pattern"), ranked
+  results are top-N, not complete — run `trail grep "<literal>"` instead
+  (exhaustive over indexed files, grouped by enclosing symbol), falling back
+  to raw `grep -rn` only for unindexed files.
+- `trail skeleton <file>` → every definition's signature + span, ~10× cheaper
+  than reading the file; use it to skim an API surface.
+- `trail callers <symbol>` gives precomputed, exact edges — who calls this.
+  Add `--direction out` for what it calls, or `--depth N` to walk
+  transitively for the full blast radius. For structural questions, skip
+  ranking and use this directly.
+- Or browse: `.trail/cache/INDEX.md` lists every node; follow the links.
+- Monorepos and folders of multiple repos rank fairly across sub-projects —
+  hits carry `[scope/]` labels naming which one they're from. Narrow with
+  `trail ask "<task>" --in <scope>/` once you know where you're working.
+
+If a returned span is truncated ("+N more lines"), open the file at that exact
+range before finalizing. Only open source files when a node genuinely lacks a
+needed detail, and then at the exact file:line the node points to — never
+re-read whole files.
+
+After big code changes, refresh the graph with `trail build` (deterministic,
+no API key, $0).
+<!-- trail:end -->
