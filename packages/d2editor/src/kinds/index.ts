@@ -1,5 +1,6 @@
 // The kind registry (spec 0018 §3): the one place a node kind is added. Selections resolve to a path from Element; unknown nodes fall back to Element + Node.
 import type { Association, AssociationObject } from '../../../d2web/src/index.ts';
+import { grid } from './grid.ts';
 import { image } from './image.ts';
 import { sequence } from './sequence.ts';
 import { shape } from './shape.ts';
@@ -7,7 +8,7 @@ import { text } from './text.ts';
 import type { Kind, Section } from './types.ts';
 
 export type { Canonical, Control, Kind, KindAction, Section } from './types.ts';
-export const kinds: Kind[] = [shape, text, image, sequence];
+export const kinds: Kind[] = [shape, text, image, sequence, grid];
 
 // Inherited sections: every element has these (spec 0018 §2).
 const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', title: 'Opacity', widget: 'range' }, { keyword: 'stroke-width', title: 'Width', widget: 'number' }] };

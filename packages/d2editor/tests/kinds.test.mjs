@@ -30,6 +30,7 @@ const nodes = {
   shape: ['x: Hi\n', 'x: Hi { style.fill: red }\n', 'x: { shape: cylinder }\n', 'x: Hi { y }\n'],
   image: ['x: { shape: image\n  icon: https://example.com/i.svg\n}\n'],
   sequence: ['x: { shape: sequence_diagram\n  a -> b\n}\n'],
+  grid: ['x: {\n  grid-columns: 2\n  a\n  b\n}\n'],
   text: ['x: |md\n  # Title\n\n  body\n|\n', 'x: |python\n  print(1)\n  print(2)\n|\n', 'x: |latex\n  x^2\n|\n', 'x: |md\n  hi\n| { style.fill: red }\n'],
 };
 const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: hierarchy }\n'];
@@ -87,6 +88,7 @@ test('sections follow the inheritance chain and list only curated keywords', () 
   const ids = o => sectionsOf(o).map(s => s.id);
   assert.deepEqual(ids(object('x: Hi\n')), ['element', 'node', 'shape']);
   assert.deepEqual(ids(object(nodes.image[0])), ['element', 'node', 'image']);
+  assert.deepEqual(ids(object(nodes.grid[0])), ['element', 'node', 'grid']);
   assert.deepEqual(ids(object('x: |md\n  hi\n|\n')), ['element', 'node', 'text']);
   assert.deepEqual(ids(object(others[0])), ['element', 'node']);
   assert.deepEqual(ids(find(compile('x -> y\n'), '(x -> y)[0]')), ['element', 'edge']);

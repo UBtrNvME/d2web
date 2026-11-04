@@ -12,13 +12,26 @@ export const container: Trait = {
   applies: o => o.kind === 'shape' && !LEAF_SHAPES.has(o.properties.shape?.value ?? '') && !['markdown', 'code', 'latex', 'sql_table', 'class'].includes(o.content ?? ''),
 };
 export const connectable: Trait = { name: 'connectable', applies: o => o.kind === 'shape' };
-export const movable: Trait = { name: 'movable', applies: (o, ctx) => connectable.applies(o, ctx) && ctx.engine === 'tala' };
+// D2 forbids top and left under a grid, hierarchy or sequence diagram parent (compile.go); in a grid or sequence diagram the children's order is the layout.
+const parentShape = (o: AssocObject, ctx: Context) => ctx.board.objects.find(p => p.id === o.parent);
+const isGrid = (o?: AssocObject) => Boolean(o?.properties['grid-rows'] || o?.properties['grid-columns']);
+export const ordered: Trait = {
+  name: 'ordered',
+  applies: (o, ctx) => connectable.applies(o, ctx) && (isGrid(parentShape(o, ctx)) || parentShape(o, ctx)?.properties.shape?.value === 'sequence_diagram'),
+};
+export const movable: Trait = {
+  name: 'movable',
+  applies: (o, ctx) => connectable.applies(o, ctx) && ctx.engine === 'tala' && !ordered.applies(o, ctx) && parentShape(o, ctx)?.properties.shape?.value !== 'hierarchy',
+};
 export const hasHandle: Trait = { name: 'has-handle', applies: (o, ctx) => connectable.applies(o, ctx) && Boolean(o.box) };
 
 export function press(object: AssocObject | undefined, ctx: Context, region: 'handle' | 'body') {
   if (!object) return 'pan';
   if (region === 'handle') return hasHandle.applies(object, ctx) ? 'connect' : 'pan';
   if (movable.applies(object, ctx)) return 'move';
+  if (ordered.applies(object, ctx)) return 'reorder';
   // Body drags still reparent on engines that ignore positions (spec 0015 §3.3).
   return connectable.applies(object, ctx) ? 'reparent' : 'pan';
 }
+
+export { isGrid };

@@ -1,4 +1,4 @@
-import { resetShape } from './shape.ts';
+import { resetKind } from './shape.ts';
 import type { Kind } from './types.ts';
 
 const TAG = { markdown: 'md', latex: 'latex' } as const;
@@ -10,6 +10,6 @@ export const text: Kind = {
   section: { id: 'text', title: 'Text', controls: [{ keyword: 'content' }, { keyword: 'language' }] },
   detect: o => o.kind === 'shape' && (o.content === 'markdown' || o.content === 'code' || o.content === 'latex'),
   read: o => ({ text: o.label, tag: o.content === 'code' ? o.language : TAG[o.content as keyof typeof TAG] }),
-  write: (c, o) => [...resetShape(o), { op: 'set', key: o.id, value: c.text, tag: c.tag ?? 'md' }],
+  write: (c, o) => [...resetKind(o), { op: 'set', key: o.id, value: c.text, tag: c.tag ?? 'md' }],
   loss: () => [],
 };

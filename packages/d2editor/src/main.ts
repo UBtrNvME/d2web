@@ -298,6 +298,32 @@ function grab(e: PointerEvent): Grab | undefined {
   const parentBox = objects.find(o => o.id === parent)?.box;
   let into = parent;
   const reset = () => { markTarget(''); for (const el of nodes) el.style.translate = ''; };
+  // Cells of a grid and actors of a sequence diagram have no free position: dropping one on a sibling puts it there (spec 0019 `reorder`).
+  if (action === 'reorder') {
+    const siblings = objects.filter(o => (o.parent ?? '') === parent);
+    let over = '';
+    return {
+      move(dx, dy) {
+        dragged = nodes;
+        hideHandles();
+        for (const el of nodes) el.style.translate = `${dx}px ${dy}px`;
+        const x = start.x + dx, y = start.y + dy;
+        over = siblings.find(o => o.id !== object.id && o.box && x >= o.box.X && x <= o.box.X + o.box.Width && y >= o.box.Y && y <= o.box.Y + o.box.Height)?.id ?? '';
+        markTarget(over);
+      },
+      cancel: reset,
+      drop() {
+        markTarget('');
+        state.selected = object.id;
+        if (!over) return reset();
+        // Dropped on an earlier sibling it goes before it; on a later one, after it.
+        const at = siblings.findIndex(o => o.id === object.id), to = siblings.findIndex(o => o.id === over);
+        const before = to < at ? over : siblings[to + 1]?.id;
+        dropping = state.revision;
+        void edit([{ op: 'reorder', key: object.id, ...(before ? { before } : {}) }]).then(() => { dropping = -1; reset(); });
+      },
+    };
+  }
   return {
     move(dx, dy) {
       dragged = nodes;

@@ -833,7 +833,7 @@ test('the Type picker turns a shape into a text node and back as one edit each, 
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: sql_table\n  id: int\n}\n');
   await select(page, 'a');
-  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence']);
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence', 'Grid']);
   await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
@@ -995,5 +995,36 @@ test('a sequence diagram offers Add actor, an actor inside it offers Add note, a
   await expect(page.locator('#props .actions button')).toHaveText(['Add note']);
   await object(page, 'plain').focus();
   await expect(page.locator('#props .actions button')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a grid shows Columns, Rows and Gap; dragging a cell onto a sibling reorders it by one edit; turning it into a Shape removes the grid keywords (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'g: {\n  grid-columns: 2\n  a\n  b\n  c\n}\n');
+  await object(page, 'g').focus();
+  await expect(page.locator('#selected')).toHaveText('Grid g');
+  await expect(page.locator('#props [data-section="grid"] .fields label > span:first-child')).toHaveText(['Columns', 'Rows', 'Gap']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  await page.locator('#props [data-path="g.grid-columns"]').fill('3');
+  await page.locator('#props [data-path="g.grid-columns"]').press('Tab');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('grid-columns: 3');
+  // Drag c onto a: it goes first.
+  n = await edits();
+  const from = await object(page, 'g.c').locator('[data-k]').first().boundingBox(), to = await object(page, 'g.a').locator('[data-k]').first().boundingBox();
+  await page.mouse.move(from.x + 4, from.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/grid-columns: 3\n\s+c\n\s+a\n\s+b/);
+  expect((await page.evaluate(() => traffic.edits.at(-1))).patch.text).not.toMatch(/top|left/);
+  await object(page, 'g').focus();
+  await page.locator('#type button', { hasText: 'Shape' }).click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).not.toContain('grid-columns');
+  await expect(page.locator('#selected')).toHaveText('Shape g');
   expect(errors).toEqual([]);
 });
