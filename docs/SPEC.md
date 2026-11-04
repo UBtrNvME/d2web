@@ -22,5 +22,6 @@ The accepted product scope is [read-only v1](product.md); [ADRs](adr/README.md) 
 | [0015 d2editor, palette, zones and drag-to-connect](specs/0015-palette.md) | Accepted 3 November 2026; building |
 | [0016 d2editor, drag past the origin](specs/0016-drag-past-origin.md) | Accepted and built 3 November 2026; `test:editor` in Chromium |
 | [0018 d2editor, element kinds and the layered inspector](specs/0018-element-kinds.md) | Accepted 4 November 2026 with ADR 0015; slice 1 built (`tasks/todo-0018.md`), slices 2-5 not; `test:editor` in Chromium |
+| [0019 edit API, structure operations](specs/0019-structure-edit-ops.md) | Accepted 4 November 2026; not built |
 
 Research probes under `research/` are evidence, not additional production APIs. The generated [feature map](feature-map.md) covers catalog constructs and paint measurements; it is not full semantic or browser acceptance.
