@@ -8,7 +8,7 @@ import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } fro
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { convert, kindOf, kinds, sectionsOf } from './kinds/index.ts';
+import { convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
 import { renderFields } from './inspector.ts';
 import keywordTable from './keywords.json' with { type: 'json' };
 
@@ -438,14 +438,14 @@ function inspect() {
       cursor = control;
       control.hidden = !applies(keyword) || (keyword === 'language' && object.content !== 'code');
     }
-    const widgets: Record<string, string> = {};
+    const controls: Record<string, Control> = {};
     const fields = section.controls.filter(c => !HAND.has(c.keyword)).flatMap(c => {
       const f = caps.fields.find(f => f.keyword === c.keyword);
-      if (f?.available) widgets[f.path] = c.widget ?? '';
+      if (f?.available) controls[f.path] = c;
       return f?.available ? [f] : [];
     });
     shown.push(...fields);
-    renderFields(el.querySelector<HTMLElement>('.fields')!, fields, widgets);
+    renderFields(el.querySelector<HTMLElement>('.fields')!, fields, controls);
   }
   // Hand-built controls no section lists are not shown, and none is ever disabled.
   for (const el of form.querySelectorAll<HTMLElement>('[data-keyword]')) if (!placed.has(el)) el.hidden = true;
@@ -517,7 +517,7 @@ $<HTMLFormElement>('props').addEventListener('change', event => {
 for (const host of document.querySelectorAll<HTMLElement>('.fields')) {
   host.addEventListener('change', event => {
     const input = event.target as HTMLInputElement, f = shown.find(f => f.path === input.dataset.path);
-    if (f) void edit(setOps(f, input.type === 'checkbox' ? (input.checked ? 'true' : '') : input.value, shown));
+    if (f) void edit(setOps(f, input.type === 'checkbox' ? (input.checked ? input.dataset.on! : '') : input.value, shown));
   });
   host.addEventListener('click', event => {
     const f = shown.find(f => f.path === (event.target as HTMLElement).dataset.reset);

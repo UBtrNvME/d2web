@@ -1,11 +1,12 @@
 // Renders the generated controls of one inspector section (spec 0018 §3.2): a control per widget, Reset when the value is declared.
 import type { Field } from './capabilities.ts';
+import type { Control } from './kinds/index.ts';
 
 const DEFAULT = "D2's default";
 
-function control(f: Field, widget: string): HTMLInputElement | HTMLSelectElement {
+function control(f: Field, widget: string | undefined): HTMLInputElement | HTMLSelectElement {
   const { domain } = f;
-  if (domain.kind === 'boolean' && widget === 'toggle') return Object.assign(document.createElement('input'), { type: 'checkbox' });
+  if (widget === 'toggle') return Object.assign(document.createElement('input'), { type: 'checkbox' });
   if (domain.kind === 'enum' || domain.kind === 'boolean') {
     const select = document.createElement('select');
     select.append(new Option(DEFAULT, ''), ...(domain.kind === 'boolean' ? ['true', 'false'] : domain.values ?? []).map(v => new Option(v, v)));
@@ -24,29 +25,30 @@ function control(f: Field, widget: string): HTMLInputElement | HTMLSelectElement
   return input;
 }
 
-function build(f: Field, widget: string) {
-  const label = document.createElement('label'), el = control(f, widget);
+function build(f: Field, c: Control | undefined) {
+  const widget = c?.widget ?? '', label = document.createElement('label'), el = control(f, widget);
   el.dataset.path = f.path;
+  el.dataset.on = c?.on ?? 'true';
   const reset = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Reset', title: `Remove ${f.keyword}; D2's default applies` });
   reset.dataset.reset = f.path;
   const row = Object.assign(document.createElement('span'), { className: widget === 'toggle' ? 'toggle' : 'color' });
   row.append(el, ...(widget === 'toggle' ? [] : [reset]));
-  label.append(Object.assign(document.createElement('span'), { textContent: f.keyword }), row);
+  label.append(Object.assign(document.createElement('span'), { textContent: c?.title ?? f.keyword }), row);
   if (widget === 'toggle') label.append(reset);
   if (f.note) label.append(Object.assign(document.createElement('small'), { textContent: f.note }));
   return label;
 }
 
 // Rebuilds only when the set of fields changes, so a focused control keeps its place across compiles.
-export function renderFields(host: HTMLElement, fields: Field[], widgets: Record<string, string> = {}) {
-  const signature = fields.map(f => `${f.path}${widgets[f.path] ?? ''}${f.note ?? ''}`).join('|');
+export function renderFields(host: HTMLElement, fields: Field[], controls: Record<string, Control> = {}) {
+  const signature = fields.map(f => `${f.path}${JSON.stringify(controls[f.path] ?? '')}${f.note ?? ''}`).join('|');
   if (host.dataset.signature !== signature) {
     host.dataset.signature = signature;
-    host.replaceChildren(...fields.map(f => build(f, widgets[f.path] ?? '')));
+    host.replaceChildren(...fields.map(f => build(f, controls[f.path])));
   }
   for (const f of fields) {
     const el = host.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-path="${CSS.escape(f.path)}"]`);
-    if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = f.value === 'true';
+    if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = f.value !== undefined && f.value !== 'false' && f.value !== '0';
     else if (el && el !== document.activeElement) el.value = f.value ?? '';
     host.querySelector<HTMLElement>(`[data-reset="${CSS.escape(f.path)}"]`)!.hidden = f.value === undefined || Boolean(f.note);
   }

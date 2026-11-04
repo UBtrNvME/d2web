@@ -4,7 +4,9 @@ import type { AssociationObject, EditOp } from '../../../d2web/src/index.ts';
 /** What every node kind can hold; a conversion is `to.write(from.read(object))`, so N kinds need N descriptors. Rows join in slice 2. */
 export type Canonical = { text: string; /** A block string's tag (`md`, `latex`, a code language); absent for a plain label. */ tag?: string };
 /** A titled group of controls, named by D2 keyword. Hand-built controls (label, fill, stroke, shape, icon, language) are matched by `data-keyword` in the page; the rest are generated. */
-export type Section = { id: string; title: string; controls: { keyword: string; widget?: 'toggle' | 'range' | 'number' }[] };
+export type Section = { id: string; title: string; controls: Control[] };
+/** `title` is the label shown; a toggle writes `on` (default `true`) when checked and removes the declaration when unchecked. */
+export type Control = { keyword: string; title?: string; widget?: 'toggle' | 'range' | 'number'; on?: string };
 export type Kind = {
   id: string;
   label: string;

@@ -773,6 +773,15 @@ test('a connection shows the Element and Edge sections with its ends and both ar
   await painted(page);
   await expect.poll(() => source(page)).toContain('target-arrowhead');
   await expect(head).toHaveValue('diamond');
+  await expect(page.locator('#props [data-section="edge"] .fields label > span:first-child')).toHaveText(['Start', 'End', 'Dashed']);
+  const dashed = page.locator('#props [data-path="(a -> b)[0].style.stroke-dash"]');
+  const m = await page.evaluate(() => traffic.edits.length);
+  await dashed.check();
+  await expect.poll(() => page.evaluate(() => traffic.edits.length), { timeout: 90_000 }).toBe(m + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('stroke-dash: 5');
+  await dashed.uncheck();
+  await expect.poll(() => source(page)).not.toContain('stroke-dash');
   await page.locator('#endpoints button', { hasText: 'To: b' }).click();
   await expect(page.locator('#selected')).toHaveText('Shape b');
   await expect(page.locator('#endpoints')).toBeHidden();

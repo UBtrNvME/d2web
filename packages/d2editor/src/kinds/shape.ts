@@ -7,7 +7,7 @@ const OTHER = new Set(['sql_table', 'class', 'image', 'sequence_diagram', 'hiera
 export const shape: Kind = {
   id: 'shape',
   label: 'Shape',
-  section: { id: 'shape', title: 'Shape', controls: [{ keyword: 'label' }, { keyword: 'shape' }, { keyword: 'icon' }, { keyword: '3d', widget: 'toggle' }, { keyword: 'shadow', widget: 'toggle' }, { keyword: 'double-border', widget: 'toggle' }, { keyword: 'multiple', widget: 'toggle' }] },
+  section: { id: 'shape', title: 'Shape', controls: [{ keyword: 'label' }, { keyword: 'shape' }, { keyword: 'icon' }, { keyword: '3d', title: '3D', widget: 'toggle' }, { keyword: 'shadow', title: 'Shadow', widget: 'toggle' }, { keyword: 'double-border', title: 'Double border', widget: 'toggle' }, { keyword: 'multiple', title: 'Multiple', widget: 'toggle' }] },
   detect: o => o.kind === 'shape' && !o.content && !OTHER.has(o.properties.shape?.value ?? ''),
   read: o => ({ text: o.label }),
   // No tag removes the block form and leaves the style, children and `shape:` line as they are (TestKindWrites).

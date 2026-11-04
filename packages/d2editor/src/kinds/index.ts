@@ -4,13 +4,13 @@ import { shape } from './shape.ts';
 import { text } from './text.ts';
 import type { Kind, Section } from './types.ts';
 
-export type { Canonical, Kind, Section } from './types.ts';
+export type { Canonical, Control, Kind, Section } from './types.ts';
 export const kinds: Kind[] = [shape, text];
 
 // Inherited sections: every element has these (spec 0018 §2).
-const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', widget: 'range' }, { keyword: 'stroke-width', widget: 'number' }] };
+const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', title: 'Opacity', widget: 'range' }, { keyword: 'stroke-width', title: 'Width', widget: 'number' }] };
 const node: Section = { id: 'node', title: 'Node', controls: [{ keyword: 'fill' }] };
-const edge: Section = { id: 'edge', title: 'Edge', controls: [{ keyword: 'label' }, { keyword: 'source-arrowhead' }, { keyword: 'target-arrowhead' }, { keyword: 'stroke-dash', widget: 'number' }] };
+const edge: Section = { id: 'edge', title: 'Edge', controls: [{ keyword: 'label' }, { keyword: 'source-arrowhead', title: 'Start' }, { keyword: 'target-arrowhead', title: 'End' }, { keyword: 'stroke-dash', title: 'Dashed', widget: 'toggle', on: '5' }] };
 
 export const kindOf = (object: AssociationObject) => kinds.find(k => k.detect(object));
 
