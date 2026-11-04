@@ -248,7 +248,7 @@ test('an invalid edit rejects without reaching the worker', async () => {
   const { spawn, spawned } = fakes(both());
   const client = createClient({ spawn });
   await assert.rejects(client.edit({ ...editInput(1), ops: [] }), /1 to 256/);
-  await assert.rejects(client.edit({ ...editInput(1), ops: [{ op: 'reconnect', key: 'a' }] }), /unknown operation/);
+  await assert.rejects(client.edit({ ...editInput(1), ops: [{ op: 'unknown', key: 'a' }] }), /unknown operation/);
   await wait(5);
   assert.equal(spawned[0].sent.length, 0);
   client.dispose();

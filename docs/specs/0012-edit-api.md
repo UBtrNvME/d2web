@@ -36,6 +36,12 @@ Protocol version becomes **2** (ADR 0012). Existing messages are unchanged; `rea
 | `delete` | `key` | `Delete(g, board, key)` | shape with its connections, one connection (`(a -> b)[0]`) |
 | `rename` | `key`, `name` | `Rename(g, board, key, name)` | rename an ID; authored index references renumbered |
 | `move` | `key`, `parent` | `Move(g, board, key, ReparentIDDelta(…), true)` | reparent a shape with its descendants (`""` is the board's root); connections rewritten; its own `top`/`left` removed. Refused before the oracle runs: a move into itself or a descendant (the oracle overflows the Go stack), a shape whose own, descendant or connection declarations include one from an imported file (the oracle rewrites only the entry, so it would duplicate; an import spread inside the shape is refused too), a name the parent already has; refused after: a key a scenario or step references (the oracle would leave a second object there). Added 3 November 2026, [palette primitives](../ideas/palette-primitives.md) |
+| `row` | `key`, `name`, `type?`, `constraint?` | AST edit, recompile | upsert a table or class row; [spec 0019](0019-structure-edit-ops.md) |
+| `row-delete` | `key`, `name` | AST edit, recompile | remove every declaration of a row; [spec 0019](0019-structure-edit-ops.md) |
+| `row-rename` | `key`, `name`, `to` | AST edit, recompile | rename every declaration of a row; [spec 0019](0019-structure-edit-ops.md) |
+| `reorder` | `key`, `before?` | AST edit, recompile | reorder a shape, connection or row in its parent map; [spec 0019](0019-structure-edit-ops.md) |
+| `reconnect` | `key`, `src?`, `dst?`, `reverse?` | AST edit, recompile | retarget or reverse a connection; [spec 0019](0019-structure-edit-ops.md) |
+| `unset` | `key` | AST edit, recompile | remove every declaration of an object's reserved keyword outside style; [spec 0019](0019-structure-edit-ops.md) |
 
 `create` may return a different key than requested (D2 picks a free one); the result reports it (section 3.2).
 

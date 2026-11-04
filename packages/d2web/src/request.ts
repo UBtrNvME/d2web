@@ -148,7 +148,20 @@ export function normalizeEditRequest(input: unknown): EditRequest {
     if (op.op === 'set') { if (op.value !== null && typeof op.value !== 'string') bad('set needs a string or null value'); if (op.tag !== undefined && typeof op.tag !== 'string') bad('tag must be a string'); }
     else if (op.op === 'rename') { if (typeof op.name !== 'string') bad('rename needs a string name'); }
     else if (op.op === 'move') { if (typeof op.parent !== 'string') bad('move needs a string parent ("" for the root)'); }
-    else if (op.op !== 'create' && op.op !== 'delete') bad(`unknown operation ${String(op.op)}`);
+    else if (op.op === 'row' || op.op === 'row-delete' || op.op === 'row-rename') {
+      if (typeof op.name !== 'string' || !op.name) bad('row needs a non-empty string name');
+      if (op.op === 'row-rename' && (typeof op.to !== 'string' || !op.to)) bad('row-rename needs a non-empty string to');
+      if (op.op === 'row') {
+        if (op.type !== undefined && typeof op.type !== 'string') bad('type must be a string');
+        if (op.constraint !== undefined && op.constraint !== null && typeof op.constraint !== 'string' && !(Array.isArray(op.constraint) && op.constraint.every(c => typeof c === 'string'))) bad('constraint must be null, a string or a string list');
+      }
+    }
+    else if (op.op === 'reorder') { if (op.before !== undefined && (typeof op.before !== 'string' || !op.before)) bad('before must be a non-empty string'); }
+    else if (op.op === 'reconnect') {
+      for (const end of ['src', 'dst']) if (op[end] !== undefined && (typeof op[end] !== 'string' || !op[end])) bad(`${end} must be a non-empty string`);
+      if (op.reverse !== undefined && typeof op.reverse !== 'boolean') bad('reverse must be a boolean');
+    }
+    else if (op.op !== 'create' && op.op !== 'delete' && op.op !== 'unset') bad(`unknown operation ${String(op.op)}`);
   });
   return {
     v: PROTOCOL_VERSION, type: 'edit', id: integer(input.id, 'id', 0), revision: integer(input.revision, 'revision', 0),

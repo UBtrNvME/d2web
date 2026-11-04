@@ -94,3 +94,29 @@ test('edit requests: shape checked, board defaults to the root', async () => {
     assert.throws(() => normalizeEditRequest({ ...base, ...patch }), message);
   }
 });
+
+test('structure edit operations: optional fields and constraint presence survive validation', async () => {
+  const { normalizeEditRequest } = await import('../src/request.ts');
+  const base = { v: 2, type: 'edit', id: 1, revision: 2, files: { 'main.d2': 'a' }, entry: 'main.d2' };
+  const ops = [
+    { op: 'row', key: 't', name: 'id' },
+    ...[null, 'unique', [], ['primary_key', 'unique']].map(constraint => ({ op: 'row', key: 't', name: 'id', type: 'int', constraint })),
+    { op: 'row-delete', key: 't', name: 'id' },
+    { op: 'row-rename', key: 't', name: 'id', to: 'number' },
+    { op: 'reorder', key: 'a' }, { op: 'reorder', key: 'a', before: 'b' },
+    { op: 'reconnect', key: '(a -> b)[0]' },
+    { op: 'reconnect', key: '(a -> b)[0]', src: 'c', dst: 'd', reverse: true },
+    { op: 'unset', key: 'g.grid-rows' },
+  ];
+  assert.deepEqual(normalizeEditRequest({ ...base, ops }).ops, ops);
+  for (const op of [
+    { op: 'row', key: 't' }, { op: 'row', key: 't', name: '' },
+    { op: 'row', key: 't', name: 'id', type: null },
+    ...[3, {}, [1], ['unique', null]].map(constraint => ({ op: 'row', key: 't', name: 'id', constraint })),
+    { op: 'row-delete', key: 't', name: 1 }, { op: 'row-rename', key: 't', name: 'id' },
+    { op: 'row-rename', key: 't', name: 'id', to: '' },
+    ...[null, 1, ''].map(before => ({ op: 'reorder', key: 'a', before })),
+    { op: 'reconnect', key: 'e', src: 1 }, { op: 'reconnect', key: 'e', dst: '' },
+    { op: 'reconnect', key: 'e', reverse: 'yes' }, { op: 'unset' },
+  ]) assert.throws(() => normalizeEditRequest({ ...base, ops: [op] }), ProtocolError, JSON.stringify(op));
+});
