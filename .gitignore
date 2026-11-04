@@ -14,3 +14,4 @@ coverage/
 /imports/d2/
 /imports/d2-architecture-studio/
 /artifacts/
+.claude/artifacts
