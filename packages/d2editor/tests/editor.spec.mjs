@@ -788,7 +788,8 @@ test('a node with no kind yet (a table) shows Element and Node only; a text node
   await object(page, 'n').focus();
   await expect(page.locator('#selected')).toHaveText('Text n');
   await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Node', 'Text']);
-  await expect(page.locator('#props [data-keyword="label"] > span')).toHaveText('Content');
+  await expect(page.locator('#props [name="content"]')).toHaveValue('# Hi');
+  await expect(page.locator('#props [name="label"]')).toBeHidden();
   await expect(page.locator('#props [name="shape"]')).toBeHidden();
   expect(errors).toEqual([]);
 });
@@ -844,5 +845,43 @@ test('the Type picker turns a shape into a text node and back as one edit each, 
   // A kind with no descriptor yet and a connection have no picker.
   await object(page, 't').focus();
   await expect(page.locator('#type')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a text node edits as multi-line text: Enter is a new line, Cmd+Enter saves, Escape cancels, the switch changes the format (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'n: |md\n  # Hi\n|\n');
+  await select(page, 'n');
+  const area = page.locator('#props [name="content"]');
+  await expect(page.locator('#text-tag [aria-pressed="true"]')).toHaveText('Markdown');
+  await expect(page.locator('#props [name="language"]')).toBeHidden();
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await area.click();
+  await area.press('ControlOrMeta+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('second paragraph');
+  expect(await edits()).toBe(n);
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/\|md\n\s+# Hi\n\s+second paragraph\n\|/);
+  // Escape cancels: the typed words are dropped, no edit is made and the selection clears.
+  await select(page, 'n');
+  await area.click();
+  await page.keyboard.type('discard me');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#inspector')).toBeHidden();
+  expect(await edits()).toBe(n + 1);
+  expect(await source(page)).not.toContain('discard');
+  // The switch rewrites the block with another tag; a code block then shows its language.
+  await select(page, 'n');
+  await page.locator('#text-tag button', { hasText: 'Code' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('|python');
+  await expect(page.locator('#props [name="language"]')).toHaveValue('python');
+  await page.locator('#text-tag button', { hasText: 'LaTeX' }).click();
+  await expect.poll(() => source(page)).toContain('|latex');
   expect(errors).toEqual([]);
 });

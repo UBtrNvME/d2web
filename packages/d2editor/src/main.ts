@@ -410,7 +410,7 @@ function highlight(object: ReturnType<typeof objectOf>) {
 // The layered inspector (ADR 0015, spec 0018): the sections of the selection's inheritance chain, only the controls D2 honours for it.
 // `shown` is every generated field on screen; the edits go through setOps over them.
 let shown: Field[] = [];
-const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language']);
+const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language', 'content']);
 function inspect() {
   const object = objectOf(state.selected);
   highlight(object);
@@ -447,8 +447,6 @@ function inspect() {
   }
   // Hand-built controls no section lists are not shown, and none is ever disabled.
   for (const el of form.querySelectorAll<HTMLElement>('[data-keyword]')) if (!placed.has(el)) el.hidden = true;
-  const labelText = form.querySelector('[data-keyword="label"] > span')!;
-  labelText.textContent = kind?.id === 'text' ? 'Content' : 'Label';
   for (const name of ['label', 'fill', 'stroke']) {
     if (document.activeElement !== field(name)) field(name).value = object.properties[name]?.value ?? (name === 'label' ? object.label : '');
   }
@@ -458,6 +456,11 @@ function inspect() {
     picker.value = hex.length === 4 ? `#${[...hex.slice(1)].map(c => c + c).join('')}` : hex || '#000000';
     picker.classList.toggle('unset', !hex);
   }
+  // The Text surface (ADR 0015): the words as a multi-line editor, and the format as a switch.
+  const content = form.elements.namedItem('content') as HTMLTextAreaElement;
+  if (document.activeElement !== content) content.value = object.label;
+  $('text-tag').replaceChildren(...(kind?.id === 'text' ? TEXT_FORMATS.map(([label, which]) => Object.assign(document.createElement('button'), { type: 'button', textContent: label, onclick: () => setFormat(object.id, which) })) : []));
+  TEXT_FORMATS.forEach(([, which], i) => $('text-tag').children[i]?.setAttribute('aria-pressed', String(object.content === which)));
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
   if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
@@ -470,6 +473,13 @@ function inspect() {
   $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
   const name = $('rename').querySelector('input') as HTMLInputElement;
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
+}
+
+const TEXT_FORMATS = [['Markdown', 'markdown'], ['Code', 'code'], ['LaTeX', 'latex']] as const;
+const tagOf = (content: string, language?: string) => (content === 'code' ? language || 'python' : content === 'latex' ? 'latex' : 'md');
+function setFormat(id: string, content: (typeof TEXT_FORMATS)[number][1]) {
+  const object = objectOf(id);
+  if (object && object.content !== content) void edit([{ op: 'set', key: id, value: object.label, tag: tagOf(content) }]);
 }
 
 function retype(id: string, to: string) {
@@ -492,7 +502,8 @@ $<HTMLFormElement>('props').addEventListener('change', event => {
     text.dispatchEvent(new Event('change', { bubbles: true }));
     return;
   }
-  const id = state.selected, value = input.name === 'label' ? input.value : input.value.trim() || null;
+  const id = state.selected, value = input.name === 'label' || input.name === 'content' ? input.value : input.value.trim() || null;
+  if (input.name === 'content') { const o = objectOf(id); if (o && value !== o.label) void edit([{ op: 'set', key: id, value, tag: tagOf(o.content ?? 'markdown', o.language) }]); return; }
   // A code block's language is its tag, so the code is written again with the new one.
   if (input.name === 'language') { if (value) void edit([{ op: 'set', key: id, value: objectOf(id)!.label, tag: value }]); return; }
   const key = { label: id, fill: `${id}.style.fill`, stroke: `${id}.style.stroke`, shape: `${id}.shape`, icon: `${id}.icon` }[input.name];
@@ -509,6 +520,12 @@ for (const host of document.querySelectorAll<HTMLElement>('.fields')) {
     if (f) void edit(setOps(f, '', shown));
   });
 }
+// Text editor keys: Enter is a new line, Cmd/Ctrl+Enter saves (by leaving the field, which commits), Escape cancels.
+($<HTMLFormElement>('props').elements.namedItem('content') as HTMLTextAreaElement).addEventListener('keydown', event => {
+  const area = event.target as HTMLTextAreaElement;
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); area.blur(); }
+  if (event.key === 'Escape') area.value = objectOf(state.selected)?.label ?? '';
+});
 $<HTMLFormElement>('props').addEventListener('submit', event => event.preventDefault());
 $('props').addEventListener('keydown', event => {
   if (event.key === 'Enter' && event.target instanceof HTMLInputElement) { event.preventDefault(); event.target.blur(); }
