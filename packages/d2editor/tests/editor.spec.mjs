@@ -818,3 +818,31 @@ test('arrow keys move a focused shape on TALA by one checked edit, Undo restores
   expect(await edits()).toBe(m);
   expect(errors).toEqual([]);
 });
+
+test('the Type picker turns a shape into a text node and back as one edit each, keeping style and children; Undo restores it (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: sql_table\n  id: int\n}\n');
+  await select(page, 'a');
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text']);
+  await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.locator('#type button', { hasText: 'Text' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/a: \|md[\s\S]*A[\s\S]*\| \{style\.fill: red\}/);
+  expect(await source(page)).toContain('a.child');
+  await expect(page.locator('#selected')).toHaveText('Text a');
+  await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Text');
+  await page.locator('#type button', { hasText: 'Shape' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Shape a');
+  expect(await source(page)).toContain('a: A {style.fill: red}');
+  await page.click('#undo');
+  await expect(page.locator('#selected')).toHaveText('Text a');
+  // A kind with no descriptor yet and a connection have no picker.
+  await object(page, 't').focus();
+  await expect(page.locator('#type')).toBeHidden();
+  expect(errors).toEqual([]);
+});

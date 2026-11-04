@@ -8,7 +8,7 @@ import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } fro
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { kindOf, sectionsOf } from './kinds/index.ts';
+import { convert, kindOf, kinds, sectionsOf } from './kinds/index.ts';
 import { renderFields } from './inspector.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -461,11 +461,24 @@ function inspect() {
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
   if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
+  // The Type picker (ADR 0015): any registered node kind to any other, one edit. A node whose kind has no descriptor yet cannot be converted safely.
+  $('type').hidden = !kind;
+  $('type').replaceChildren(...(kind ? kinds.map(k => Object.assign(document.createElement('button'), { type: 'button', textContent: k.label, onclick: () => retype(object.id, k.id) })) : []));
+  for (const b of $('type').children) b.setAttribute('aria-pressed', String(b.textContent === kind?.label));
   // A connection names its ends; each is a button that selects it.
   $('endpoints').hidden = !ends;
   $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
   const name = $('rename').querySelector('input') as HTMLInputElement;
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
+}
+
+function retype(id: string, to: string) {
+  const object = objectOf(id), target = kinds.find(k => k.id === to);
+  if (!object || !target || kindOf(object) === target) return;
+  const { ops, loss } = convert(object, target);
+  // Nothing is lost between the kinds built so far; a lossy pair (tables, slice 2) asks first.
+  if (loss.length && !confirm(`Change ${id} to ${target.label}?\n\nThis removes: ${loss.join(', ')}. You can undo it.`)) return;
+  void edit(ops);
 }
 
 const shapeSelect = ($<HTMLFormElement>('props').elements.namedItem('shape') as HTMLSelectElement);
