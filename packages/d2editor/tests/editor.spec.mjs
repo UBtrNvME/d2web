@@ -556,8 +556,8 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await expect(page.locator('#inspector')).toBeHidden();
   await expect(page.locator('#src')).toHaveValue('a: API\n');
   await page.locator('#src').focus();
-  // Element and Node controls come first, then the Shape section's label.
-  for (let n = 0; n < 12 && !(await page.locator('#props [name="label"]').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
+  // The toolbar's buttons, then Element and Node controls, then the Shape section's label.
+  for (let n = 0; n < 30 && !(await page.locator('#props [name="label"]').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#props [name="label"]')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Keyboard');
@@ -833,7 +833,7 @@ test('the Type picker turns a shape into a text node and back as one edit each, 
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: sql_table\n  id: int\n}\n');
   await select(page, 'a');
-  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image']);
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence']);
   await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
@@ -976,5 +976,24 @@ test('double-click edits a label on the canvas; the toolbar sits on the selectio
   await expect.poll(() => source(page), { timeout: 90_000 }).not.toContain('Renamed');
   await painted(page);
   await expect(page.locator('#toolbar')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a sequence diagram offers Add actor, an actor inside it offers Add note, and a plain shape offers neither (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'd: {\n  shape: sequence_diagram\n  a -> b: hi\n}\nplain\n');
+  await object(page, 'd').focus();
+  await expect(page.locator('#selected')).toHaveText('Sequence d');
+  await expect(page.locator('#props [data-section="sequence"] .actions button')).toHaveText(['Add actor']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.locator('#props [data-section="sequence"] .actions button').click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('actor');
+  await object(page, 'd.a').focus();
+  await expect(page.locator('#props .actions button')).toHaveText(['Add note']);
+  await object(page, 'plain').focus();
+  await expect(page.locator('#props .actions button')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

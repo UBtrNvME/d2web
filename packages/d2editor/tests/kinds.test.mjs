@@ -29,9 +29,10 @@ const object = (source, id = 'x') => find(compile(source), id);
 const nodes = {
   shape: ['x: Hi\n', 'x: Hi { style.fill: red }\n', 'x: { shape: cylinder }\n', 'x: Hi { y }\n'],
   image: ['x: { shape: image\n  icon: https://example.com/i.svg\n}\n'],
+  sequence: ['x: { shape: sequence_diagram\n  a -> b\n}\n'],
   text: ['x: |md\n  # Title\n\n  body\n|\n', 'x: |python\n  print(1)\n  print(2)\n|\n', 'x: |latex\n  x^2\n|\n', 'x: |md\n  hi\n| { style.fill: red }\n'],
 };
-const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: sequence_diagram\n  a -> b\n}\n', 'x: { shape: hierarchy }\n'];
+const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: hierarchy }\n'];
 
 test('every selection resolves to a path from Element: node kinds, the fallback and edges', () => {
   for (const [id, sources] of Object.entries(nodes)) for (const source of sources) {

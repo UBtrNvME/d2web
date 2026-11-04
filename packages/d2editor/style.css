@@ -109,3 +109,5 @@ menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; }
 #toolbar input[type=color] { width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; cursor: pointer; }
 #toolbar button { width: 30px; height: 30px; padding: 0; border: 0; background: transparent; }
 .label-edit { position: absolute; box-sizing: border-box; text-align: center; font: 16px system-ui, sans-serif; border: 2px solid #3975d5; border-radius: 4px; background: #fff; color: #000; }
+#inspector .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#inspector .actions:empty { display: none; }

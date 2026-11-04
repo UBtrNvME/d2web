@@ -1,4 +1,5 @@
 import type { AssociationObject, EditOp } from '../../../d2web/src/index.ts';
+import { freeKey } from '../palette.ts';
 import type { Kind } from './types.ts';
 
 // Kinds with their own surface in a later slice, or no kind yet: not a plain shape, so they fall to the "edit in source" fallback.
@@ -12,6 +13,12 @@ export const shape: Kind = {
   id: 'shape',
   label: 'Shape',
   section: { id: 'shape', title: 'Shape', controls: [{ keyword: 'label' }, { keyword: 'shape' }, { keyword: 'icon' }, { keyword: '3d', title: '3D', widget: 'toggle' }, { keyword: 'shadow', title: 'Shadow', widget: 'toggle' }, { keyword: 'double-border', title: 'Double border', widget: 'toggle' }, { keyword: 'multiple', title: 'Multiple', widget: 'toggle' }] },
+  // D2 turns a leaf under a sequence diagram's actor into a note.
+  actions: [{
+    label: 'Add note',
+    when: (o, board) => board.objects.find(p => p.id === o.parent)?.properties.shape?.value === 'sequence_diagram',
+    ops: (o, board) => [{ op: 'create', key: freeKey(board.objects, o.id, 'note') }],
+  }],
   detect: o => o.kind === 'shape' && !o.content && !OTHER.has(o.properties.shape?.value ?? ''),
   read: o => ({ text: o.label }),
   // No tag removes the block form and leaves the style, children and `shape:` line as they are (TestKindWrites).

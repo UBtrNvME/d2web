@@ -476,7 +476,7 @@ function inspect() {
   for (const el of form.querySelectorAll<HTMLElement>('[data-section]')) {
     const section = sections.find(s => s.id === el.dataset.section);
     el.hidden = !section;
-    if (!section) continue;
+    if (!section) { el.querySelector('.actions')?.replaceChildren(); continue; }
     let cursor: Element = el.querySelector('h3')!;
     for (const { keyword } of section.controls.filter(c => HAND.has(c.keyword))) {
       const control = form.querySelector<HTMLElement>(`[data-keyword="${keyword}"]`)!;
@@ -493,6 +493,10 @@ function inspect() {
     });
     shown.push(...fields);
     renderFields(el.querySelector<HTMLElement>('.fields')!, fields, controls);
+    // A kind's actions are buttons under its controls, only where they apply.
+    const host = el.querySelector<HTMLElement>('.actions') ?? el.appendChild(Object.assign(document.createElement('div'), { className: 'actions' }));
+    host.replaceChildren(...(kinds.find(k => k.section.id === section.id)?.actions ?? []).filter(a => a.when?.(object, boardOf()!.association) ?? true)
+      .map(a => Object.assign(document.createElement('button'), { type: 'button', textContent: a.label, onclick: () => void edit(a.ops(object, boardOf()!.association)) })));
   }
   // Hand-built controls no section lists are not shown, and none is ever disabled.
   for (const el of form.querySelectorAll<HTMLElement>('[data-keyword]')) if (!placed.has(el)) el.hidden = true;
