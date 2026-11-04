@@ -1,7 +1,7 @@
 # 0015. d2editor shows an element's kind and inheritance, and omits what does not apply
 
 Status: accepted (user, 4 November 2026: "I accept")
-Delivery: partly delivered (4 November 2026). Slice 1 of [spec 0018](../specs/0018-element-kinds.md) is built: the registry with Shape and Text, the layered inspector, the Type picker, the text surface, the code language search and the edge panel. Table, Class, Image, Sequence and Grid kinds, in-place label editing, the floating toolbar and endpoint retargeting are later slices.
+Delivery: delivered (4 November 2026). [Spec 0018](../specs/0018-element-kinds.md) is built: the registry with Shape, Text, Image, Sequence, Grid, Table and Class, the layered inspector, the Type picker with its confirmation sheet, in-place label editing, the selection toolbar and endpoint retargeting.
 Context: [ADR 0014](0014-advertised-capabilities.md) made the inspector list every field D2 has, with unavailable ones disabled and a reason. In use that is clutter. The author's direction: the visual editor exists to raise productivity, so it shows only what applies and matters; power users edit the rest in the source pane. D2 has two primitives, node and edge, and a few properties change what a node is (a block string, `shape: sql_table`, `class`, `image`, `sequence_diagram`, grid). Any node can become any other kind. Constraints: [ADR 0009](0009-natural-web-forms.md) (D2 owns semantics), [ADR 0012](0012-editing-in-scope.md) (edits go through the worker), [ADR 0013](0013-editor-traits-from-d2.md) (traits derived from D2).
 
 Decision:

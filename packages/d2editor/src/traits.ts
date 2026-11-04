@@ -19,6 +19,14 @@ export const ordered: Trait = {
   name: 'ordered',
   applies: (o, ctx) => connectable.applies(o, ctx) && (isGrid(parentShape(o, ctx)) || parentShape(o, ctx)?.properties.shape?.value === 'sequence_diagram'),
 };
+// A message: a connection inside a sequence diagram, whose place in the order is its position on the page. Returns the diagram's id.
+export function diagramOf(o: AssocObject, ctx: Context) {
+  for (let p = ctx.board.objects.find(s => s.id === o.src); p; p = ctx.board.objects.find(s => s.id === p!.parent)) {
+    if (p.properties.shape?.value === 'sequence_diagram') return p.id;
+  }
+  return undefined;
+}
+export const message: Trait = { name: 'message', applies: (o, ctx) => o.kind === 'connection' && diagramOf(o, ctx) !== undefined };
 export const movable: Trait = {
   name: 'movable',
   applies: (o, ctx) => connectable.applies(o, ctx) && ctx.engine === 'tala' && !ordered.applies(o, ctx) && parentShape(o, ctx)?.properties.shape?.value !== 'hierarchy',
@@ -27,6 +35,7 @@ export const hasHandle: Trait = { name: 'has-handle', applies: (o, ctx) => conne
 
 export function press(object: AssocObject | undefined, ctx: Context, region: 'handle' | 'body') {
   if (!object) return 'pan';
+  if (message.applies(object, ctx)) return region === 'body' ? 'reorder' : 'pan';
   if (region === 'handle') return hasHandle.applies(object, ctx) ? 'connect' : 'pan';
   if (movable.applies(object, ctx)) return 'move';
   if (ordered.applies(object, ctx)) return 'reorder';

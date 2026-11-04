@@ -1096,3 +1096,19 @@ test('a table edits its columns in place: type, constraint chips, rename, add, d
   await expect(page.locator('#props [data-section="class"] .row-line')).toHaveCount(2);
   expect(errors).toEqual([]);
 });
+
+test('dragging a message down a sequence diagram reorders it by one edit (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 's: {\n  shape: sequence_diagram\n  a\n  b\n  a -> b: one\n  b -> a: two\n}\n');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  const first = await object(page, 's.(a -> b)[0]').locator('path').first().boundingBox();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2 + 120, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/b -> a: two\n\s+a -> b: one/);
+  expect(errors).toEqual([]);
+});

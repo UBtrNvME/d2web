@@ -5,7 +5,7 @@ import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
 import { leaves, moveOps, NUDGE, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
-import { hasHandle, movable, press } from './traits.ts';
+import { diagramOf, hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
 import { actionsOf, convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
@@ -326,6 +326,30 @@ function grab(e: PointerEvent): Grab | undefined {
   const parentBox = objects.find(o => o.id === parent)?.box;
   let into = parent;
   const reset = () => { markTarget(''); for (const el of nodes) el.style.translate = ''; };
+  // A message moves up or down the diagram: dropped between two others it takes that place.
+  if (object.kind === 'connection') {
+    const diagram = diagramOf(object, ctx), messages = objects.filter(o => o.kind === 'connection' && diagramOf(o, ctx) === diagram), middle = (o: typeof object) => o.box!.Y + o.box!.Height / 2;
+    let before: string | undefined | null = null;
+    return {
+      move(_dx, dy) {
+        dragged = nodes;
+        for (const el of nodes) el.style.translate = `0 ${dy}px`;
+        const y = start.y + dy, rest = messages.filter(m => m.id !== object.id && m.box);
+        before = rest.find(m => middle(m) > y)?.id;
+        const at = messages.findIndex(m => m.id === object.id);
+        if (before === messages[at + 1]?.id) before = null;
+        markTarget(before ?? '');
+      },
+      cancel: reset,
+      drop() {
+        markTarget('');
+        state.selected = object.id;
+        if (before === null) return reset();
+        dropping = state.revision;
+        void edit([{ op: 'reorder', key: object.id, ...(before ? { before } : {}) }]).then(() => { dropping = -1; reset(); });
+      },
+    };
+  }
   // Cells of a grid and actors of a sequence diagram have no free position: dropping one on a sibling puts it there (spec 0019 `reorder`).
   if (action === 'reorder') {
     const siblings = objects.filter(o => (o.parent ?? '') === parent);
