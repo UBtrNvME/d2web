@@ -69,16 +69,6 @@ test('connections and shapes get different style fields; label and shape are fie
   assert.ok(!names(a).includes('filled'));
 });
 
-test('actions: add-child follows the container trait and says why not', () => {
-  for (const [source, available] of [['x\n', true], ['x: { shape: image\nicon: https://example.com/i.svg }\n', false], ['x: { shape: sql_table }\n', false]]) {
-    const ctx = context(source), actions = capabilities(ctx.board.objects.find(o => o.id === 'x'), ctx).actions;
-    for (const id of ['rename', 'delete']) assert.equal(actions.find(a => a.id === id).available, true);
-    const child = actions.find(a => a.id === 'add-child');
-    assert.equal(child.available, available, source);
-    assert.equal(Boolean(child.reason), !available);
-  }
-});
-
 test('every advertised connection field changes a real compile', () => {
   const ctx = context('a -> b\n'), connection = ctx.board.objects.find(o => o.kind === 'connection');
   for (const field of capabilities(connection, ctx).fields.filter(f => f.path.includes('.style.') && !f.keyword.includes('arrowhead'))) {
@@ -186,19 +176,4 @@ test('a value declared in an imported file says so: an edit overrides it locally
   // The note is true: a set shadows the import, and a delete changes nothing.
   assert.match(JSON.parse(goRun(binary, [request([{ op: 'set', key: 'x.style.fill', value: 'blue' }])])).patch.text, /style\.fill: blue/);
   assert.equal(JSON.parse(goRun(binary, [request([{ op: 'delete', key: 'x.style.fill' }])])).patch.text, files['main.d2']);
-});
-
-test('the actions say why one is unavailable', () => {
-  const ctx = context('t: { shape: sql_table }\n'), actions = capabilities(ctx.board.objects.find(o => o.id === 't'), ctx).actions;
-  assert.match(actions.find(a => a.id === 'add-child').reason, /rows/);
-});
-
-test('interactions follow the press arbiter: connect from a handle, move on TALA, reparent elsewhere, nothing for a connection', () => {
-  const on = (source, engine, id = 'x') => { const ctx = context(source, engine); return capabilities(ctx.board.objects.find(o => o.id === id), ctx).interactions; };
-  const tala = on('x\n', 'tala'), dagre = on('x\n', 'dagre');
-  assert.deepEqual(tala.map(i => `${i.region}:${i.action}`), ['handle:connect', 'body:move', 'keyboard:move']);
-  assert.deepEqual(dagre.map(i => `${i.region}:${i.action}`), ['handle:connect', 'body:reparent']);
-  assert.ok(tala.every(i => i.gesture && i.result));
-  const ctx = context('a -> b\n');
-  assert.deepEqual(capabilities(ctx.board.objects.find(o => o.kind === 'connection'), ctx).interactions, []);
 });

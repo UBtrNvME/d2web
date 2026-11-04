@@ -2,6 +2,10 @@
 
 Current work and historical execution records. Product scope and accepted architecture are in [product.md](../docs/product.md) and the [ADRs](../docs/adr/README.md); the [specifications](../docs/SPEC.md) own the implemented contracts. Research evidence is in [research findings](../docs/research-findings.md), the [capability matrix](../docs/capability-matrix.md) and [plan.md](plan.md). Native HTML/JS/CSS/SVG is the foundation; D2/WASM owns compile/layout/theme, with scene-led paint plus association data.
 
+## Slice: element kinds and the layered inspector (ADR 0015, spec 0018; 4 November 2026)
+
+Slice 1 built on `ui-updates`; tasks and findings in [todo-0018.md](todo-0018.md), the plan in [plan-0018.md](plan-0018.md). Supersedes the rendering half of the next slice.
+
 ## Slice: advertised capabilities (ADR 0014, spec 0017; 4 November 2026)
 
 Built on `capabilities-0017`; tasks, findings and the open decision (5b, reverse and arrow direction) are in [todo-0017.md](todo-0017.md), the plan in [plan-0017.md](plan-0017.md).

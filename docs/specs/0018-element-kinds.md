@@ -1,7 +1,7 @@
 # Spec 0018: d2editor, element kinds and the layered inspector
 
 Status: **accepted** (user, 4 November 2026) with [ADR 0015](../adr/0015-editor-kinds-inheritance.md). Answers in §8: one Text kind with a Markdown / Code / LaTeX switch, and a language switch for Code; the proposed commit keys; slice 1 first. Supersedes the "advertise every field, disabled with a reason" part of [spec 0017](0017-capabilities.md) §3.3. Idea and boards: [minimal UX](../ideas/editor-minimal-ux.md) (the design preview is the "d2editor Layered UI" canvas).
-Delivered: not delivered. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user.
+Delivered: partly delivered (4 November 2026): slice 1 (§7) is built and covered by `tasks/todo-0018.md`; slices 2-5 are not. Deviations: no loss sheet yet (Shape and Text lose nothing; `retype` falls back to the browser's `confirm`), no separate markdown preview (the canvas is the preview), the language search is a native `datalist`. A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user.
 
 ## 1. Objective
 
