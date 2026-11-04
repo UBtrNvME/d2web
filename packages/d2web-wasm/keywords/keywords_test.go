@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/d2lang/d2/d2ast"
 	"github.com/d2lang/d2/d2compiler"
 )
@@ -109,6 +110,25 @@ func TestDomainsMatchD2(t *testing.T) {
 		if !accepts("a -> b: {target-arrowhead: {shape: " + a + "}}") {
 			t.Errorf("arrowhead %s", a)
 		}
+	}
+}
+
+// D2 highlights a code block with lexers.Get(tag), so every exported tag must resolve to a real lexer and the common ones must be exported.
+func TestLanguagesResolveInD2sHighlighter(t *testing.T) {
+	all := map[string]bool{}
+	for _, l := range Table().Languages {
+		all[l] = true
+		if lexers.Get(l) == nil {
+			t.Errorf("language %q has no lexer", l)
+		}
+	}
+	for _, l := range Table().Common {
+		if !all[l] {
+			t.Errorf("common language %q is not exported", l)
+		}
+	}
+	if len(all) < 100 {
+		t.Errorf("only %d languages", len(all))
 	}
 }
 

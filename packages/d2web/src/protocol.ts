@@ -117,7 +117,13 @@ export type EditOp =
   | { op: 'create'; key: string }
   | { op: 'delete'; key: string }
   | { op: 'rename'; key: string; name: string }
-  | { op: 'move'; key: string; parent: string };
+  | { op: 'move'; key: string; parent: string }
+  | { op: 'row'; key: string; name: string; type?: string; constraint?: string | string[] | null }
+  | { op: 'row-delete'; key: string; name: string }
+  | { op: 'row-rename'; key: string; name: string; to: string }
+  | { op: 'reorder'; key: string; before?: string }
+  | { op: 'reconnect'; key: string; src?: string; dst?: string; reverse?: boolean }
+  | { op: 'unset'; key: string };
 export interface EditRequest { v: typeof PROTOCOL_VERSION; type: 'edit'; id: number; revision: number; files: Record<string, string>; entry: string; board?: string; ops: EditOp[] }
 export type EditErrorCode = 'compile' | 'edit' | 'panic' | 'recompile' | 'unchecked' | 'internal' | 'stale';
 export interface EditResult {
@@ -151,6 +157,7 @@ export interface AssociationObject {
   classes?: string[];
   // A code block's tag (`|go …|` is 'go'), for content 'code' only (spec 0015).
   language?: string;
+  rows?: { name: string; type: string; constraint?: string[] }[];
   nodes: string[];
   references: Source[];
   properties: Record<string, { value: string; source: Source | null }>;

@@ -1,7 +1,7 @@
 # Spec 0017: d2editor, advertised fields, actions and interactions
 
 Status: **accepted** (user, 4 November 2026: "Accept"), with ADR 0014 and the proposed defaults for §6: a "not drawn yet" note and a build-time JSON export. **Built** 4 November 2026 on `capabilities-0017` except the reverse action and arrow direction (blocked, see the Delivered line); `mise run check` and `test:editor` (32 cases) pass.
-Delivered: partly delivered (4 November 2026). Built: keyword table from D2 with probed domains, `capabilities()` for shapes, containers and connections (fields, sources, reasons, actions, gestures), generated inspector fields with Reset, layout fields, arrowheads and endpoints, arrow-key moves. Not delivered: §3.5 reverse and arrow direction, which need a `reconnect` edit op the spec forbids in this slice (decision recorded in `tasks/todo-0017.md` 5b). Not drawn-yet notes were not needed: every style keyword is `ok` in `docs/feature-map.md`. Deviations: the worker also reports layout and arrowhead keywords in `association.properties` (additive); the table test is Go; a blank control uses `delete`, not `set`.
+Delivered: partly delivered, and its rendering superseded (4 November 2026). Built and still true: the keyword table from D2 with probed domains and `capabilities()` for fields and their reasons. Replaced by [spec 0018](0018-element-kinds.md): §3.3 (show every field, disabled with a reason), §3.4 (the interactions panel) and the actions list are gone from the inspector, and `capabilities()` no longer returns actions or interactions; arrow-key moves remain. Not delivered: §3.5 reverse and arrow direction (a `reconnect` edit op the spec forbade in this slice).
 
 ## 1. Objective
 

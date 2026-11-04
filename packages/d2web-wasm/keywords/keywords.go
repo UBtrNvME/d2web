@@ -5,10 +5,13 @@ package keywords
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/d2lang/d2/d2ast"
 	"github.com/d2lang/d2/d2renderers/d2fonts"
 	"github.com/d2lang/d2/d2target"
+
+	"github.com/alecthomas/chroma/v2/lexers"
 )
 
 type Domain struct {
@@ -23,9 +26,9 @@ type Keyword struct {
 	Style     bool   `json:"style"`               // written as style.<name>
 	Validated bool   `json:"validated,omitempty"` // D2 rejects a value outside the domain
 	// Only: D2 accepts the keyword on these shapes alone (the compiler refuses it elsewhere). Not: the scene builder refuses it on these.
-	Only []string `json:"only,omitempty"`
-	Not  []string `json:"not,omitempty"`
-	Domain    Domain `json:"domain"`
+	Only   []string `json:"only,omitempty"`
+	Not    []string `json:"not,omitempty"`
+	Domain Domain   `json:"domain"`
 }
 
 type Result struct {
@@ -33,6 +36,33 @@ type Result struct {
 	Shapes     []string  `json:"shapes"`
 	Arrowheads []string  `json:"arrowheads"`
 	Keywords   []Keyword `json:"keywords"`
+	// Languages are the code-block tags D2's highlighter knows (chroma; an unknown tag falls back to plain text), Common the ones offered first.
+	Languages []string `json:"languages"`
+	Common    []string `json:"commonLanguages"`
+}
+
+// common is an editor choice, not a D2 list; keywords_test.go checks each is a language D2 highlights.
+var common = []string{"python", "go", "javascript", "typescript", "java", "rust", "c", "cpp", "sql", "bash", "json", "yaml", "html", "css"}
+
+func languages() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, l := range lexers.GlobalLexerRegistry.Lexers {
+		cfg := l.Config()
+		// The lexer's name and its first alias ("javascript" and "js"); every other alias still works when typed.
+		names := []string{strings.ToLower(cfg.Name)}
+		if len(cfg.Aliases) > 0 {
+			names = append(names, cfg.Aliases[0])
+		}
+		for _, name := range names {
+			if !seen[name] && lexers.Get(name) != nil {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func f(v float64) *float64 { return &v }
@@ -107,5 +137,5 @@ func Table() Result {
 		{Name: "filled", Style: true, Domain: boolean},
 	}
 	sort.Slice(k, func(i, j int) bool { return k[i].Name < k[j].Name })
-	return Result{D2: "v0.9.0", Shapes: d2target.Shapes, Arrowheads: arrowheads, Keywords: k}
+	return Result{D2: "v0.9.0", Shapes: d2target.Shapes, Arrowheads: arrowheads, Keywords: k, Languages: languages(), Common: common}
 }

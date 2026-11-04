@@ -5,10 +5,13 @@ import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
 import { leaves, moveOps, NUDGE, placeShifting } from './position.ts';
 import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
-import { hasHandle, movable, press } from './traits.ts';
+import { diagramOf, hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { HAND_BUILT, renderActions, renderFields, renderInteractions } from './inspector.ts';
+import { actionsOf, convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
+import { renderFields, renderRows } from './inspector.ts';
+import keywordTable from './keywords.json' with { type: 'json' };
+
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -40,7 +43,7 @@ try {
 const client = createClient({ spawn: spawnWorker(), images: { mode: 'link' } });
 const view = mount($('host'));
 const history = createHistory(initial);
-const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; }, grab);
+const camera = canvas($('canvas'), $('host'), $('grid'), v => { $('zoom').textContent = `${Math.round(v.k * 100)}%`; placeToolbar(); }, grab);
 // Fit the next painted board: on load, an opened file, and a board switch.
 let fitNext = true;
 // `painted` is the revision the canvas shows.
@@ -280,7 +283,35 @@ function markTarget(id: string) {
   target = box ? chrome('drop-target', `pointer-events:none;left:${box.X}px;top:${box.Y}px;width:${box.Width}px;height:${box.Height}px;outline:2px dashed #3975d5;outline-offset:2px;background:rgb(57 117 213 / 0.08)`) : undefined;
 }
 
+function retarget(dot: HTMLElement, e: PointerEvent): Grab | undefined {
+  const board = boardOf(), id = state.selected, object = objectOf(id), start = toScene(e.clientX, e.clientY);
+  if (!board || !object || !start) return;
+  const side = dot.dataset.end as 'source' | 'target', fixed = endDots.find(d => d !== dot)!, ctx = { board: board.association, engine: layout() };
+  const band = chrome('rubber-band', 'left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none', 'svg');
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  for (const [k, v] of Object.entries({ stroke: '#3975d5', 'stroke-width': String(2 / camera.view.k), 'stroke-dasharray': `${6 / camera.view.k} ${4 / camera.view.k}` })) line.setAttribute(k, v);
+  band.append(line);
+  let to = '';
+  const end = () => { band.remove(); markTarget(''); };
+  return {
+    move(dx, dy) {
+      const x = start.x + dx, y = start.y + dy;
+      for (const [k, v] of Object.entries({ x1: fixed.dataset.x!, y1: fixed.dataset.y!, x2: String(x), y2: String(y) })) line.setAttribute(k, v);
+      to = connectTarget(ctx, x, y, 12 / camera.view.k);
+      markTarget(to && to !== (side === 'source' ? object.src : object.dst) ? to : '');
+    },
+    cancel: end,
+    drop() {
+      end();
+      if (!to || to === (side === 'source' ? object.src : object.dst)) return;
+      void edit([{ op: 'reconnect', key: id, ...(side === 'source' ? { src: to } : { dst: to }) }]);
+    },
+  };
+}
+
 function grab(e: PointerEvent): Grab | undefined {
+  const dot = (e.composedPath()[0] as Element | undefined)?.closest?.('.end-dot');
+  if (dot) return retarget(dot as HTMLElement, e);
   const handle = (e.composedPath()[0] as Element | undefined)?.closest?.('.handle');
   const object = objectOf(handle ? (handle as HTMLElement).dataset.from! : hovered), board = boardOf();
   if (!board) return;
@@ -295,6 +326,56 @@ function grab(e: PointerEvent): Grab | undefined {
   const parentBox = objects.find(o => o.id === parent)?.box;
   let into = parent;
   const reset = () => { markTarget(''); for (const el of nodes) el.style.translate = ''; };
+  // A message moves up or down the diagram: dropped between two others it takes that place.
+  if (object.kind === 'connection') {
+    const diagram = diagramOf(object, ctx), messages = objects.filter(o => o.kind === 'connection' && diagramOf(o, ctx) === diagram), middle = (o: typeof object) => o.box!.Y + o.box!.Height / 2;
+    let before: string | undefined | null = null;
+    return {
+      move(_dx, dy) {
+        dragged = nodes;
+        for (const el of nodes) el.style.translate = `0 ${dy}px`;
+        const y = start.y + dy, rest = messages.filter(m => m.id !== object.id && m.box);
+        before = rest.find(m => middle(m) > y)?.id;
+        const at = messages.findIndex(m => m.id === object.id);
+        if (before === messages[at + 1]?.id) before = null;
+        markTarget(before ?? '');
+      },
+      cancel: reset,
+      drop() {
+        markTarget('');
+        state.selected = object.id;
+        if (before === null) return reset();
+        dropping = state.revision;
+        void edit([{ op: 'reorder', key: object.id, ...(before ? { before } : {}) }]).then(() => { dropping = -1; reset(); });
+      },
+    };
+  }
+  // Cells of a grid and actors of a sequence diagram have no free position: dropping one on a sibling puts it there (spec 0019 `reorder`).
+  if (action === 'reorder') {
+    const siblings = objects.filter(o => (o.parent ?? '') === parent);
+    let over = '';
+    return {
+      move(dx, dy) {
+        dragged = nodes;
+        hideHandles();
+        for (const el of nodes) el.style.translate = `${dx}px ${dy}px`;
+        const x = start.x + dx, y = start.y + dy;
+        over = siblings.find(o => o.id !== object.id && o.box && x >= o.box.X && x <= o.box.X + o.box.Width && y >= o.box.Y && y <= o.box.Y + o.box.Height)?.id ?? '';
+        markTarget(over);
+      },
+      cancel: reset,
+      drop() {
+        markTarget('');
+        state.selected = object.id;
+        if (!over) return reset();
+        // Dropped on an earlier sibling it goes before it; on a later one, after it.
+        const at = siblings.findIndex(o => o.id === object.id), to = siblings.findIndex(o => o.id === over);
+        const before = to < at ? over : siblings[to + 1]?.id;
+        dropping = state.revision;
+        void edit([{ op: 'reorder', key: object.id, ...(before ? { before } : {}) }]).then(() => { dropping = -1; reset(); });
+      },
+    };
+  }
   return {
     move(dx, dy) {
       dragged = nodes;
@@ -406,16 +487,120 @@ function highlight(object: ReturnType<typeof objectOf>) {
   node.parentElement.append(outline);
 }
 
-// The fields the inspector lists now; the generated controls edit through setOps over them (spec 0017).
+// A selected connection shows a dot at each end; dragging one onto another shape retargets that end (spec 0019 `reconnect`).
+let endDots: HTMLElement[] = [];
+function markEnds(object: ReturnType<typeof objectOf>) {
+  for (const dot of endDots) dot.remove();
+  endDots = [];
+  const node = object?.kind === 'connection' && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
+  const paths = node ? [...node.querySelectorAll('path')] : [];
+  const line = paths.sort((a, b) => b.getTotalLength() - a.getTotalLength())[0];
+  if (!line || !line.getScreenCTM()) return;
+  const size = 14 / camera.view.k, length = line.getTotalLength();
+  endDots = (['source', 'target'] as const).flatMap(end => {
+    const local = line.getPointAtLength(end === 'source' ? 0 : length), client = new DOMPoint(local.x, local.y).matrixTransform(line.getScreenCTM()!), at = toScene(client.x, client.y);
+    if (!at) return [];
+    const dot = chrome('end-dot', `left:${at.x - size / 2}px;top:${at.y - size / 2}px;width:${size}px;height:${size}px;border-radius:50%;background:#fff;border:${2 / camera.view.k}px solid #3975d5;box-sizing:border-box;cursor:grab;pointer-events:auto`) as HTMLElement;
+    Object.assign(dot.dataset, { end, x: at.x, y: at.y });
+    return [dot];
+  });
+}
+
+// The toolbar sits on the selection's outline in screen space (it does not scale with zoom) and follows pan, zoom and repaints.
+function placeToolbar() {
+  const bar = $('toolbar'), object = objectOf(state.selected), at = outline?.getBoundingClientRect(), page = $('canvas').getBoundingClientRect();
+  bar.hidden = !object || !at || !object.box;
+  if (bar.hidden || !at || !object) return;
+  const edge = object.kind === 'connection';
+  bar.querySelector<HTMLElement>('[data-tool="fill"]')!.hidden = edge;
+  const width = bar.offsetWidth, top = at.top - page.top - bar.offsetHeight - 10;
+  bar.style.top = `${top < 4 ? at.bottom - page.top + 10 : top}px`;
+  bar.style.left = `${Math.max(4, Math.min(page.width - width - 4, at.left - page.left + at.width / 2 - width / 2))}px`;
+  for (const tool of ['fill', 'stroke']) {
+    const hex = object.properties[tool]?.value ?? '', input = bar.querySelector<HTMLInputElement>(`[data-tool="${tool}"] input`)!;
+    if (/^#[0-9a-f]{6}$/i.test(hex)) input.value = hex;
+  }
+}
+$('toolbar').addEventListener('change', event => {
+  const input = event.target as HTMLInputElement, tool = input.closest<HTMLElement>('[data-tool]')?.dataset.tool;
+  if (tool && state.selected) void edit([{ op: 'set', key: `${state.selected}.style.${tool}`, value: input.value }]);
+});
+$('tool-delete').addEventListener('click', () => { if (state.selected) void edit([{ op: 'delete', key: state.selected }]); });
+
+// Double-click edits a shape's label where it is drawn: Enter or leaving saves, Escape cancels. A text node edits in the inspector.
+$('canvas').addEventListener('dblclick', () => {
+  const object = objectOf(state.selected), parent = sceneParent();
+  if (!object?.box || object.kind !== 'shape' || !parent) return;
+  if (kindOf(object)?.id === 'text') { ($<HTMLFormElement>('props').elements.namedItem('content') as HTMLTextAreaElement).focus(); return; }
+  if (kindOf(object)?.id !== 'shape') return;
+  const { X, Y, Width, Height } = object.box, input = document.createElement('input');
+  input.className = 'label-edit';
+  input.value = object.label;
+  input.setAttribute('aria-label', `Label of ${object.id}`);
+  input.style.cssText = `left:${X}px;top:${Y + Height / 2 - 16}px;width:${Math.max(Width, 80)}px;height:32px`;
+  let done = false;
+  const finish = (save: boolean) => {
+    if (done) return;
+    done = true;
+    input.remove();
+    if (save && input.value !== object.label) void edit([{ op: 'set', key: object.id, value: input.value }]);
+  };
+  input.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  input.addEventListener('blur', () => finish(true));
+  parent.append(input);
+  input.select();
+  input.focus();
+});
+
+// The layered inspector (ADR 0015, spec 0018): the sections of the selection's inheritance chain, only the controls D2 honours for it.
+// `shown` is every generated field on screen; the edits go through setOps over them.
 let shown: Field[] = [];
+const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language', 'content']);
 function inspect() {
   const object = objectOf(state.selected);
   highlight(object);
+  markEnds(object);
+  placeToolbar();
   $('inspector').hidden = !object;
   if (!object) return;
   const form = $<HTMLFormElement>('props');
   const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
-  $('selected').replaceChildren(Object.assign(document.createElement('span'), { className: 'kind', textContent: object.kind === 'connection' ? 'Connection' : 'Shape' }), ` ${object.id}`);
+  const sections = sectionsOf(object), kind = kindOf(object), caps = capabilities(object, { board: boardOf()!.association, engine: layout(), entry: ENTRY }), ends = caps.endpoints;
+  $('selected').replaceChildren(Object.assign(document.createElement('span'), { className: 'kind', textContent: object.kind === 'connection' ? 'Connection' : kind?.label ?? 'Node' }), ` ${object.id}`);
+  // A section is shown when the chain has it; its controls are placed in order, then the generated ones, and a control D2 ignores here is absent.
+  const applies = (keyword: string) => caps.fields.find(f => f.keyword === keyword)?.available ?? true;
+  shown = [];
+  const placed = new Set<Element>();
+  for (const el of form.querySelectorAll<HTMLElement>('[data-section]')) {
+    const section = sections.find(s => s.id === el.dataset.section);
+    el.hidden = !section;
+    if (!section) { el.querySelector('.actions')?.replaceChildren(); continue; }
+    let cursor: Element = el.querySelector('h3')!;
+    for (const { keyword } of section.controls.filter(c => HAND.has(c.keyword))) {
+      const control = form.querySelector<HTMLElement>(`[data-keyword="${keyword}"]`)!;
+      placed.add(control);
+      cursor.after(control);
+      cursor = control;
+      control.hidden = !applies(keyword) || (keyword === 'language' && object.content !== 'code');
+    }
+    const controls: Record<string, Control> = {};
+    const fields = section.controls.filter(c => !HAND.has(c.keyword)).flatMap(c => {
+      const f = caps.fields.find(f => f.keyword === c.keyword);
+      if (f?.available) controls[f.path] = c;
+      return f?.available ? [f] : [];
+    });
+    shown.push(...fields);
+    renderFields(el.querySelector<HTMLElement>('.fields')!, fields, controls);
+    // A table or class edits its rows in place.
+    const flavor = kinds.find(k => k.section.id === section.id)?.rows;
+    if (flavor) renderRows(el.querySelector<HTMLElement>('.rows')!, object, flavor, ops => void edit(ops));
+    // A kind's actions are buttons under its controls, only where they apply.
+    const host = el.querySelector<HTMLElement>('.actions') ?? el.appendChild(Object.assign(document.createElement('div'), { className: 'actions' }));
+    host.replaceChildren(...actionsOf(section.id).filter(a => a.when?.(object, boardOf()!.association) ?? true)
+      .map(a => Object.assign(document.createElement('button'), { type: 'button', textContent: a.label, onclick: () => void edit(a.ops(object, boardOf()!.association)) })));
+  }
+  // Hand-built controls no section lists are not shown, and none is ever disabled.
+  for (const el of form.querySelectorAll<HTMLElement>('[data-keyword]')) if (!placed.has(el)) el.hidden = true;
   for (const name of ['label', 'fill', 'stroke']) {
     if (document.activeElement !== field(name)) field(name).value = object.properties[name]?.value ?? (name === 'label' ? object.label : '');
   }
@@ -425,28 +610,50 @@ function inspect() {
     picker.value = hex.length === 4 ? `#${[...hex.slice(1)].map(c => c + c).join('')}` : hex || '#000000';
     picker.classList.toggle('unset', !hex);
   }
+  // The Text surface (ADR 0015): the words as a multi-line editor, and the format as a switch.
+  const content = form.elements.namedItem('content') as HTMLTextAreaElement;
+  if (document.activeElement !== content) content.value = object.label;
+  $('text-tag').replaceChildren(...(kind?.id === 'text' ? TEXT_FORMATS.map(([label, which]) => Object.assign(document.createElement('button'), { type: 'button', textContent: label, onclick: () => setFormat(object.id, which) })) : []));
+  TEXT_FORMATS.forEach(([, which], i) => $('text-tag').children[i]?.setAttribute('aria-pressed', String(object.content === which)));
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
-  for (const el of form.querySelectorAll<HTMLElement>('[data-shape-only]')) el.hidden = object.kind === 'connection';
-  for (const el of form.querySelectorAll<HTMLElement>('[data-code-only]')) el.hidden = object.content !== 'code';
-  if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
+  if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : object.properties.icon?.value ?? '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
-  const caps = capabilities(object, { board: boardOf()!.association, engine: layout(), entry: ENTRY }), ends = caps.endpoints;
-  shown = caps.fields.filter(f => !HAND_BUILT.has(f.keyword));
+  // The Type picker (ADR 0015): any registered node kind to any other, one edit. A node whose kind has no descriptor yet cannot be converted safely.
+  $('type').hidden = !kind;
+  $('type').replaceChildren(...(kind ? kinds.map(k => Object.assign(document.createElement('button'), { type: 'button', textContent: k.label, onclick: () => retype(object.id, k.id) })) : []));
+  for (const b of $('type').children) b.setAttribute('aria-pressed', String(b.textContent === kind?.label));
   // A connection names its ends; each is a button that selects it.
   $('endpoints').hidden = !ends;
   $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
-  renderFields($('fields'), shown);
-  renderActions($('actions'), caps.actions);
-  renderInteractions($('interactions'), caps.interactions);
-  // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
-  $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {
-    const source = object.properties[name]?.source;
-    const dd = Object.assign(document.createElement('dd'), { textContent: source ? `${source.path} line ${source.start.line + 1}` : "D2's default" });
-    dd.classList.toggle('default', !source);
-    return [Object.assign(document.createElement('dt'), { textContent: name }), dd];
-  }));
   const name = $('rename').querySelector('input') as HTMLInputElement;
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
+}
+
+// Languages D2's highlighter knows (exported from D2 at build, keywords.json), the common ones first; any other tag can still be typed.
+$('languages').append(...[...keywordTable.commonLanguages, ...keywordTable.languages.filter(l => !keywordTable.commonLanguages.includes(l))].map(l => new Option(l, l)));
+const TEXT_FORMATS = [['Markdown', 'markdown'], ['Code', 'code'], ['LaTeX', 'latex']] as const;
+const tagOf = (content: string, language?: string) => (content === 'code' ? language || 'python' : content === 'latex' ? 'latex' : 'md');
+function setFormat(id: string, content: (typeof TEXT_FORMATS)[number][1]) {
+  const object = objectOf(id);
+  if (object && object.content !== content) void edit([{ op: 'set', key: id, value: object.label, tag: tagOf(content) }]);
+}
+
+// A small confirmation sheet; resolves true on the primary button.
+function confirmSheet(title: string, body: string) {
+  const dialog = $<HTMLDialogElement>('confirm');
+  $('confirm-title').textContent = title;
+  $('confirm-body').textContent = body;
+  dialog.returnValue = 'cancel';
+  dialog.showModal();
+  return new Promise<boolean>(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true }));
+}
+
+async function retype(id: string, to: string) {
+  const object = objectOf(id), target = kinds.find(k => k.id === to), board = boardOf();
+  if (!object || !target || !board || kindOf(object) === target) return;
+  const { ops, loss } = convert(object, target, board.association);
+  if (loss.length && !(await confirmSheet(`Change ${id} to ${target.label}?`, `This removes ${loss.join(', ')}. You can undo it.`))) return;
+  void edit(ops);
 }
 
 const shapeSelect = ($<HTMLFormElement>('props').elements.namedItem('shape') as HTMLSelectElement);
@@ -460,20 +667,29 @@ $<HTMLFormElement>('props').addEventListener('change', event => {
     text.dispatchEvent(new Event('change', { bubbles: true }));
     return;
   }
-  const id = state.selected, value = input.name === 'label' ? input.value : input.value.trim() || null;
+  const id = state.selected, value = input.name === 'label' || input.name === 'content' ? input.value : input.value.trim() || null;
+  if (input.name === 'content') { const o = objectOf(id); if (o && value !== o.label) void edit([{ op: 'set', key: id, value, tag: tagOf(o.content ?? 'markdown', o.language) }]); return; }
   // A code block's language is its tag, so the code is written again with the new one.
   if (input.name === 'language') { if (value) void edit([{ op: 'set', key: id, value: objectOf(id)!.label, tag: value }]); return; }
   const key = { label: id, fill: `${id}.style.fill`, stroke: `${id}.style.stroke`, shape: `${id}.shape`, icon: `${id}.icon` }[input.name];
   if (key) void edit([{ op: 'set', key, value }]);
 });
-// Generated fields (spec 0017): a control's data-path names its field; a blank value removes the declaration, and top/left travel together.
-$('fields').addEventListener('change', event => {
-  const input = event.target as HTMLInputElement, f = shown.find(f => f.path === input.dataset.path);
-  if (f) void edit(setOps(f, input.value, shown));
-});
-$('fields').addEventListener('click', event => {
-  const f = shown.find(f => f.path === (event.target as HTMLElement).dataset.reset);
-  if (f) void edit(setOps(f, '', shown));
+// Generated fields: a control's data-path names its field; a blank value (or an unchecked toggle) removes the declaration, and top/left travel together.
+for (const host of document.querySelectorAll<HTMLElement>('.fields')) {
+  host.addEventListener('change', event => {
+    const input = event.target as HTMLInputElement, f = shown.find(f => f.path === input.dataset.path);
+    if (f) void edit(setOps(f, input.type === 'checkbox' ? (input.checked ? input.dataset.on! : '') : input.value, shown));
+  });
+  host.addEventListener('click', event => {
+    const f = shown.find(f => f.path === (event.target as HTMLElement).dataset.reset);
+    if (f) void edit(setOps(f, '', shown));
+  });
+}
+// Text editor keys: Enter is a new line, Cmd/Ctrl+Enter saves (by leaving the field, which commits), Escape cancels.
+($<HTMLFormElement>('props').elements.namedItem('content') as HTMLTextAreaElement).addEventListener('keydown', event => {
+  const area = event.target as HTMLTextAreaElement;
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); area.blur(); }
+  if (event.key === 'Escape') area.value = objectOf(state.selected)?.label ?? '';
 });
 $<HTMLFormElement>('props').addEventListener('submit', event => event.preventDefault());
 $('props').addEventListener('keydown', event => {

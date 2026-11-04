@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/d2lang/d2/d2ast"
 	"github.com/d2lang/d2/d2compiler"
 	"github.com/d2lang/d2/d2format"
 	"github.com/d2lang/d2/d2graph"
@@ -18,12 +19,19 @@ import (
 )
 
 type Op struct {
-	Op     string  `json:"op"` // set | create | delete | rename | move
-	Key    string  `json:"key"`
-	Value  *string `json:"value,omitempty"` // set: nil removes the value
-	Tag    *string `json:"tag,omitempty"`
-	Name   string  `json:"name,omitempty"`   // rename
-	Parent string  `json:"parent,omitempty"` // move: the new parent's key, "" for the board's root
+	Op         string          `json:"op"` // set | create | delete | rename | move | row | row-delete | row-rename | reorder | reconnect | unset
+	Key        string          `json:"key"`
+	Value      *string         `json:"value,omitempty"` // set: nil removes the value
+	Tag        *string         `json:"tag,omitempty"`
+	Name       string          `json:"name,omitempty"`   // rename
+	Parent     string          `json:"parent,omitempty"` // move: the new parent's key, "" for the board's root
+	To         string          `json:"to,omitempty"`
+	Type       *string         `json:"type,omitempty"`
+	Constraint json.RawMessage `json:"constraint,omitempty"`
+	Before     string          `json:"before,omitempty"`
+	Src        string          `json:"src,omitempty"`
+	Dst        string          `json:"dst,omitempty"`
+	Reverse    bool            `json:"reverse,omitempty"`
 }
 
 type Request struct {
@@ -129,7 +137,7 @@ func Apply(req Request) (res Result) {
 		}
 	}
 	for i, op := range req.Ops {
-		code, err := run(&g, board, req.Entry, op, &res.IDs)
+		code, err := run(&g, board, req, op, &res.IDs)
 		if err != nil {
 			res.Error = &Error{Code: code, Message: err.Error(), Op: &i}
 			return
@@ -280,7 +288,7 @@ func compile(req Request, text string) (*d2graph.Graph, error) {
 }
 
 // run applies one operation; d2oracle does not guard its own nil dereferences, so a panic becomes an error.
-func run(g **d2graph.Graph, board []string, entry string, op Op, ids *IDs) (code string, err error) {
+func run(g **d2graph.Graph, board []string, req Request, op Op, ids *IDs) (code string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			code, err = "panic", fmt.Errorf("%v", r)
@@ -311,7 +319,13 @@ func run(g **d2graph.Graph, board []string, entry string, op Op, ids *IDs) (code
 			}
 		}
 	case "move":
-		next, err = move(*g, board, entry, op, ids)
+		next, err = move(*g, board, req.Entry, op, ids)
+	case "row", "row-delete", "row-rename", "reorder", "reconnect", "unset":
+		if len(board) != 0 {
+			err = fmt.Errorf("%s only supports the root board", op.Op)
+		} else if err = structure(*g, req.Entry, op, ids); err == nil {
+			next, err = compile(req, d2format.Format((*g).AST))
+		}
 	default:
 		err = fmt.Errorf("unknown operation %q", op.Op)
 	}
@@ -510,4 +524,648 @@ func ranges(before, after string) []Range {
 		i, j = ni+1, nj+1
 	}
 	return out
+}
+
+// astSite keeps the author's node, rather than the IR copy stored in graph references.
+type astSite struct {
+	parent *d2ast.Map
+	key    *d2ast.Key
+	part   int
+}
+
+func astSites(m *d2ast.Map) []astSite {
+	var out []astSite
+	for _, n := range m.Nodes {
+		if k := n.MapKey; k != nil {
+			out = append(out, astSite{parent: m, key: k})
+			if k.Value.Map != nil {
+				out = append(out, astSites(k.Value.Map)...)
+			}
+		}
+	}
+	return out
+}
+func siteAt(sites []astSite, r d2ast.Range) (astSite, bool) {
+	for _, s := range sites {
+		if s.key.Range == r {
+			return s, true
+		}
+	}
+	return astSite{}, false
+}
+func (s astSite) remove() {
+	for i, n := range s.parent.Nodes {
+		if n.MapKey == s.key {
+			s.parent.Nodes = append(s.parent.Nodes[:i], s.parent.Nodes[i+1:]...)
+			return
+		}
+	}
+}
+func shape(g *d2graph.Graph, key string) (*d2graph.Object, error) {
+	mk, err := d2parser.ParseMapKey(key)
+	if err == nil && mk.Key != nil && len(mk.Edges) == 0 {
+		if o, ok := g.Root.HasChild(d2graph.Key(mk.Key)); ok && len(o.AbsIDArray()) == len(mk.Key.Path) {
+			return o, nil
+		}
+	}
+	return nil, fmt.Errorf("shape %q not found", key)
+}
+func connection(g *d2graph.Graph, key string) (*d2graph.Edge, error) {
+	mk, err := d2parser.ParseMapKey(key)
+	if err == nil && len(mk.Edges) == 1 && mk.EdgeIndex != nil && mk.EdgeIndex.Int != nil && mk.EdgeKey == nil {
+		parent := g.Root
+		if mk.Key != nil {
+			parent, _ = shape(g, d2format.Format(mk.Key))
+		}
+		if parent != nil {
+			if e, ok := parent.HasEdge(mk); ok {
+				return e, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("connection %q not found", key)
+}
+func localShape(g *d2graph.Graph, key, entry string) (*d2graph.Object, error) {
+	o, err := shape(g, key)
+	if err != nil {
+		return nil, err
+	}
+	if file := imported(g, o, entry); file != "" {
+		return nil, fmt.Errorf("%s is declared in imported file %s", key, file)
+	}
+	for _, r := range o.References {
+		if r.IsVar || (r.MapKey != nil && r.MapKey.HasGlob()) {
+			return nil, fmt.Errorf("%s has shared glob or variable declarations", key)
+		}
+		if r.MapKey != nil && (r.MapKey.Value.Import != nil || hasImport(r.MapKey.Value.Map)) {
+			return nil, fmt.Errorf("%s contains imported declarations", key)
+		}
+	}
+	return o, nil
+}
+
+func hasImport(m *d2ast.Map) bool {
+	if m == nil {
+		return false
+	}
+	for _, n := range m.Nodes {
+		if n.Import != nil {
+			return true
+		}
+		if k := n.MapKey; k != nil && (k.Value.Import != nil || hasImport(k.Value.Map)) {
+			return true
+		}
+	}
+	return false
+}
+
+func structure(g *d2graph.Graph, entry string, op Op, ids *IDs) error {
+	sites := astSites(g.AST)
+	switch op.Op {
+	case "row", "row-delete", "row-rename":
+		return row(g, sites, entry, op)
+	case "reorder":
+		return reorder(g, sites, entry, op)
+	case "unset":
+		return unset(g, sites, entry, op.Key)
+	default:
+		return reconnect(g, sites, entry, op, ids)
+	}
+}
+
+// rowSites includes flattened declarations, including a separate name.constraint key.
+func rowSites(o *d2graph.Object, sites []astSite) []astSite {
+	var out []astSite
+	seen := map[*d2ast.Key]bool{}
+	add := func(s astSite, part int) {
+		if s.key.Key == nil || len(s.key.Edges) > 0 || seen[s.key] {
+			return
+		}
+		name := s.key.Key.Path[part].Unbox()
+		if _, reserved := d2ast.ReservedKeywords[strings.ToLower(name.ScalarString())]; reserved && name.IsUnquoted() {
+			return
+		}
+		s.part = part
+		seen[s.key] = true
+		out = append(out, s)
+	}
+	for _, s := range sites {
+		for _, r := range o.References {
+			if r.MapKey == nil || r.InEdge() || r.MapKey.Range != s.key.Range || s.key.Key == nil {
+				continue
+			}
+			part := r.KeyPathIndex + 1
+			if part < len(s.key.Key.Path) {
+				add(s, part)
+			} else if m := s.key.Value.Map; m != nil {
+				for _, n := range m.Nodes {
+					if n.MapKey != nil && n.MapKey.Key != nil {
+						add(astSite{parent: m, key: n.MapKey}, 0)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+func namedRows(sites []astSite, name string) []astSite {
+	var out []astSite
+	for _, s := range sites {
+		if strings.EqualFold(s.key.Key.Path[s.part].Unbox().ScalarString(), name) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+func rowName(name string) *d2ast.StringBox {
+	if _, reserved := d2ast.ReservedKeywords[strings.ToLower(name)]; reserved || name == "_" {
+		return d2ast.MakeValueBox(d2ast.FlatDoubleQuotedString(name)).StringBox()
+	}
+	return d2ast.RawStringBox(name, true)
+}
+func constraint(raw json.RawMessage) (d2ast.ValueBox, error) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return d2ast.ValueBox{}, err
+	}
+	switch v := v.(type) {
+	case nil:
+		return d2ast.ValueBox{}, nil
+	case string:
+		return d2ast.MakeValueBox(d2ast.RawString(v, false)), nil
+	case []any:
+		a := &d2ast.Array{}
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return d2ast.ValueBox{}, fmt.Errorf("constraint must contain strings")
+			}
+			a.Nodes = append(a.Nodes, d2ast.MakeArrayNodeBox(d2ast.RawString(s, false)))
+		}
+		return d2ast.MakeValueBox(a), nil
+	default:
+		return d2ast.ValueBox{}, fmt.Errorf("constraint must be null, a string or a string list")
+	}
+}
+func row(g *d2graph.Graph, sites []astSite, entry string, op Op) error {
+	o, err := localShape(g, op.Key, entry)
+	if err != nil {
+		return err
+	}
+	if o.SQLTable == nil && o.Class == nil {
+		return fmt.Errorf("%s is not a sql_table or class", op.Key)
+	}
+	if op.Name == "" || (op.Op == "row-rename" && op.To == "") {
+		return fmt.Errorf("row names must not be empty")
+	}
+	if o.Class != nil && len(op.Constraint) > 0 {
+		return fmt.Errorf("class rows do not have constraints")
+	}
+	all := rowSites(o, sites)
+	rows := namedRows(all, op.Name)
+	if op.Op != "row" && len(rows) == 0 {
+		return fmt.Errorf("row %q not found", op.Name)
+	}
+	switch op.Op {
+	case "row-delete":
+		for _, s := range rows {
+			s.remove()
+		}
+		return nil
+	case "row-rename":
+		if len(namedRows(all, op.To)) > 0 && !strings.EqualFold(op.Name, op.To) {
+			return fmt.Errorf("row %q already exists", op.To)
+		}
+		for _, e := range g.Edges {
+			for _, end := range []struct {
+				o     *d2graph.Object
+				index *int
+			}{{e.Src, e.SrcTableColumnIndex}, {e.Dst, e.DstTableColumnIndex}} {
+				if end.o == o && end.index != nil && strings.EqualFold(o.SQLTable.Columns[*end.index].Name.Label, op.Name) {
+					return fmt.Errorf("a connection references row %q", op.Name)
+				}
+			}
+		}
+		for _, s := range rows {
+			s.key.Key.Path[s.part] = rowName(op.To)
+		}
+		return nil
+	}
+	return upsertRow(g, o, rows, op)
+}
+
+func upsertRow(g *d2graph.Graph, o *d2graph.Object, rows []astSite, op Op) error {
+	var err error
+	var value d2ast.ValueBox
+	if len(op.Constraint) > 0 {
+		value, err = constraint(op.Constraint)
+		if err != nil {
+			return err
+		}
+	}
+	base, constraints := rowValues(rows, op.Type)
+	if base == nil && (len(rows) == 0 || op.Type != nil) {
+		base = appendRow(g, o, rows, op)
+	}
+	if len(op.Constraint) == 0 {
+		return nil
+	}
+	if len(constraints) > 0 {
+		for _, s := range constraints {
+			if value.Unbox() == nil {
+				s.remove()
+			} else {
+				s.key.Value = value
+			}
+		}
+	} else if value.Unbox() != nil {
+		if base == nil {
+			return fmt.Errorf("row %q has no writable type declaration", op.Name)
+		}
+		k := base.key
+		if k.Value.Map == nil {
+			k.Primary = k.Value.ScalarBox()
+			k.Value = d2ast.MakeValueBox(inlineMap())
+		}
+		k.Value.Map.Nodes = append(k.Value.Map.Nodes, d2ast.MakeMapNodeBox(&d2ast.Key{Key: d2ast.MakeKeyPath([]string{"constraint"}), Value: value}))
+	}
+	return nil
+}
+
+func rowValues(rows []astSite, typ *string) (*astSite, []astSite) {
+	var base *astSite
+	var constraints []astSite
+	for _, s := range rows {
+		tail := s.key.Key.Path[s.part+1:]
+		if len(tail) == 0 {
+			if base == nil {
+				copy := s
+				base = &copy
+			}
+			if typ != nil {
+				v := d2ast.RawString(*typ, false)
+				if s.key.Value.Map != nil {
+					s.key.Primary = d2ast.MakeValueBox(v).ScalarBox()
+				} else {
+					s.key.Value = d2ast.MakeValueBox(v)
+				}
+			}
+			if m := s.key.Value.Map; m != nil {
+				for _, n := range m.Nodes {
+					if k := n.MapKey; k != nil && k.Key != nil && len(k.Key.Path) == 1 && k.Key.Path[0].Unbox().ScalarString() == "constraint" {
+						constraints = append(constraints, astSite{parent: m, key: k})
+					}
+				}
+			}
+		} else if len(tail) == 1 && tail[0].Unbox().ScalarString() == "constraint" {
+			constraints = append(constraints, s)
+		}
+	}
+	return base, constraints
+}
+
+func appendRow(g *d2graph.Graph, o *d2graph.Object, rows []astSite, op Op) *astSite {
+	k := &d2ast.Key{Key: d2ast.MakeKeyPath([]string{op.Name})}
+	k.Key.Path[0] = rowName(op.Name)
+	var m *d2ast.Map
+	sites := astSites(g.AST)
+	for _, r := range o.References {
+		if r.MapKey != nil && !r.InEdge() && r.KeyPathIndex == len(r.Key.Path)-1 {
+			if s, ok := siteAt(sites, r.MapKey.Range); ok && s.key.Value.Map != nil {
+				m = s.key.Value.Map
+			}
+		}
+	}
+	if len(rows) > 0 {
+		s := rows[0]
+		m = s.parent
+		k.Key.Path = append(append([]*d2ast.StringBox{}, s.key.Key.Path[:s.part]...), rowName(op.Name))
+	}
+	if m == nil {
+		mk, _ := d2parser.ParseMapKey(o.AbsID())
+		m = inlineMap()
+		g.AST.Nodes = append(g.AST.Nodes, d2ast.MakeMapNodeBox(&d2ast.Key{Key: mk.Key, Value: d2ast.MakeValueBox(m)}))
+	}
+	if op.Type != nil {
+		k.Value = d2ast.MakeValueBox(d2ast.RawString(*op.Type, false))
+	}
+	m.Nodes = append(m.Nodes, d2ast.MakeMapNodeBox(k))
+	return &astSite{parent: m, key: k}
+}
+
+func declaration(g *d2graph.Graph, sites []astSite, entry, key string) (astSite, string, string, error) {
+	if o, err := shape(g, key); err == nil {
+		if _, err = localShape(g, key, entry); err != nil {
+			return astSite{}, "", "", err
+		}
+		for _, s := range sites {
+			for _, r := range o.References {
+				if r.MapKey != nil && !r.InEdge() && r.KeyPathIndex == len(r.Key.Path)-1 && r.MapKey.Range == s.key.Range {
+					return s, "shape", o.Parent.AbsID(), nil
+				}
+			}
+		}
+	} else if e, err := connection(g, key); err == nil {
+		for _, r := range e.References {
+			if r.MapKey.Range.Path != entry {
+				return astSite{}, "", "", fmt.Errorf("imported connection")
+			}
+		}
+		for _, s := range sites {
+			for _, r := range e.References {
+				if r.MapKey.Range == s.key.Range && s.key.EdgeIndex == nil {
+					if len(s.key.Edges) != 1 {
+						return astSite{}, "", "", fmt.Errorf("cannot reorder part of a connection chain")
+					}
+					return s, "connection", r.ScopeObj.AbsID(), nil
+				}
+			}
+		}
+	} else {
+		mk, err := d2parser.ParseMapKey(key)
+		if err == nil && mk.Key != nil && len(mk.Edges) == 0 && len(mk.Key.Path) > 1 {
+			path := mk.Key.Path
+			mk.Key.Path = path[:len(path)-1]
+			if o, err := localShape(g, d2format.Format(mk.Key), entry); err == nil && (o.SQLTable != nil || o.Class != nil) {
+				rows := namedRows(rowSites(o, sites), path[len(path)-1].Unbox().ScalarString())
+				if len(rows) > 0 {
+					return rows[0], "row", o.AbsID(), nil
+				}
+			}
+		}
+	}
+	return astSite{}, "", "", fmt.Errorf("no writable declaration for %q", key)
+}
+func reorder(g *d2graph.Graph, sites []astSite, entry string, op Op) error {
+	s, kind, parent, err := declaration(g, sites, entry, op.Key)
+	if err != nil {
+		return err
+	}
+	var before *d2ast.Key
+	if op.Before != "" {
+		b, bkind, bparent, err := declaration(g, sites, entry, op.Before)
+		if err != nil {
+			return err
+		}
+		if bkind != kind || bparent != parent || b.parent != s.parent {
+			return fmt.Errorf("reorder needs the same kind and parent map")
+		}
+		before = b.key
+		if before == s.key {
+			return nil
+		}
+	}
+	s.remove()
+	s.parent.InsertBefore(before, s.key)
+	return nil
+}
+
+func relativeEnd(scope, end *d2graph.Object) *d2ast.KeyPath {
+	var names []string
+	for p := end; p.Parent != nil; p = p.Parent {
+		names = append([]string{p.IDVal}, names...)
+	}
+	var parents []string
+	for p := scope; p != nil && p.Parent != nil; p = p.Parent {
+		parents = append([]string{p.IDVal}, parents...)
+	}
+	i := 0
+	for i < len(names) && i < len(parents) && strings.EqualFold(names[i], parents[i]) {
+		i++
+	}
+	path := make([]string, len(parents)-i)
+	for j := range path {
+		path[j] = "_"
+	}
+	return d2ast.MakeKeyPath(append(path, names[i:]...))
+}
+func reconnect(g *d2graph.Graph, sites []astSite, entry string, op Op, ids *IDs) error {
+	e, err := connection(g, op.Key)
+	if err != nil {
+		return err
+	}
+	next := *e
+	if op.Src != "" {
+		next.Src, err = shape(g, op.Src)
+		if err != nil {
+			return err
+		}
+		next.SrcTableColumnIndex = nil
+	}
+	if op.Dst != "" {
+		next.Dst, err = shape(g, op.Dst)
+		if err != nil {
+			return err
+		}
+		next.DstTableColumnIndex = nil
+	}
+	if op.Reverse {
+		next.Src, next.Dst = next.Dst, next.Src
+		// The arrowheads stay where they are, so the arrow now points the other way (`a -> b` becomes `b -> a`).
+		next.SrcTableColumnIndex, next.DstTableColumnIndex = next.DstTableColumnIndex, next.SrcTableColumnIndex
+	}
+	// shortcut: a chain shares endpoints between edges; refuse it until splitting preserves every edge's attributes.
+	for _, r := range e.References {
+		if r.MapKey.Range.Path != entry {
+			return fmt.Errorf("imported connection")
+		}
+		if r.MapKey.HasGlob() {
+			return fmt.Errorf("connection has a shared glob declaration")
+		}
+		if len(r.MapKey.Edges) != 1 {
+			return fmt.Errorf("cannot reconnect part of a connection chain")
+		}
+		if _, ok := siteAt(sites, r.MapKey.Range); !ok {
+			return fmt.Errorf("connection has no writable declaration")
+		}
+	}
+	// Renumber the affected parallel groups in declaration order, including their indexed property references.
+	counts := map[string]int{}
+	deltas := map[string]string{}
+	for _, old := range g.Edges {
+		changed := *old
+		if old == e {
+			changed = next
+		}
+		changed.Index = 0
+		group := changed.AbsID()
+		changed.Index = counts[group]
+		counts[group]++
+		if old.AbsID() != changed.AbsID() {
+			deltas[old.AbsID()] = changed.AbsID()
+		}
+		if old != e && old.Index == changed.Index {
+			continue
+		}
+		seen := map[*d2ast.Key]bool{}
+		for _, r := range old.References {
+			if r.MapKey.Range.Path != entry {
+				return fmt.Errorf("parallel connection is imported")
+			}
+			s, ok := siteAt(sites, r.MapKey.Range)
+			if !ok {
+				return fmt.Errorf("connection has no writable declaration")
+			}
+			if seen[s.key] {
+				continue
+			}
+			seen[s.key] = true
+			if old == e {
+				if len(s.key.Edges) != 1 {
+					return fmt.Errorf("cannot reconnect part of a connection chain")
+				}
+				scope := r.ScopeObj
+				edge := s.key.Edges[0]
+				edge.Src, edge.Dst = relativeEnd(scope, changed.Src), relativeEnd(scope, changed.Dst)
+				if changed.SrcTableColumnIndex != nil {
+					edge.Src.Path = append(edge.Src.Path, d2ast.RawStringBox(changed.Src.SQLTable.Columns[*changed.SrcTableColumnIndex].Name.Label, true))
+				}
+				if changed.DstTableColumnIndex != nil {
+					edge.Dst.Path = append(edge.Dst.Path, d2ast.RawStringBox(changed.Dst.SQLTable.Columns[*changed.DstTableColumnIndex].Name.Label, true))
+				}
+				edge.SrcArrow, edge.DstArrow = "", ""
+				if changed.SrcArrow {
+					edge.SrcArrow = "<"
+				}
+				if changed.DstArrow {
+					edge.DstArrow = ">"
+				}
+			}
+			if s.key.EdgeIndex != nil {
+				index := changed.Index
+				s.key.EdgeIndex.Int = &index
+			}
+		}
+	}
+	// Compose once: parallel renumbering can reuse another connection's old ID.
+	composed := map[string]bool{}
+	for orig, cur := range ids.Renamed {
+		if to, ok := deltas[cur]; ok {
+			ids.Renamed[orig] = to
+			composed[cur] = true
+		}
+	}
+	for from, to := range deltas {
+		if !composed[from] {
+			ids.Renamed[from] = to
+		}
+	}
+	return nil
+}
+
+func inlineMap() *d2ast.Map {
+	return &d2ast.Map{Range: d2ast.Range{Start: d2ast.Position{Column: 1}}}
+}
+
+func keywordSites(s astSite, offset int, path []*d2ast.StringBox) []astSite {
+	if s.key.Key == nil {
+		return nil
+	}
+	parts := s.key.Key.Path[offset:]
+	for i := 0; i < len(parts) && i < len(path); i++ {
+		if !parts[i].Unbox().IsUnquoted() || !strings.EqualFold(parts[i].Unbox().ScalarString(), path[i].Unbox().ScalarString()) {
+			return nil
+		}
+	}
+	if len(parts) >= len(path) {
+		return []astSite{s}
+	}
+	var out []astSite
+	if m := s.key.Value.Map; m != nil {
+		for _, n := range m.Nodes {
+			if n.MapKey != nil {
+				out = append(out, keywordSites(astSite{parent: m, key: n.MapKey}, 0, path[len(parts):])...)
+			}
+		}
+	}
+	return out
+}
+
+func pruneEmptyMaps(sites, removed []astSite, root *d2ast.Map, gone map[*d2ast.Key]bool) {
+	for _, s := range removed {
+		m := s.parent
+		for len(m.Nodes) == 0 && m != root {
+			var owner *astSite
+			for _, candidate := range sites {
+				if candidate.key.Value.Map == m {
+					copy := candidate
+					owner = &copy
+					break
+				}
+			}
+			if owner == nil {
+				break
+			}
+			owner.key.Value = d2ast.ValueBox{}
+			if owner.key.Primary.Unbox() != nil {
+				owner.key.Value = d2ast.MakeValueBox(owner.key.Primary.Unbox())
+				owner.key.Primary = d2ast.ScalarBox{}
+			} else if path := owner.key.Key; path != nil {
+				last := path.Path[len(path.Path)-1].Unbox()
+				if _, reserved := d2ast.ReservedKeywords[strings.ToLower(last.ScalarString())]; reserved && last.IsUnquoted() {
+					owner.remove()
+					gone[owner.key] = true
+				}
+			}
+			m = owner.parent
+		}
+	}
+}
+
+func unset(g *d2graph.Graph, sites []astSite, entry, key string) error {
+	mk, err := d2parser.ParseMapKey(key)
+	if err != nil || mk.Key == nil || len(mk.Edges) > 0 || len(mk.Key.Path) < 2 {
+		return fmt.Errorf("unset needs an object's reserved keyword")
+	}
+	path := mk.Key.Path
+	var o *d2graph.Object
+	var cut int
+	for cut = len(path) - 1; cut > 0; cut-- {
+		mk.Key.Path = path[:cut]
+		if o, err = shape(g, d2format.Format(mk.Key)); err == nil {
+			break
+		}
+	}
+	if o == nil {
+		return fmt.Errorf("unset needs an existing object")
+	}
+	for _, part := range path[cut:] {
+		name := strings.ToLower(part.Unbox().ScalarString())
+		if _, ok := d2ast.ReservedKeywords[name]; !ok || !part.Unbox().IsUnquoted() || name == "style" {
+			return fmt.Errorf("unset only supports reserved keywords outside style")
+		}
+	}
+	if _, err = localShape(g, o.AbsID(), entry); err != nil {
+		return err
+	}
+	var removed []astSite
+	gone := map[*d2ast.Key]bool{}
+	for _, r := range o.References {
+		if r.MapKey == nil || r.InEdge() {
+			continue
+		}
+		if s, ok := siteAt(sites, r.MapKey.Range); ok {
+			for _, site := range keywordSites(s, r.KeyPathIndex+1, path[cut:]) {
+				if !gone[site.key] {
+					removed = append(removed, site)
+					gone[site.key] = true
+				}
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return fmt.Errorf("keyword %q has no local declaration", key)
+	}
+	for _, s := range removed {
+		s.remove()
+	}
+	pruneEmptyMaps(sites, removed, g.AST, gone)
+	for _, r := range o.References {
+		if s, ok := siteAt(sites, r.MapKey.Range); ok && !gone[s.key] {
+			return nil
+		}
+	}
+	// A flattened keyword can be the object's only declaration; keep the object when removing it.
+	g.AST.Nodes = append(g.AST.Nodes, d2ast.MakeMapNodeBox(&d2ast.Key{Key: mk.Key}))
+	return nil
 }

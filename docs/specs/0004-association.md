@@ -19,6 +19,7 @@ Object = {
   parent?: id,                   // containing shape; absent at the root
   label: string,
   content?: 'markdown' | 'code' | 'latex' | 'sql_table' | 'class',   // absent for plain text
+  rows?: [ { name: string, type: string, constraint?: [ string ] } ], // sql_table or class, declaration order (spec 0019)
   language?: string,             // content 'code' only: the block's tag
   classes?: [ name ],            // classes applied to the object
   nodes: [ sceneNodeId ],        // every scene node painting this object, listed explicitly
@@ -34,6 +35,7 @@ Pos    = { line, column, offset }  // line 0-based; column and offset in UTF-16 
 ```
 
 Rules:
+- `rows` (spec 0019): SQL columns carry their name, type and optional constraint list. Class members carry the name as written, including visibility prefixes and method signatures, and the type value, in declaration order. Other objects omit `rows`; empty row lists are omitted.
 - `links` (amendment, 2 November 2026): D2's scene builder adds a region per shape, then per connection, that has a link, tooltip or prettyLink, in diagram order (`d2scenebuild` preflight, `compileLinkRegions`), then inline-link regions while it builds markdown; the worker replays that order (and leaves `links` out if the count does not match), and an inline-link region goes to the smallest markdown viewport holding it: the clip of a `<id>:markdown` scene node, translated to scene coordinates (within 0.5 px, D2 rounds region boxes). `html` is `textmeasure.RenderMarkdown`, the document `LayoutMarkdown` lays out, re-serialised with only D2's markdown elements (`validateMarkdownSVGNodes`, less `img`) and the attributes D2 reads (`a` href/title, `ol` start/type, cell `align`), `href` first; any other element (an image) leaves it absent. It is untrusted author text after that filter: the page still applies its link policy.
 - The join key is (revision, board path, object `id`), as decided in ADR 0002. A board's association is complete for that board only; imported and layered boards each carry their own.
 - `nodes` is computed by the worker from the scene build, not left for consumers to derive by ID prefix. It lists the named scene nodes (`<id>` and `<id>:...`) of the object. Anonymous nodes (empty ID, the plain paint primitives) have no name to list; each belongs to its nearest named ancestor. Every scene node except the helpers `root` and `root:background` is covered by exactly one object (test, section 6). Owner lookup uses the observed `<ownerID>:<suffix>` convention inside the worker, where a test pins it, so consumers do not depend on it.

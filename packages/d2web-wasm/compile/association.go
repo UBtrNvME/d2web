@@ -61,7 +61,46 @@ type AssocObject struct {
 	// Box is D2's box for a shape (its position, width and height); for a connection, the exact geometry bounds of its painted paths.
 	Box *d2scene.Box `json:"box,omitempty"`
 	// Links are the indices into the scene's Links that D2 added for this object.
-	Links []int `json:"links,omitempty"`
+	Links []int      `json:"links,omitempty"`
+	Rows  []AssocRow `json:"rows,omitempty"`
+}
+
+type AssocRow struct {
+	Name       string   `json:"name"`
+	Type       string   `json:"type"`
+	Constraint []string `json:"constraint,omitempty"`
+}
+
+// D2's class target splits fields from methods and strips visibility prefixes; the resolved IR keeps their names and declaration order.
+func classRows(g *d2graph.Graph, board *d2ir.Map) map[string][]AssocRow {
+	out := map[string][]AssocRow{}
+	if board == nil {
+		return out
+	}
+	for _, obj := range g.Objects {
+		if obj.Class == nil {
+			continue
+		}
+		mk, err := d2parser.ParseMapKey(obj.AbsID())
+		if err != nil {
+			continue
+		}
+		field := board.GetField(mk.Key.IDA()...)
+		if field.Map() == nil {
+			continue
+		}
+		for _, row := range field.Map().Fields {
+			if _, reserved := d2ast.ReservedKeywords[strings.ToLower(row.Name.ScalarString())]; reserved && row.Name.IsUnquoted() {
+				continue
+			}
+			value := ""
+			if row.Primary() != nil {
+				value = row.Primary().Value.ScalarString()
+			}
+			out[obj.AbsID()] = append(out[obj.AbsID()], AssocRow{Name: row.Name.ScalarString(), Type: value})
+		}
+	}
+	return out
 }
 
 // AssocImage names the image link of an object, the scene node that holds D2's placeholder for it (<id>:icon) and the role D2 gave it.
@@ -334,7 +373,7 @@ func routeBox(n *d2scene.Node) *d2scene.Box {
 	return &d2scene.Box{X: b.Min.X, Y: b.Min.Y, Width: b.Max.X - b.Min.X, Height: b.Max.Y - b.Min.Y}
 }
 
-func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *Association {
+func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document, board *d2ir.Map) *Association {
 	ids := map[string]bool{}
 	for _, o := range g.Objects {
 		ids[o.AbsID()] = true
@@ -362,8 +401,15 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 		links[id] = append(links[id], i)
 	}
 	a := &Association{Objects: []AssocObject{}, Classes: []string{}}
+	rows := classRows(g, board)
 	for _, o := range g.Objects {
 		out := AssocObject{ID: o.AbsID(), Kind: "shape", Label: o.Label.Value, Content: content(o), Nodes: nodes[o.AbsID()], References: []Source{}, Properties: properties(o.Label, o.Style, &o.Attributes)}
+		out.Rows = rows[o.AbsID()]
+		if o.SQLTable != nil {
+			for _, col := range o.SQLTable.Columns {
+				out.Rows = append(out.Rows, AssocRow{Name: col.Name.Label, Type: col.Type.Label, Constraint: col.Constraint})
+			}
+		}
 		if out.Content == "code" {
 			out.Language = o.Language
 		}
@@ -416,14 +462,14 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document) *As
 	return a
 }
 
-// boardClasses lists, per compile result path, the classes each board defines. D2's graph keeps only the classes applied to objects, so this
+// boardData lists the defined classes and resolved board IR. D2's graph drops row declarations and keeps only applied classes, so this
 // reads the IR, where imports and scenario/step inheritance are already resolved. An IR error leaves the lists empty: d2lib reported it already.
-func boardClasses(entry, source string, fsys fs.FS) func(path string) []string {
+func boardData(entry, source string, fsys fs.FS) func(path string) ([]string, *d2ir.Map) {
 	var ir *d2ir.Map
 	if ast, err := d2parser.Parse(entry, strings.NewReader(source), &d2parser.ParseOptions{UTF16Pos: true}); err == nil {
 		ir, _, _ = d2ir.Compile(ast, &d2ir.CompileOptions{UTF16Pos: true, FS: fsys})
 	}
-	return func(path string) []string {
+	return func(path string) ([]string, *d2ir.Map) {
 		names := []string{}
 		var board []string
 		for i, part := range strings.Split(strings.TrimPrefix(path, "/"), "/") {
@@ -433,7 +479,7 @@ func boardClasses(entry, source string, fsys fs.FS) func(path string) []string {
 		}
 		root := ir.FindBoardRoot(board)
 		if root == nil {
-			return names
+			return names, root
 		}
 		if f := root.GetField(d2ast.FlatUnquotedString("classes")); f != nil && f.Map() != nil {
 			for _, c := range f.Map().Fields {
@@ -441,6 +487,6 @@ func boardClasses(entry, source string, fsys fs.FS) func(path string) []string {
 			}
 		}
 		sort.Strings(names)
-		return names
+		return names, root
 	}
 }

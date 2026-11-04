@@ -1,7 +1,7 @@
 # 0014. Elements advertise their fields, actions and values, derived from D2
 
-Status: accepted (user, 4 November 2026: "Accept"; spec 0017 defaults taken)
-Delivery: partly delivered (4 November 2026). Built per [spec 0017](../specs/0017-capabilities.md): the keyword table exported from D2 and probed against it, `capabilities()`, and an inspector that renders it. Open: reverse and arrow direction for connections need a new edit op, which is a decision for the user (see `tasks/todo-0017.md` 5b).
+Status: accepted (user, 4 November 2026: "Accept"; spec 0017 defaults taken); the second paragraph of the decision (render every field, unavailable ones disabled with a reason) is superseded by [ADR 0015](0015-editor-kinds-inheritance.md)
+Delivery: partly delivered (4 November 2026). The derivation half is built: the keyword table exported from D2 and probed against it (`packages/d2web-wasm/keywords`), and `capabilities()` deciding which fields D2 honours. The rendering half was replaced by ADR 0015 and spec 0018: the inspector shows a curated subset by kind and omits what does not apply. Reverse and arrow direction stay open (`tasks/todo-0017.md` 5b).
 Context: The d2editor inspector offers a fixed handful of fields (label, fill, stroke, shape, icon, language) and gestures (move, connect, reparent) that the author must already know about. The author asked for every element, connections included, to advertise the fields it has, the actions that can be performed on it, every interaction, and every value each field accepts. Constraints:
 - [ADR 0009](0009-natural-web-forms.md): D2 owns semantics. A hand-written table of fields and enums in the editor would be a second model that drifts from D2 (the failure [ADR 0013](0013-editor-traits-from-d2.md) already rejected for traits).
 - [ADR 0012](0012-editing-in-scope.md): the only write path is the worker edit API; each field edit is a `set` op, so a field is advertised only if its op is accepted.

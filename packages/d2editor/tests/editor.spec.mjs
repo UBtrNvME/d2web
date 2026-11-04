@@ -207,7 +207,7 @@ test('palette entries write D2 under a free key, focus the name; Zone defines it
   await expect(page.locator('#src')).toHaveValue('x\nnote: |md # Note |\n');
   await painted(page);
   await expect(page.locator('#rename input')).toBeFocused();
-  await expect(page.locator('#selected')).toHaveText('Shape note');
+  await expect(page.locator('#selected')).toHaveText('Text note');
   await page.keyboard.press('Escape');
   await page.click('[data-entry="code"]');
   await expect(page.locator('#src')).toHaveValue(/code: \|python print\("hello"\) \|/);
@@ -441,7 +441,6 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   await type(page, '# services\na: API\nb: DB\n');
   await select(page, 'a');
   await expect(page.locator('#selected')).toHaveText('Shape a');
-  await expect(page.locator('#sources')).toContainText('main.d2 line 2');
   const red = '# services\na: API {style.fill: "#ff0000"}\nb: DB\n';
   await patch(page, red, () => property(page, 'fill', '#ff0000'));
   expect(await object(page, 'a').evaluate(el => [el, ...el.querySelectorAll('*')].some(e => getComputedStyle(e).backgroundColor === 'rgb(255, 0, 0)' || getComputedStyle(e).fill === 'rgb(255, 0, 0)'))).toBe(true);
@@ -557,15 +556,15 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await expect(page.locator('#inspector')).toBeHidden();
   await expect(page.locator('#src')).toHaveValue('a: API\n');
   await page.locator('#src').focus();
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
+  // The toolbar's buttons, then Element and Node controls, then the Shape section's label.
+  for (let n = 0; n < 30 && !(await page.locator('#props [name="label"]').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#props [name="label"]')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Keyboard');
   await patch(page, 'a: Keyboard\n', () => page.keyboard.press('Enter'));
   // Continue with Tab only, from the source through the canvas into the rename form.
   await page.locator('#src').focus();
-  // a, label, fill, stroke, shape, icon, then every advertised style field (spec 0017), then name.
+  // a, then the inspector's controls (stroke, opacity, width, fill, label, shape, icon, effects), then name.
   for (let n = 0; n < 80 && !(await page.locator('#rename input').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#rename input')).toBeFocused();
   await page.keyboard.press('ControlOrMeta+a');
@@ -721,16 +720,19 @@ test('assembled Pages site serves the demo at / and the editor and worker depend
   await visible(page, 'api');
 });
 
-test('the inspector advertises every style field with D2\'s values; a change is one edit, Reset removes it, an unavailable field says why (spec 0017)', async ({ page }) => {
+test('the inspector shows the inheritance chain and only the controls D2 honours; a toggle is one edit and unchecking removes it (spec 0018)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a: A\nb: B\n');
   await select(page, 'a');
-  const field = k => page.locator(`#fields [data-path="a.style.${k}"]`);
+  for (const gone of ['#fields', '#actions', '#interactions', '#sources']) await expect(page.locator(gone)).toHaveCount(0);
+  await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Node', 'Shape']);
+  const field = k => page.locator(`#props [data-path="a.style.${k}"]`);
+  await expect(field('opacity')).toHaveAttribute('type', 'range');
   await expect(field('opacity')).toHaveAttribute('max', '1');
-  await expect(field('stroke-width')).toHaveAttribute('max', '15');
-  await expect(field('fill-pattern').locator('option')).toHaveText(["D2's default", 'none', 'dots', 'lines', 'grain', 'paper']);
-  await expect(field('shadow').locator('option')).toHaveText(["D2's default", 'true', 'false']);
-  await expect(field('3d')).toBeEnabled();
+  await expect(field('3d')).toHaveAttribute('type', 'checkbox');
+  // Nothing outside the curated set is offered.
+  await expect(page.locator('#props [data-path="a.style.fill-pattern"]')).toHaveCount(0);
+  await expect(page.locator('#props [data-path="a.top"]')).toHaveCount(0);
 
   const edits = () => page.evaluate(() => traffic.edits.length);
   const change = async action => {
@@ -739,94 +741,72 @@ test('the inspector advertises every style field with D2\'s values; a change is 
     await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
     await painted(page);
   };
-  await change(() => field('fill-pattern').selectOption('dots'));
-  await expect.poll(() => source(page)).toContain('fill-pattern: dots');
-
+  await change(() => field('3d').check());
+  await expect.poll(() => source(page)).toContain('3d: true');
+  await change(() => field('3d').uncheck());
+  await expect.poll(() => source(page)).not.toContain('3d');
   await change(async () => { await field('opacity').fill('0.5'); await field('opacity').press('Tab'); });
   await expect.poll(() => source(page)).toContain('opacity: 0.5');
-  await expect(field('opacity')).toHaveValue('0.5');
-
-  await change(() => page.locator('#fields [data-reset="a.style.opacity"]').click());
+  await change(() => page.locator('#props [data-reset="a.style.opacity"]').click());
   await expect.poll(() => source(page)).not.toContain('opacity');
-  expect(await source(page)).toContain('fill-pattern: dots');
 
-  // 3d is D2's rectangle, square and hexagon only.
+  // 3d is D2's rectangle, square and hexagon only: for a circle the control is absent, not disabled.
   await change(() => page.locator('#props [name="shape"]').selectOption('circle'));
-  await expect(field('3d')).toBeDisabled();
-  await expect(page.locator('#fields [data-reason="a.style.3d"]')).toContainText('only to rectangle, square, hexagon');
+  await expect(field('3d')).toHaveCount(0);
+  await expect(field('double-border')).toHaveAttribute('type', 'checkbox');
   expect(errors).toEqual([]);
 });
 
-test('layout fields: top and left are written together and need TALA; near is for root shapes; a connection offers link only (spec 0017)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
-  await type(page, 'p: { x }\nq\n');
-  const field = (id, k) => page.locator(`#fields [data-path="${id}.${k}"]`);
-  const edits = () => page.evaluate(() => traffic.edits.length);
-  const change = async action => {
-    const n = await edits();
-    await action();
-    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
-    await painted(page);
-  };
-  await select(page, 'q');
-  await expect(field('q', 'direction').locator('option')).toHaveText(["D2's default", 'up', 'down', 'right', 'left']);
-  await expect(field('q', 'near')).toBeEnabled();
-  await change(async () => { await field('q', 'top').fill('30'); await field('q', 'top').press('Tab'); });
-  await expect.poll(() => source(page)).toMatch(/top: 30[\s\S]*left: 0|left: 0[\s\S]*top: 30/);
-  await expect(field('q', 'left')).toHaveValue('0');
-  await change(() => page.locator('#fields [data-reset="q.top"]').click());
-  await expect.poll(() => source(page)).not.toMatch(/top|left/);
-
-  await select(page, 'p.x');
-  await expect(field('p.x', 'near')).toBeDisabled();
-  await expect(page.locator('#fields [data-reason="p.x.near"]')).toContainText('root level shapes');
-
-  await page.selectOption('#layout', 'dagre');
-  await painted(page);
-  await select(page, 'q');
-  await expect(field('q', 'top')).toBeDisabled();
-  await expect(page.locator('#fields [data-reason="q.top"]')).toContainText('TALA');
-  expect(errors).toEqual([]);
-});
-
-test('a connection lists its ends as buttons and both arrowheads with D2\'s shapes; an arrowhead edit is one patch (spec 0017)', async ({ page }) => {
+test('a connection shows the Element and Edge sections with its ends and both arrowheads, and no shape controls; an arrowhead edit is one patch (spec 0018)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a -> b\n');
   await page.locator('#host [data-id="(a -> b)[0]"]').focus();
   await expect(page.locator('#selected')).toHaveText('Connection (a -> b)[0]');
+  await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Edge']);
   await expect(page.locator('#endpoints button')).toHaveText(['From: a', 'To: b']);
-  const head = page.locator('#fields [data-path="(a -> b)[0].target-arrowhead.shape"]');
+  const head = page.locator('#props [data-path="(a -> b)[0].target-arrowhead.shape"]');
   await expect(head.locator('option')).toHaveText(["D2's default", 'arrow', 'box', 'cf-many', 'cf-many-required', 'cf-one', 'cf-one-required', 'circle', 'cross', 'diamond', 'none', 'triangle']);
-  await expect(page.locator('#fields [data-path="(a -> b)[0].style.shadow"]')).toHaveCount(0);
+  await expect(page.locator('#props [name="shape"]')).toBeHidden();
   const n = await page.evaluate(() => traffic.edits.length);
   await head.selectOption('diamond');
   await expect.poll(() => page.evaluate(() => traffic.edits.length), { timeout: 90_000 }).toBe(n + 1);
   await painted(page);
   await expect.poll(() => source(page)).toContain('target-arrowhead');
   await expect(head).toHaveValue('diamond');
+  await expect(page.locator('#props [data-section="edge"] .fields label > span:first-child')).toHaveText(['Start', 'End', 'Dashed']);
+  const dashed = page.locator('#props [data-path="(a -> b)[0].style.stroke-dash"]');
+  const m = await page.evaluate(() => traffic.edits.length);
+  await dashed.check();
+  await expect.poll(() => page.evaluate(() => traffic.edits.length), { timeout: 90_000 }).toBe(m + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('stroke-dash: 5');
+  await dashed.uncheck();
+  await expect.poll(() => source(page)).not.toContain('stroke-dash');
   await page.locator('#endpoints button', { hasText: 'To: b' }).click();
   await expect(page.locator('#selected')).toHaveText('Shape b');
   await expect(page.locator('#endpoints')).toBeHidden();
   expect(errors).toEqual([]);
 });
 
-test('the inspector lists the actions of the selection and says why one is unavailable (spec 0017)', async ({ page }) => {
+test('a node with no kind yet (a hierarchy) shows Element and Node only; a text node shows Content and no shape controls (spec 0018)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
-  await type(page, 't: { shape: sql_table }\nb\n');
-  await object(page, 'b').focus();
-  await expect(page.locator('#actions')).toContainText('Add child');
-  await expect(page.locator('#actions dd').nth(1)).toHaveText('available');
+  await type(page, 't: { shape: hierarchy }\nn: |md # Hi |\n');
   await object(page, 't').focus();
-  await expect(page.locator('#actions dd').nth(1)).toContainText('into rows');
+  await expect(page.locator('#selected')).toHaveText('Node t');
+  await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Node']);
+  await object(page, 'n').focus();
+  await expect(page.locator('#selected')).toHaveText('Text n');
+  await expect(page.locator('#props [data-section]:not([hidden]) > h3')).toHaveText(['Element', 'Node', 'Text']);
+  await expect(page.locator('#props [name="content"]')).toHaveValue('# Hi');
+  await expect(page.locator('#props [name="label"]')).toBeHidden();
+  await expect(page.locator('#props [name="shape"]')).toBeHidden();
   expect(errors).toEqual([]);
 });
 
-test('arrow keys move a focused shape on TALA by one checked edit, Undo restores it; other engines say positions need TALA; the panel lists the gestures (spec 0017)', async ({ page }) => {
+test('arrow keys move a focused shape on TALA by one checked edit, Undo restores it; other engines say positions need TALA; (spec 0017)', async ({ page }) => {
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a\nb\n');
   await object(page, 'a').focus();
-  await expect(page.locator('#interactions')).toContainText('edge handle');
-  await expect(page.locator('#interactions')).toContainText('Arrow keys');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
   await page.keyboard.press('ArrowRight');
@@ -842,10 +822,293 @@ test('arrow keys move a focused shape on TALA by one checked edit, Undo restores
   await page.selectOption('#layout', 'dagre');
   await painted(page);
   await object(page, 'a').focus();
-  await expect(page.locator('#interactions')).not.toContainText('Arrow keys');
   const m = await edits();
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#status')).toContainText('TALA');
   expect(await edits()).toBe(m);
+  expect(errors).toEqual([]);
+});
+
+test('the Type picker turns a shape into a text node and back as one edit each, keeping style and children; Undo restores it (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: hierarchy }\n');
+  await select(page, 'a');
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image', 'Sequence', 'Grid', 'Table', 'Class']);
+  await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.locator('#type button', { hasText: 'Text' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/a: \|md[\s\S]*A[\s\S]*\| \{style\.fill: red\}/);
+  expect(await source(page)).toContain('a.child');
+  await expect(page.locator('#selected')).toHaveText('Text a');
+  await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Text');
+  await page.locator('#type button', { hasText: 'Shape' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Shape a');
+  expect(await source(page)).toContain('a: A {style.fill: red}');
+  await page.click('#undo');
+  await expect(page.locator('#selected')).toHaveText('Text a');
+  // A kind with no descriptor yet and a connection have no picker.
+  await object(page, 't').focus();
+  await expect(page.locator('#type')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a text node edits as multi-line text: Enter is a new line, Cmd+Enter saves, Escape cancels, the switch changes the format (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'n: |md\n  # Hi\n|\n');
+  await select(page, 'n');
+  const area = page.locator('#props [name="content"]');
+  await expect(page.locator('#text-tag [aria-pressed="true"]')).toHaveText('Markdown');
+  await expect(page.locator('#props [name="language"]')).toBeHidden();
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await area.click();
+  await area.press('ControlOrMeta+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('second paragraph');
+  expect(await edits()).toBe(n);
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/\|md\n\s+# Hi\n\s+second paragraph\n\|/);
+  // Escape cancels: the typed words are dropped, no edit is made and the selection clears.
+  await select(page, 'n');
+  await area.click();
+  await page.keyboard.type('discard me');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#inspector')).toBeHidden();
+  expect(await edits()).toBe(n + 1);
+  expect(await source(page)).not.toContain('discard');
+  // The switch rewrites the block with another tag; a code block then shows its language.
+  await select(page, 'n');
+  await page.locator('#text-tag button', { hasText: 'Code' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 2);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('|python');
+  await expect(page.locator('#props [name="language"]')).toHaveValue('python');
+  await page.locator('#text-tag button', { hasText: 'LaTeX' }).click();
+  await expect.poll(() => source(page)).toContain('|latex');
+  expect(errors).toEqual([]);
+});
+
+test('the code language is searched in the list D2 highlights, the common ones first; another tag still goes through (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'c: |python\n  x = 1\n|\n');
+  await object(page, 'c').focus();
+  const options = await page.locator('#languages option').evaluateAll(os => os.map(o => o.value));
+  expect(options.slice(0, 3)).toEqual(['python', 'go', 'javascript']);
+  expect(options).toContain('rust');
+  expect(options.length).toBeGreaterThan(100);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await property(page, 'language', 'rust');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/\|rust\b/);
+  expect(await source(page)).toContain('x = 1');
+  await property(page, 'language', 'mydsl');
+  await expect.poll(() => source(page)).toMatch(/\|mydsl\b/);
+  expect(errors).toEqual([]);
+});
+
+test('turning a shape with children into an Image asks first; Cancel changes nothing, confirming removes them and Undo restores them (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\na.child\nb: B\n');
+  await select(page, 'a');
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await expect(page.locator('#confirm')).toBeVisible();
+  await expect(page.locator('#confirm-body')).toContainText('1 child shape');
+  const before = await source(page);
+  await page.locator('#confirm button[value="cancel"]').click();
+  await expect(page.locator('#confirm')).toBeHidden();
+  expect(await source(page)).toBe(before);
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await page.locator('#confirm-ok').click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('shape: image');
+  expect(await source(page)).not.toContain('child');
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Image a');
+  await page.click('#undo');
+  await expect.poll(() => source(page)).toBe(before);
+  // A shape without children converts straight away, to the placeholder icon.
+  await select(page, 'b');
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await expect(page.locator('#confirm')).toBeHidden();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('112-server.svg');
+  expect(errors).toEqual([]);
+});
+
+test('double-click edits a label on the canvas; the toolbar sits on the selection and sets colours and deletes (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\nb: B\n');
+  await expect(page.locator('#toolbar')).toBeHidden();
+  await select(page, 'a');
+  await expect(page.locator('#toolbar')).toBeVisible();
+  await expect(page.locator('#toolbar [data-tool="fill"]')).toBeVisible();
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  // Escape in the field cancels; Enter saves as one edit.
+  await object(page, 'a').locator('[data-k="rect"], [data-k="text"], svg').first().dblclick({ position: { x: 5, y: 5 } });
+  const field = page.locator('#host .label-edit, .label-edit').first();
+  await expect(field).toBeVisible();
+  await field.fill('discard');
+  await page.keyboard.press('Escape');
+  await expect(field).toHaveCount(0);
+  expect(await edits()).toBe(n);
+  expect(await source(page)).toBe('a: A\nb: B\n');
+  await expect(page.locator('#toolbar')).toBeVisible();
+  await object(page, 'a').locator('[data-k="rect"], [data-k="text"], svg').first().dblclick({ position: { x: 5, y: 5 } });
+  await field.fill('Renamed');
+  await page.keyboard.press('Enter');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toBe('a: Renamed\nb: B\n');
+  n = await edits();
+  await page.locator('#toolbar [data-tool="fill"] input').fill('#ff0000');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('fill: "#ff0000"');
+  await page.click('#tool-delete');
+  await expect.poll(() => source(page), { timeout: 90_000 }).not.toContain('Renamed');
+  await painted(page);
+  await expect(page.locator('#toolbar')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a sequence diagram offers Add actor, an actor inside it offers Add note, and a plain shape offers neither (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'd: {\n  shape: sequence_diagram\n  a -> b: hi\n}\nplain\n');
+  await object(page, 'd').focus();
+  await expect(page.locator('#selected')).toHaveText('Sequence d');
+  await expect(page.locator('#props [data-section="sequence"] .actions button')).toHaveText(['Add actor']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await page.locator('#props [data-section="sequence"] .actions button').click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('actor');
+  await object(page, 'd.a').focus();
+  await expect(page.locator('#props .actions button')).toHaveText(['Add note']);
+  await object(page, 'plain').focus();
+  await expect(page.locator('#props .actions button')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a grid shows Columns, Rows and Gap; dragging a cell onto a sibling reorders it by one edit; turning it into a Shape removes the grid keywords (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'g: {\n  grid-columns: 2\n  a\n  b\n  c\n}\n');
+  await object(page, 'g').focus();
+  await expect(page.locator('#selected')).toHaveText('Grid g');
+  await expect(page.locator('#props [data-section="grid"] .fields label > span:first-child')).toHaveText(['Columns', 'Rows', 'Gap']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  await page.locator('#props [data-path="g.grid-columns"]').fill('3');
+  await page.locator('#props [data-path="g.grid-columns"]').press('Tab');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('grid-columns: 3');
+  // Drag c onto a: it goes first.
+  n = await edits();
+  const from = await object(page, 'g.c').locator('[data-k]').first().boundingBox(), to = await object(page, 'g.a').locator('[data-k]').first().boundingBox();
+  await page.mouse.move(from.x + 4, from.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/grid-columns: 3\n\s+c\n\s+a\n\s+b/);
+  expect((await page.evaluate(() => traffic.edits.at(-1))).patch.text).not.toMatch(/top|left/);
+  await object(page, 'g').focus();
+  await page.locator('#type button', { hasText: 'Shape' }).click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).not.toContain('grid-columns');
+  await expect(page.locator('#selected')).toHaveText('Shape g');
+  expect(errors).toEqual([]);
+});
+
+test('a selected connection has an end dot on each side; dragging one onto another shape retargets it; Reverse swaps the ends, each one edit (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a -> b\nc\n');
+  await page.locator('#host [data-id="(a -> b)[0]"]').focus();
+  await expect(page.locator('#host .end-dot')).toHaveCount(2);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  await page.locator('#props [data-section="edge"] .actions button', { hasText: 'Reverse' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('b -> a');
+  await expect(page.locator('#selected')).toHaveText('Connection (b -> a)[0]');
+  await expect(page.locator('#host .end-dot')).toHaveCount(2);
+  // The target end (a) goes to c.
+  n = await edits();
+  const dot = await page.locator('#host .end-dot[data-end="target"]').boundingBox(), c = await object(page, 'c').locator('[data-k]').first().boundingBox();
+  await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('b -> c');
+  await expect(page.locator('#selected')).toHaveText('Connection (b -> c)[0]');
+  expect(errors).toEqual([]);
+});
+
+test('a table edits its columns in place: type, constraint chips, rename, add, delete, drag to reorder; each is one edit; Table to Class keeps the columns (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 't: {\n  shape: sql_table\n  id: int {constraint: primary_key}\n  name: varchar\n}\n');
+  await object(page, 't').focus();
+  await expect(page.locator('#selected')).toHaveText('Table t');
+  const rows = page.locator('#props [data-section="table"] .row-line');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('.chips [aria-pressed="true"]')).toHaveText(['PK']);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const once = async action => {
+    const n = await edits();
+    await action();
+    await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+    await painted(page);
+  };
+  await once(async () => { await rows.nth(1).locator('.r-type').fill('text'); await rows.nth(1).locator('.r-type').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('name: text');
+  expect(await source(page)).not.toMatch(/name: varchar/);
+  await once(() => rows.nth(1).locator('.chips button', { hasText: 'UNQ' }).click());
+  await expect.poll(() => source(page)).toMatch(/name: text[^\n]*unique/);
+  await once(async () => { await rows.nth(1).locator('.r-name').fill('title'); await rows.nth(1).locator('.r-name').press('Tab'); });
+  await expect.poll(() => source(page)).toContain('title: text');
+  await once(() => page.locator('#props .r-add').click());
+  await expect(rows).toHaveCount(3);
+  await once(() => rows.nth(2).locator('.r-del').click());
+  await expect(rows).toHaveCount(2);
+  // Drag the second column above the first.
+  await once(() => rows.nth(1).dragTo(rows.nth(0)));
+  await expect.poll(() => source(page)).toMatch(/title: text[\s\S]*id: int/);
+  await expect(rows.nth(0).locator('.r-name')).toHaveValue('title');
+  // To a Class: the columns stay (as members); its constraints are named in the sheet.
+  await page.locator('#type button', { hasText: 'Class' }).click();
+  await expect(page.locator('#confirm-body')).toContainText("the columns' constraints");
+  await page.locator('#confirm-ok').click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('shape: class');
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Class t');
+  await expect(page.locator('#props [data-section="class"] .row-line')).toHaveCount(2);
+  expect(errors).toEqual([]);
+});
+
+test('dragging a message down a sequence diagram reorders it by one edit (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 's: {\n  shape: sequence_diagram\n  a\n  b\n  a -> b: one\n  b -> a: two\n}\n');
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  const first = await object(page, 's.(a -> b)[0]').locator('path').first().boundingBox();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2 + 120, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/b -> a: two\n\s+a -> b: one/);
   expect(errors).toEqual([]);
 });

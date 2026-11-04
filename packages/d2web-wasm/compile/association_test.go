@@ -185,3 +185,56 @@ func TestClassesPerBoardAndCodeLanguage(t *testing.T) {
 		t.Errorf("languages %v", languages)
 	}
 }
+
+func TestAssociationRows(t *testing.T) {
+	res := compileText(t, `t: {shape: sql_table; id: int {constraint: [primary_key; unique]}; name: varchar}
+c: {shape: class; "+run(x int)": bool; -name: string; plain; "#save()": int}
+plain
+`)
+	if res["error"] != nil {
+		t.Fatal(res["error"])
+	}
+	got := map[string]any{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		got[obj["id"].(string)] = obj["rows"]
+	}
+	want := map[string]any{
+		"t":     []any{map[string]any{"name": "id", "type": "int", "constraint": []any{"primary_key", "unique"}}, map[string]any{"name": "name", "type": "varchar"}},
+		"c":     []any{map[string]any{"name": "+run(x int)", "type": "bool"}, map[string]any{"name": "-name", "type": "string"}, map[string]any{"name": "plain", "type": ""}, map[string]any{"name": "#save()", "type": "int"}},
+		"plain": nil,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestClassRowsFromImportsAndBoards(t *testing.T) {
+	var req map[string]any
+	_ = json.Unmarshal(request(""), &req)
+	req["files"] = map[string]string{"main.d2": "...@shared\nscenarios: {s: {c.+extra: bool}}\nlayers: {l: {c: @members; c.shape: class}}", "shared.d2": "c: {shape: class; \"+run()\": int; -x: string}", "members.d2": "\"#first()\": bool\n+second: int"}
+	req["boards"] = "all"
+	raw, _ := json.Marshal(req)
+	var res map[string]any
+	if err := json.Unmarshal(Handle(context.Background(), raw), &res); err != nil || res["error"] != nil {
+		t.Fatal(err, res["error"])
+	}
+	for _, b := range res["boards"].([]any) {
+		board := b.(map[string]any)
+		var rows []any
+		for _, o := range board["association"].(map[string]any)["objects"].([]any) {
+			obj := o.(map[string]any)
+			if obj["id"] == "c" {
+				rows, _ = obj["rows"].([]any)
+			}
+		}
+		want := map[string][]string{"": {"+run()", "-x"}, "/scenarios/s": {"+run()", "-x", "+extra"}, "/layers/l": {"#first()", "+second"}}[board["path"].(string)]
+		var names []string
+		for _, r := range rows {
+			names = append(names, r.(map[string]any)["name"].(string))
+		}
+		if !reflect.DeepEqual(names, want) {
+			t.Errorf("board %s rows %v, want %v", board["path"], names, want)
+		}
+	}
+}
