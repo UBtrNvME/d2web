@@ -939,27 +939,6 @@ func relativeEnd(scope, end *d2graph.Object) *d2ast.KeyPath {
 	}
 	return d2ast.MakeKeyPath(append(path, names[i:]...))
 }
-func swapArrowheads(k *d2ast.Key) {
-	swap := func(path *d2ast.KeyPath) {
-		if path == nil || len(path.Path) == 0 {
-			return
-		}
-		switch path.Path[0].Unbox().ScalarString() {
-		case "source-arrowhead":
-			path.Path[0] = d2ast.RawStringBox("target-arrowhead", true)
-		case "target-arrowhead":
-			path.Path[0] = d2ast.RawStringBox("source-arrowhead", true)
-		}
-	}
-	swap(k.EdgeKey)
-	if m := k.Value.Map; m != nil {
-		for _, n := range m.Nodes {
-			if n.MapKey != nil {
-				swap(n.MapKey.Key)
-			}
-		}
-	}
-}
 func reconnect(g *d2graph.Graph, sites []astSite, entry string, op Op, ids *IDs) error {
 	e, err := connection(g, op.Key)
 	if err != nil {
@@ -982,7 +961,7 @@ func reconnect(g *d2graph.Graph, sites []astSite, entry string, op Op, ids *IDs)
 	}
 	if op.Reverse {
 		next.Src, next.Dst = next.Dst, next.Src
-		next.SrcArrow, next.DstArrow = next.DstArrow, next.SrcArrow
+		// The arrowheads stay where they are, so the arrow now points the other way (`a -> b` becomes `b -> a`).
 		next.SrcTableColumnIndex, next.DstTableColumnIndex = next.DstTableColumnIndex, next.SrcTableColumnIndex
 	}
 	// shortcut: a chain shares endpoints between edges; refuse it until splitting preserves every edge's attributes.
@@ -1050,9 +1029,6 @@ func reconnect(g *d2graph.Graph, sites []astSite, entry string, op Op, ids *IDs)
 				}
 				if changed.DstArrow {
 					edge.DstArrow = ">"
-				}
-				if op.Reverse {
-					swapArrowheads(s.key)
 				}
 			}
 			if s.key.EdgeIndex != nil {

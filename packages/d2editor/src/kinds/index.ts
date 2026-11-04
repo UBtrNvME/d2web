@@ -5,7 +5,7 @@ import { image } from './image.ts';
 import { sequence } from './sequence.ts';
 import { shape } from './shape.ts';
 import { text } from './text.ts';
-import type { Kind, Section } from './types.ts';
+import type { Kind, KindAction, Section } from './types.ts';
 
 export type { Canonical, Control, Kind, KindAction, Section } from './types.ts';
 export const kinds: Kind[] = [shape, text, image, sequence, grid];
@@ -14,6 +14,11 @@ export const kinds: Kind[] = [shape, text, image, sequence, grid];
 const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', title: 'Opacity', widget: 'range' }, { keyword: 'stroke-width', title: 'Width', widget: 'number' }] };
 const node: Section = { id: 'node', title: 'Node', controls: [{ keyword: 'fill' }] };
 const edge: Section = { id: 'edge', title: 'Edge', controls: [{ keyword: 'label' }, { keyword: 'source-arrowhead', title: 'Start' }, { keyword: 'target-arrowhead', title: 'End' }, { keyword: 'stroke-dash', title: 'Dashed', widget: 'toggle', on: '5' }] };
+
+/** Buttons for a section: a node kind's own, or the Edge section's Reverse. */
+export const actionsOf = (sectionId: string): KindAction[] => (sectionId === 'edge'
+  ? [{ label: 'Reverse', ops: o => [{ op: 'reconnect', key: o.id, reverse: true }] }]
+  : kinds.find(k => k.section.id === sectionId)?.actions ?? []);
 
 export const kindOf = (object: AssociationObject) => kinds.find(k => k.detect(object));
 

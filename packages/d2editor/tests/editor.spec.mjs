@@ -1028,3 +1028,30 @@ test('a grid shows Columns, Rows and Gap; dragging a cell onto a sibling reorder
   await expect(page.locator('#selected')).toHaveText('Shape g');
   expect(errors).toEqual([]);
 });
+
+test('a selected connection has an end dot on each side; dragging one onto another shape retargets it; Reverse swaps the ends, each one edit (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a -> b\nc\n');
+  await page.locator('#host [data-id="(a -> b)[0]"]').focus();
+  await expect(page.locator('#host .end-dot')).toHaveCount(2);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  let n = await edits();
+  await page.locator('#props [data-section="edge"] .actions button', { hasText: 'Reverse' }).click();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('b -> a');
+  await expect(page.locator('#selected')).toHaveText('Connection (b -> a)[0]');
+  await expect(page.locator('#host .end-dot')).toHaveCount(2);
+  // The target end (a) goes to c.
+  n = await edits();
+  const dot = await page.locator('#host .end-dot[data-end="target"]').boundingBox(), c = await object(page, 'c').locator('[data-k]').first().boundingBox();
+  await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toContain('b -> c');
+  await expect(page.locator('#selected')).toHaveText('Connection (b -> c)[0]');
+  expect(errors).toEqual([]);
+});

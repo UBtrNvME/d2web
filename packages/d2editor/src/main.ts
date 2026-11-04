@@ -8,7 +8,7 @@ import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } fro
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
+import { actionsOf, convert, kindOf, kinds, sectionsOf, type Control } from './kinds/index.ts';
 import { renderFields } from './inspector.ts';
 import keywordTable from './keywords.json' with { type: 'json' };
 
@@ -283,7 +283,35 @@ function markTarget(id: string) {
   target = box ? chrome('drop-target', `pointer-events:none;left:${box.X}px;top:${box.Y}px;width:${box.Width}px;height:${box.Height}px;outline:2px dashed #3975d5;outline-offset:2px;background:rgb(57 117 213 / 0.08)`) : undefined;
 }
 
+function retarget(dot: HTMLElement, e: PointerEvent): Grab | undefined {
+  const board = boardOf(), id = state.selected, object = objectOf(id), start = toScene(e.clientX, e.clientY);
+  if (!board || !object || !start) return;
+  const side = dot.dataset.end as 'source' | 'target', fixed = endDots.find(d => d !== dot)!, ctx = { board: board.association, engine: layout() };
+  const band = chrome('rubber-band', 'left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none', 'svg');
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  for (const [k, v] of Object.entries({ stroke: '#3975d5', 'stroke-width': String(2 / camera.view.k), 'stroke-dasharray': `${6 / camera.view.k} ${4 / camera.view.k}` })) line.setAttribute(k, v);
+  band.append(line);
+  let to = '';
+  const end = () => { band.remove(); markTarget(''); };
+  return {
+    move(dx, dy) {
+      const x = start.x + dx, y = start.y + dy;
+      for (const [k, v] of Object.entries({ x1: fixed.dataset.x!, y1: fixed.dataset.y!, x2: String(x), y2: String(y) })) line.setAttribute(k, v);
+      to = connectTarget(ctx, x, y, 12 / camera.view.k);
+      markTarget(to && to !== (side === 'source' ? object.src : object.dst) ? to : '');
+    },
+    cancel: end,
+    drop() {
+      end();
+      if (!to || to === (side === 'source' ? object.src : object.dst)) return;
+      void edit([{ op: 'reconnect', key: id, ...(side === 'source' ? { src: to } : { dst: to }) }]);
+    },
+  };
+}
+
 function grab(e: PointerEvent): Grab | undefined {
+  const dot = (e.composedPath()[0] as Element | undefined)?.closest?.('.end-dot');
+  if (dot) return retarget(dot as HTMLElement, e);
   const handle = (e.composedPath()[0] as Element | undefined)?.closest?.('.handle');
   const object = objectOf(handle ? (handle as HTMLElement).dataset.from! : hovered), board = boardOf();
   if (!board) return;
@@ -435,6 +463,25 @@ function highlight(object: ReturnType<typeof objectOf>) {
   node.parentElement.append(outline);
 }
 
+// A selected connection shows a dot at each end; dragging one onto another shape retargets that end (spec 0019 `reconnect`).
+let endDots: HTMLElement[] = [];
+function markEnds(object: ReturnType<typeof objectOf>) {
+  for (const dot of endDots) dot.remove();
+  endDots = [];
+  const node = object?.kind === 'connection' && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
+  const paths = node ? [...node.querySelectorAll('path')] : [];
+  const line = paths.sort((a, b) => b.getTotalLength() - a.getTotalLength())[0];
+  if (!line || !line.getScreenCTM()) return;
+  const size = 14 / camera.view.k, length = line.getTotalLength();
+  endDots = (['source', 'target'] as const).flatMap(end => {
+    const local = line.getPointAtLength(end === 'source' ? 0 : length), client = new DOMPoint(local.x, local.y).matrixTransform(line.getScreenCTM()!), at = toScene(client.x, client.y);
+    if (!at) return [];
+    const dot = chrome('end-dot', `left:${at.x - size / 2}px;top:${at.y - size / 2}px;width:${size}px;height:${size}px;border-radius:50%;background:#fff;border:${2 / camera.view.k}px solid #3975d5;box-sizing:border-box;cursor:grab;pointer-events:auto`) as HTMLElement;
+    Object.assign(dot.dataset, { end, x: at.x, y: at.y });
+    return [dot];
+  });
+}
+
 // The toolbar sits on the selection's outline in screen space (it does not scale with zoom) and follows pan, zoom and repaints.
 function placeToolbar() {
   const bar = $('toolbar'), object = objectOf(state.selected), at = outline?.getBoundingClientRect(), page = $('canvas').getBoundingClientRect();
@@ -488,6 +535,7 @@ const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language', 'c
 function inspect() {
   const object = objectOf(state.selected);
   highlight(object);
+  markEnds(object);
   placeToolbar();
   $('inspector').hidden = !object;
   if (!object) return;
@@ -521,7 +569,7 @@ function inspect() {
     renderFields(el.querySelector<HTMLElement>('.fields')!, fields, controls);
     // A kind's actions are buttons under its controls, only where they apply.
     const host = el.querySelector<HTMLElement>('.actions') ?? el.appendChild(Object.assign(document.createElement('div'), { className: 'actions' }));
-    host.replaceChildren(...(kinds.find(k => k.section.id === section.id)?.actions ?? []).filter(a => a.when?.(object, boardOf()!.association) ?? true)
+    host.replaceChildren(...actionsOf(section.id).filter(a => a.when?.(object, boardOf()!.association) ?? true)
       .map(a => Object.assign(document.createElement('button'), { type: 'button', textContent: a.label, onclick: () => void edit(a.ops(object, boardOf()!.association)) })));
   }
   // Hand-built controls no section lists are not shown, and none is ever disabled.

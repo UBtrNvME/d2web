@@ -60,7 +60,7 @@ func TestStructurePatches(t *testing.T) {
 		{"parallel retarget", "a\nb\nc\na -> b\na -> b\na -> c\n(a -> b)[1].style.stroke: red", `{"op":"reconnect","key":"(a -> b)[0]","dst":"c"}`, "a\nb\nc\na -> c\na -> b\na -> c\n(a -> b)[0].style.stroke: red"},
 		{"source", "a\nb\nc\na -> b: hi {style.stroke: red}", `{"op":"reconnect","key":"(a -> b)[0]","src":"c"}`, "a\nb\nc\nc -> b: hi {style.stroke: red}"},
 		{"destination", "a\nb\nc\na -> b", `{"op":"reconnect","key":"(a -> b)[0]","dst":"c"}`, "a\nb\nc\na -> c"},
-		{"reverse", "a\nb\na -> b: hi {source-arrowhead: {shape: diamond}; target-arrowhead: {shape: circle}}", `{"op":"reconnect","key":"(a -> b)[0]","reverse":true}`, "a\nb\nb <- a: hi {target-arrowhead: {shape: diamond}; source-arrowhead: {shape: circle}}"},
+		{"reverse", "a\nb\na -> b: hi {source-arrowhead: {shape: diamond}; target-arrowhead: {shape: circle}}", `{"op":"reconnect","key":"(a -> b)[0]","reverse":true}`, "a\nb\nb -> a: hi {source-arrowhead: {shape: diamond}; target-arrowhead: {shape: circle}}"},
 		{"reverse both", "a\nb\na <-> b", `{"op":"reconnect","key":"(a <-> b)[0]","reverse":true}`, "a\nb\nb <-> a"},
 		{"reverse plain", "a\nb\na -- b", `{"op":"reconnect","key":"(a -- b)[0]","reverse":true}`, "a\nb\nb -- a"},
 		{"container edge", "c: {a; b; d; a -> b: hi}", `{"op":"reconnect","key":"c.(a -> b)[0]","dst":"c.d"}`, "c: {a; b; d; a -> d: hi}"},
@@ -165,11 +165,11 @@ func TestStructureTransaction(t *testing.T) {
 	if res.Error != nil || res.Patch == nil {
 		t.Fatalf("%+v", res)
 	}
-	want := formatted(t, "t: {shape: sql_table; number: text {constraint: unique}}\ng: {b; a}\na\nb\nc\nc <- a")
+	want := formatted(t, "t: {shape: sql_table; number: text {constraint: unique}}\ng: {b; a}\na\nb\nc\nc -> a")
 	if res.Patch.Text != want {
 		t.Fatalf("got %s want %s", res.Patch.Text, want)
 	}
-	if res.IDs.Renamed["(a -> b)[0]"] != "(c <- a)[0]" {
+	if res.IDs.Renamed["(a -> b)[0]"] != "(c -> a)[0]" {
 		t.Fatalf("IDs %+v", res.IDs)
 	}
 }
