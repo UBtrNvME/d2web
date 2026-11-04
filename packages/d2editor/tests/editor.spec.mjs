@@ -885,3 +885,23 @@ test('a text node edits as multi-line text: Enter is a new line, Cmd+Enter saves
   await expect.poll(() => source(page)).toContain('|latex');
   expect(errors).toEqual([]);
 });
+
+test('the code language is searched in the list D2 highlights, the common ones first; another tag still goes through (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'c: |python\n  x = 1\n|\n');
+  await object(page, 'c').focus();
+  const options = await page.locator('#languages option').evaluateAll(os => os.map(o => o.value));
+  expect(options.slice(0, 3)).toEqual(['python', 'go', 'javascript']);
+  expect(options).toContain('rust');
+  expect(options.length).toBeGreaterThan(100);
+  const edits = () => page.evaluate(() => traffic.edits.length);
+  const n = await edits();
+  await property(page, 'language', 'rust');
+  await expect.poll(edits, { timeout: 90_000 }).toBe(n + 1);
+  await painted(page);
+  await expect.poll(() => source(page)).toMatch(/\|rust\b/);
+  expect(await source(page)).toContain('x = 1');
+  await property(page, 'language', 'mydsl');
+  await expect.poll(() => source(page)).toMatch(/\|mydsl\b/);
+  expect(errors).toEqual([]);
+});

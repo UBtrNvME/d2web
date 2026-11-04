@@ -10,6 +10,8 @@ import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
 import { convert, kindOf, kinds, sectionsOf } from './kinds/index.ts';
 import { renderFields } from './inspector.ts';
+import keywordTable from './keywords.json' with { type: 'json' };
+
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -475,6 +477,8 @@ function inspect() {
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
 }
 
+// Languages D2's highlighter knows (exported from D2 at build, keywords.json), the common ones first; any other tag can still be typed.
+$('languages').append(...[...keywordTable.commonLanguages, ...keywordTable.languages.filter(l => !keywordTable.commonLanguages.includes(l))].map(l => new Option(l, l)));
 const TEXT_FORMATS = [['Markdown', 'markdown'], ['Code', 'code'], ['LaTeX', 'latex']] as const;
 const tagOf = (content: string, language?: string) => (content === 'code' ? language || 'python' : content === 'latex' ? 'latex' : 'md');
 function setFormat(id: string, content: (typeof TEXT_FORMATS)[number][1]) {
