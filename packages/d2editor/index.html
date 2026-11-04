@@ -66,6 +66,10 @@
       <h3>Shape</h3>
       <div class="fields" data-fields="shape"></div>
     </section>
+    <section data-section="image">
+      <h3>Image</h3>
+      <div class="fields" data-fields="image"></div>
+    </section>
     <section data-section="text">
       <h3>Text</h3>
       <div id="text-tag" class="segmented" role="group" aria-label="Text format"></div>
@@ -88,6 +92,13 @@
   </form>
   <button type="button" id="delete" class="danger">Delete</button>
 </section>
+<dialog id="confirm">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-body"></p>
+    <menu><button value="cancel" autofocus>Cancel</button> <button value="ok" id="confirm-ok">Change type</button></menu>
+  </form>
+</dialog>
 <dialog id="unchecked">
   <form method="dialog">
     <h2>D2 cannot apply this edit as a small change</h2>

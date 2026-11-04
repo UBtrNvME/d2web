@@ -833,7 +833,7 @@ test('the Type picker turns a shape into a text node and back as one edit each, 
   const errors = await open(page, '/repo/editor/');
   await type(page, 'a: A {style.fill: red}\na.child\nt: { shape: sql_table\n  id: int\n}\n');
   await select(page, 'a');
-  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text']);
+  await expect(page.locator('#type button')).toHaveText(['Shape', 'Text', 'Image']);
   await expect(page.locator('#type [aria-pressed="true"]')).toHaveText('Shape');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
@@ -912,5 +912,32 @@ test('the code language is searched in the list D2 highlights, the common ones f
   expect(await source(page)).toContain('x = 1');
   await property(page, 'language', 'mydsl');
   await expect.poll(() => source(page)).toMatch(/\|mydsl\b/);
+  expect(errors).toEqual([]);
+});
+
+test('turning a shape with children into an Image asks first; Cancel changes nothing, confirming removes them and Undo restores them (spec 0018)', async ({ page }) => {
+  const errors = await open(page, '/repo/editor/');
+  await type(page, 'a: A\na.child\nb: B\n');
+  await select(page, 'a');
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await expect(page.locator('#confirm')).toBeVisible();
+  await expect(page.locator('#confirm-body')).toContainText('1 child shape');
+  const before = await source(page);
+  await page.locator('#confirm button[value="cancel"]').click();
+  await expect(page.locator('#confirm')).toBeHidden();
+  expect(await source(page)).toBe(before);
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await page.locator('#confirm-ok').click();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('shape: image');
+  expect(await source(page)).not.toContain('child');
+  await painted(page);
+  await expect(page.locator('#selected')).toHaveText('Image a');
+  await page.click('#undo');
+  await expect.poll(() => source(page)).toBe(before);
+  // A shape without children converts straight away, to the placeholder icon.
+  await select(page, 'b');
+  await page.locator('#type button', { hasText: 'Image' }).click();
+  await expect(page.locator('#confirm')).toBeHidden();
+  await expect.poll(() => source(page), { timeout: 90_000 }).toContain('112-server.svg');
   expect(errors).toEqual([]);
 });

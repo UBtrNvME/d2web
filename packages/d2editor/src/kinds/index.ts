@@ -1,11 +1,12 @@
 // The kind registry (spec 0018 §3): the one place a node kind is added. Selections resolve to a path from Element; unknown nodes fall back to Element + Node.
-import type { AssociationObject } from '../../../d2web/src/index.ts';
+import type { Association, AssociationObject } from '../../../d2web/src/index.ts';
+import { image } from './image.ts';
 import { shape } from './shape.ts';
 import { text } from './text.ts';
 import type { Kind, Section } from './types.ts';
 
 export type { Canonical, Control, Kind, Section } from './types.ts';
-export const kinds: Kind[] = [shape, text];
+export const kinds: Kind[] = [shape, text, image];
 
 // Inherited sections: every element has these (spec 0018 §2).
 const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', title: 'Opacity', widget: 'range' }, { keyword: 'stroke-width', title: 'Width', widget: 'number' }] };
@@ -22,9 +23,10 @@ export function describe(object: AssociationObject) {
 }
 
 /** The edit ops that turn `object` into `to`, and what that loses (the author is asked first when it is not empty). */
-export function convert(object: AssociationObject, to: Kind) {
+export function convert(object: AssociationObject, to: Kind, board?: Association) {
   const from = kindOf(object);
-  const canonical = (from ?? shape).read(object);
+  const children = board?.objects.filter(o => o.parent === object.id).map(o => o.id);
+  const canonical = { ...(from ?? shape).read(object), children };
   return { ops: to.write(canonical, object), loss: to.loss(canonical, object) };
 }
 

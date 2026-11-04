@@ -28,9 +28,10 @@ const object = (source, id = 'x') => find(compile(source), id);
 
 const nodes = {
   shape: ['x: Hi\n', 'x: Hi { style.fill: red }\n', 'x: { shape: cylinder }\n', 'x: Hi { y }\n'],
+  image: ['x: { shape: image\n  icon: https://example.com/i.svg\n}\n'],
   text: ['x: |md\n  # Title\n\n  body\n|\n', 'x: |python\n  print(1)\n  print(2)\n|\n', 'x: |latex\n  x^2\n|\n', 'x: |md\n  hi\n| { style.fill: red }\n'],
 };
-const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: image\n  icon: https://example.com/i.svg\n}\n', 'x: { shape: sequence_diagram\n  a -> b\n}\n', 'x: { shape: hierarchy }\n'];
+const others = ['x: { shape: sql_table\n  id: int\n}\n', 'x: { shape: class\n  name: string\n}\n', 'x: { shape: sequence_diagram\n  a -> b\n}\n', 'x: { shape: hierarchy }\n'];
 
 test('every selection resolves to a path from Element: node kinds, the fallback and edges', () => {
   for (const [id, sources] of Object.entries(nodes)) for (const source of sources) {
@@ -55,15 +56,22 @@ test('read then write of the same kind leaves the object as it was', () => {
   }
 });
 
-test('every ordered pair of node kinds converts: D2 accepts it, name, style and children survive, the kind changes', () => {
+test('every ordered pair of node kinds converts: D2 accepts it, name and style survive, children survive unless the target is an image, the kind changes', () => {
   for (const from of kinds) for (const to of kinds) for (const source of nodes[from.id]) {
-    const withChild = `${source}x.child\n`, before = object(withChild);
-    const { ops, loss } = convert(before, to);
-    const association = compile(edit(withChild, ops)), after = find(association, 'x');
+    // An image cannot have children, so a source that is one is converted bare.
+    const text = from.id === 'image' ? source : `${source}x.child\n`, association0 = compile(text), before = find(association0, 'x');
+    const { ops, loss } = convert(before, to, association0);
+    const association = compile(edit(text, ops)), after = find(association, 'x');
     assert.equal(kindOf(after)?.id, to.id, `${from.id} to ${to.id}: ${source}`);
-    assert.ok(find(association, 'x.child'), `${from.id} to ${to.id} keeps its child`);
+    if (to.id === 'image') {
+      const n = association0.objects.filter(o => o.parent === 'x').length;
+      assert.deepEqual(loss, from.id === 'image' ? [] : [`${n} child ${n === 1 ? 'shape' : 'shapes'}`], `${from.id} to image names what it removes`);
+      assert.equal(association.objects.filter(o => o.parent === 'x').length, 0, `${from.id} to image removes every child`);
+    } else {
+      assert.deepEqual(loss, [], `${from.id} to ${to.id} loses nothing`);
+      if (from.id !== 'image') assert.ok(find(association, 'x.child'), `${from.id} to ${to.id} keeps its child`);
+    }
     assert.equal(after.properties.fill?.value, before.properties.fill?.value, `${from.id} to ${to.id} keeps fill`);
-    assert.deepEqual(loss, [], `${from.id} to ${to.id} loses nothing in slice 1`);
   }
 });
 
@@ -77,6 +85,7 @@ test('a text node keeps its words as the label and a label becomes markdown', ()
 test('sections follow the inheritance chain and list only curated keywords', () => {
   const ids = o => sectionsOf(o).map(s => s.id);
   assert.deepEqual(ids(object('x: Hi\n')), ['element', 'node', 'shape']);
+  assert.deepEqual(ids(object(nodes.image[0])), ['element', 'node', 'image']);
   assert.deepEqual(ids(object('x: |md\n  hi\n|\n')), ['element', 'node', 'text']);
   assert.deepEqual(ids(object(others[0])), ['element', 'node']);
   assert.deepEqual(ids(find(compile('x -> y\n'), '(x -> y)[0]')), ['element', 'edge']);

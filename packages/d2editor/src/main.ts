@@ -464,7 +464,7 @@ function inspect() {
   $('text-tag').replaceChildren(...(kind?.id === 'text' ? TEXT_FORMATS.map(([label, which]) => Object.assign(document.createElement('button'), { type: 'button', textContent: label, onclick: () => setFormat(object.id, which) })) : []));
   TEXT_FORMATS.forEach(([, which], i) => $('text-tag').children[i]?.setAttribute('aria-pressed', String(object.content === which)));
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
-  if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
+  if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : object.properties.icon?.value ?? '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
   // The Type picker (ADR 0015): any registered node kind to any other, one edit. A node whose kind has no descriptor yet cannot be converted safely.
   $('type').hidden = !kind;
@@ -486,12 +486,21 @@ function setFormat(id: string, content: (typeof TEXT_FORMATS)[number][1]) {
   if (object && object.content !== content) void edit([{ op: 'set', key: id, value: object.label, tag: tagOf(content) }]);
 }
 
-function retype(id: string, to: string) {
-  const object = objectOf(id), target = kinds.find(k => k.id === to);
-  if (!object || !target || kindOf(object) === target) return;
-  const { ops, loss } = convert(object, target);
-  // Nothing is lost between the kinds built so far; a lossy pair (tables, slice 2) asks first.
-  if (loss.length && !confirm(`Change ${id} to ${target.label}?\n\nThis removes: ${loss.join(', ')}. You can undo it.`)) return;
+// A small confirmation sheet; resolves true on the primary button.
+function confirmSheet(title: string, body: string) {
+  const dialog = $<HTMLDialogElement>('confirm');
+  $('confirm-title').textContent = title;
+  $('confirm-body').textContent = body;
+  dialog.returnValue = 'cancel';
+  dialog.showModal();
+  return new Promise<boolean>(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true }));
+}
+
+async function retype(id: string, to: string) {
+  const object = objectOf(id), target = kinds.find(k => k.id === to), board = boardOf();
+  if (!object || !target || !board || kindOf(object) === target) return;
+  const { ops, loss } = convert(object, target, board.association);
+  if (loss.length && !(await confirmSheet(`Change ${id} to ${target.label}?`, `This removes ${loss.join(', ')}. You can undo it.`))) return;
   void edit(ops);
 }
 
