@@ -51,22 +51,33 @@
 <section id="inspector" aria-label="Selected object" hidden>
   <h2 id="selected"></h2>
   <form id="props">
-    <h3>Properties</h3>
-    <label>Label <input name="label" autocomplete="off"></label>
-    <label>Fill <span class="color"><input name="fill" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="fill" tabindex="-1" aria-label="Pick fill colour"></span></label>
-    <label>Stroke <span class="color"><input name="stroke" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="stroke" tabindex="-1" aria-label="Pick stroke colour"></span></label>
-    <label data-shape-only>Shape <select name="shape"></select></label>
-    <label data-shape-only>Icon <input name="icon" autocomplete="off" placeholder="none" spellcheck="false"></label>
-    <label data-code-only>Language <input name="language" autocomplete="off" spellcheck="false"></label>
-    <div id="endpoints" class="row" hidden></div>
-    <h3>Fields</h3>
-    <div id="fields" class="fields"></div>
-    <h3>Gestures</h3>
-    <dl class="sources" id="interactions"></dl>
-    <h3>Actions</h3>
-    <dl class="sources" id="actions"></dl>
-    <h3>Declared at</h3>
-    <dl class="sources" id="sources"></dl>
+    <section data-section="element">
+      <h3>Element</h3>
+      <label data-keyword="stroke"><span>Stroke</span> <span class="color"><input name="stroke" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="stroke" tabindex="-1" aria-label="Pick stroke colour"></span></label>
+      <div class="fields" data-fields="element"></div>
+    </section>
+    <section data-section="node">
+      <h3>Node</h3>
+      <label data-keyword="fill"><span>Fill</span> <span class="color"><input name="fill" autocomplete="off" placeholder="D2's default" spellcheck="false"><input type="color" data-for="fill" tabindex="-1" aria-label="Pick fill colour"></span></label>
+      <div class="fields" data-fields="node"></div>
+    </section>
+    <section data-section="shape">
+      <h3>Shape</h3>
+      <div class="fields" data-fields="shape"></div>
+    </section>
+    <section data-section="text">
+      <h3>Text</h3>
+      <label data-keyword="language"><span>Language</span> <input name="language" autocomplete="off" spellcheck="false"></label>
+      <div class="fields" data-fields="text"></div>
+    </section>
+    <section data-section="edge">
+      <h3>Edge</h3>
+      <div id="endpoints" class="row" hidden></div>
+      <div class="fields" data-fields="edge"></div>
+    </section>
+    <label data-keyword="label" id="label-field"><span>Label</span> <input name="label" autocomplete="off"></label>
+    <label data-keyword="shape" id="shape-field"><span>Shape</span> <select name="shape"></select></label>
+    <label data-keyword="icon" id="icon-field"><span>Icon</span> <input name="icon" autocomplete="off" placeholder="none" spellcheck="false"></label>
   </form>
   <form id="rename">
     <h3>Name</h3>

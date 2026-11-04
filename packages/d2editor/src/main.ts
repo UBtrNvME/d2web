@@ -8,7 +8,8 @@ import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } fro
 import { hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
-import { HAND_BUILT, renderActions, renderFields, renderInteractions } from './inspector.ts';
+import { kindOf, sectionsOf } from './kinds/index.ts';
+import { renderFields } from './inspector.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const src = $<HTMLTextAreaElement>('src');
@@ -406,8 +407,10 @@ function highlight(object: ReturnType<typeof objectOf>) {
   node.parentElement.append(outline);
 }
 
-// The fields the inspector lists now; the generated controls edit through setOps over them (spec 0017).
+// The layered inspector (ADR 0015, spec 0018): the sections of the selection's inheritance chain, only the controls D2 honours for it.
+// `shown` is every generated field on screen; the edits go through setOps over them.
 let shown: Field[] = [];
+const HAND = new Set(['label', 'shape', 'icon', 'fill', 'stroke', 'language']);
 function inspect() {
   const object = objectOf(state.selected);
   highlight(object);
@@ -415,7 +418,37 @@ function inspect() {
   if (!object) return;
   const form = $<HTMLFormElement>('props');
   const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
-  $('selected').replaceChildren(Object.assign(document.createElement('span'), { className: 'kind', textContent: object.kind === 'connection' ? 'Connection' : 'Shape' }), ` ${object.id}`);
+  const sections = sectionsOf(object), kind = kindOf(object), caps = capabilities(object, { board: boardOf()!.association, engine: layout(), entry: ENTRY }), ends = caps.endpoints;
+  $('selected').replaceChildren(Object.assign(document.createElement('span'), { className: 'kind', textContent: object.kind === 'connection' ? 'Connection' : kind?.label ?? 'Node' }), ` ${object.id}`);
+  // A section is shown when the chain has it; its controls are placed in order, then the generated ones, and a control D2 ignores here is absent.
+  const applies = (keyword: string) => caps.fields.find(f => f.keyword === keyword)?.available ?? true;
+  shown = [];
+  const placed = new Set<Element>();
+  for (const el of form.querySelectorAll<HTMLElement>('[data-section]')) {
+    const section = sections.find(s => s.id === el.dataset.section);
+    el.hidden = !section;
+    if (!section) continue;
+    let cursor: Element = el.querySelector('h3')!;
+    for (const { keyword } of section.controls.filter(c => HAND.has(c.keyword))) {
+      const control = form.querySelector<HTMLElement>(`[data-keyword="${keyword}"]`)!;
+      placed.add(control);
+      cursor.after(control);
+      cursor = control;
+      control.hidden = !applies(keyword) || (keyword === 'language' && object.content !== 'code');
+    }
+    const widgets: Record<string, string> = {};
+    const fields = section.controls.filter(c => !HAND.has(c.keyword)).flatMap(c => {
+      const f = caps.fields.find(f => f.keyword === c.keyword);
+      if (f?.available) widgets[f.path] = c.widget ?? '';
+      return f?.available ? [f] : [];
+    });
+    shown.push(...fields);
+    renderFields(el.querySelector<HTMLElement>('.fields')!, fields, widgets);
+  }
+  // Hand-built controls no section lists are not shown, and none is ever disabled.
+  for (const el of form.querySelectorAll<HTMLElement>('[data-keyword]')) if (!placed.has(el)) el.hidden = true;
+  const labelText = form.querySelector('[data-keyword="label"] > span')!;
+  labelText.textContent = kind?.id === 'text' ? 'Content' : 'Label';
   for (const name of ['label', 'fill', 'stroke']) {
     if (document.activeElement !== field(name)) field(name).value = object.properties[name]?.value ?? (name === 'label' ? object.label : '');
   }
@@ -426,25 +459,11 @@ function inspect() {
     picker.classList.toggle('unset', !hex);
   }
   if (document.activeElement !== shapeSelect) shapeSelect.value = object.properties.shape?.value ?? '';
-  for (const el of form.querySelectorAll<HTMLElement>('[data-shape-only]')) el.hidden = object.kind === 'connection';
-  for (const el of form.querySelectorAll<HTMLElement>('[data-code-only]')) el.hidden = object.content !== 'code';
   if (document.activeElement !== field('icon')) field('icon').value = object.image && object.image.role !== 'edge-icon' ? object.image.source : '';
   if (document.activeElement !== field('language')) field('language').value = object.language ?? '';
-  const caps = capabilities(object, { board: boardOf()!.association, engine: layout(), entry: ENTRY }), ends = caps.endpoints;
-  shown = caps.fields.filter(f => !HAND_BUILT.has(f.keyword));
   // A connection names its ends; each is a button that selects it.
   $('endpoints').hidden = !ends;
   $('endpoints').replaceChildren(...(ends ? (['source', 'target'] as const).map(side => Object.assign(document.createElement('button'), { type: 'button', textContent: `${side === 'source' ? 'From' : 'To'}: ${ends[side]}`, onclick: () => select(ends[side]) })) : []));
-  renderFields($('fields'), shown);
-  renderActions($('actions'), caps.actions);
-  renderInteractions($('interactions'), caps.interactions);
-  // Where each value comes from (spec 0004): a declaration in the text, or D2's default.
-  $('sources').replaceChildren(...['label', 'fill', 'stroke', 'shape'].flatMap(name => {
-    const source = object.properties[name]?.source;
-    const dd = Object.assign(document.createElement('dd'), { textContent: source ? `${source.path} line ${source.start.line + 1}` : "D2's default" });
-    dd.classList.toggle('default', !source);
-    return [Object.assign(document.createElement('dt'), { textContent: name }), dd];
-  }));
   const name = $('rename').querySelector('input') as HTMLInputElement;
   if (document.activeElement !== name) name.value = object.id.split('.').pop()!;
 }
@@ -466,15 +485,17 @@ $<HTMLFormElement>('props').addEventListener('change', event => {
   const key = { label: id, fill: `${id}.style.fill`, stroke: `${id}.style.stroke`, shape: `${id}.shape`, icon: `${id}.icon` }[input.name];
   if (key) void edit([{ op: 'set', key, value }]);
 });
-// Generated fields (spec 0017): a control's data-path names its field; a blank value removes the declaration, and top/left travel together.
-$('fields').addEventListener('change', event => {
-  const input = event.target as HTMLInputElement, f = shown.find(f => f.path === input.dataset.path);
-  if (f) void edit(setOps(f, input.value, shown));
-});
-$('fields').addEventListener('click', event => {
-  const f = shown.find(f => f.path === (event.target as HTMLElement).dataset.reset);
-  if (f) void edit(setOps(f, '', shown));
-});
+// Generated fields: a control's data-path names its field; a blank value (or an unchecked toggle) removes the declaration, and top/left travel together.
+for (const host of document.querySelectorAll<HTMLElement>('.fields')) {
+  host.addEventListener('change', event => {
+    const input = event.target as HTMLInputElement, f = shown.find(f => f.path === input.dataset.path);
+    if (f) void edit(setOps(f, input.type === 'checkbox' ? (input.checked ? 'true' : '') : input.value, shown));
+  });
+  host.addEventListener('click', event => {
+    const f = shown.find(f => f.path === (event.target as HTMLElement).dataset.reset);
+    if (f) void edit(setOps(f, '', shown));
+  });
+}
 $<HTMLFormElement>('props').addEventListener('submit', event => event.preventDefault());
 $('props').addEventListener('keydown', event => {
   if (event.key === 'Enter' && event.target instanceof HTMLInputElement) { event.preventDefault(); event.target.blur(); }

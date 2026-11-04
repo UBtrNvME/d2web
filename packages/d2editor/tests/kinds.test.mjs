@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { goEnv, goRun, root } from '../../../tests/examples.mjs';
 import { normalizeCompileRequest } from '../../d2web/src/request.ts';
-import { convert, describe, kindOf, kinds } from '../src/kinds/index.ts';
+import { convert, describe, kindOf, kinds, sectionsOf } from '../src/kinds/index.ts';
 
 const output = join(root, 'artifacts/d2editor-kinds');
 mkdirSync(output, { recursive: true });
@@ -72,4 +72,15 @@ test('a text node keeps its words as the label and a label becomes markdown', ()
   assert.deepEqual(toText.ops, [{ op: 'set', key: 'x', value: 'Hello', tag: 'md' }]);
   const toShape = convert(object('x: |go\n  run()\n|\n'), kinds.find(k => k.id === 'shape'));
   assert.deepEqual(toShape.ops, [{ op: 'set', key: 'x', value: 'run()' }]);
+});
+
+test('sections follow the inheritance chain and list only curated keywords', () => {
+  const ids = o => sectionsOf(o).map(s => s.id);
+  assert.deepEqual(ids(object('x: Hi\n')), ['element', 'node', 'shape']);
+  assert.deepEqual(ids(object('x: |md\n  hi\n|\n')), ['element', 'node', 'text']);
+  assert.deepEqual(ids(object(others[0])), ['element', 'node']);
+  assert.deepEqual(ids(find(compile('x -> y\n'), '(x -> y)[0]')), ['element', 'edge']);
+  // Position, size, near, grid, fonts and link stay in the source pane (spec 0018 §3.6).
+  const listed = new Set(['x: Hi\n', 'x: |md\n  hi\n|\n', 'x -> y\n'].flatMap(s => sectionsOf(s.includes('->') ? find(compile(s), '(x -> y)[0]') : object(s)).flatMap(sec => sec.controls.map(c => c.keyword))));
+  for (const gone of ['top', 'left', 'width', 'height', 'near', 'direction', 'link', 'tooltip', 'font', 'vars', 'grid-rows']) assert.ok(!listed.has(gone), gone);
 });

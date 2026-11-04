@@ -2,10 +2,15 @@
 import type { AssociationObject } from '../../../d2web/src/index.ts';
 import { shape } from './shape.ts';
 import { text } from './text.ts';
-import type { Kind } from './types.ts';
+import type { Kind, Section } from './types.ts';
 
-export type { Canonical, Kind } from './types.ts';
+export type { Canonical, Kind, Section } from './types.ts';
 export const kinds: Kind[] = [shape, text];
+
+// Inherited sections: every element has these (spec 0018 §2).
+const element: Section = { id: 'element', title: 'Element', controls: [{ keyword: 'stroke' }, { keyword: 'opacity', widget: 'range' }, { keyword: 'stroke-width', widget: 'number' }] };
+const node: Section = { id: 'node', title: 'Node', controls: [{ keyword: 'fill' }] };
+const edge: Section = { id: 'edge', title: 'Edge', controls: [{ keyword: 'label' }, { keyword: 'source-arrowhead' }, { keyword: 'target-arrowhead' }, { keyword: 'stroke-dash', widget: 'number' }] };
 
 export const kindOf = (object: AssociationObject) => kinds.find(k => k.detect(object));
 
@@ -21,4 +26,11 @@ export function convert(object: AssociationObject, to: Kind) {
   const from = kindOf(object);
   const canonical = (from ?? shape).read(object);
   return { ops: to.write(canonical, object), loss: to.loss(canonical, object) };
+}
+
+/** The sections a selection renders, root first (the inheritance chain). A node with no registered kind gets Element and Node only. */
+export function sectionsOf(object: AssociationObject): Section[] {
+  if (object.kind === 'connection') return [element, edge];
+  const kind = kindOf(object);
+  return kind ? [element, node, kind.section] : [element, node];
 }

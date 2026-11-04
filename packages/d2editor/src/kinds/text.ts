@@ -6,6 +6,7 @@ const TAG = { markdown: 'md', latex: 'latex' } as const;
 export const text: Kind = {
   id: 'text',
   label: 'Text',
+  section: { id: 'text', title: 'Text', controls: [{ keyword: 'label' }, { keyword: 'language' }] },
   detect: o => o.kind === 'shape' && (o.content === 'markdown' || o.content === 'code' || o.content === 'latex'),
   read: o => ({ text: o.label, tag: o.content === 'code' ? o.language : TAG[o.content as keyof typeof TAG] }),
   write: (c, o) => [{ op: 'set', key: o.id, value: c.text, tag: c.tag ?? 'md' }],
