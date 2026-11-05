@@ -379,3 +379,7 @@ Verification on this branch: `mise run check` passed; `go test ./compile` passed
 Uncommitted: all of the above plus pre-existing demo edits in `packages/d2web/demo/index.html` carried over from before the merge of origin/main. Not committed or pushed.
 
 Open: the Firefox focus-tooltip failure; flow has no runtime refit if a consumer font wraps past D2's box (reported by `data-flow-fit` only); D2 v0.9.0 measures a lazy list continuation smaller than it paints (native clips the text; positioned here).
+
+## d2editor source pane (spec 0020, ADR 0016; accepted 5 November 2026)
+
+- [x] Slice 1 (5 November 2026; `dist/main.js` 111,458 to 400,369 bytes): CodeMirror 6 replaces `#src` (no history extension), inline diagnostics, two-way caret/selection link, patch highlights as decorations; Chromium tests per spec 0020 §3. Measure `dist/main.js` growth and report it.

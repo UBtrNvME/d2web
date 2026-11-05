@@ -43,3 +43,4 @@ Consequences: what it commits us to, what stays open, what would reverse it
 | [0013](0013-editor-traits-from-d2.md) | d2editor components: palette entries as data, traits derived from D2, edit ops the only write path | accepted |
 | [0014](0014-advertised-capabilities.md) | Elements advertise fields, actions and values, derived from D2 | accepted; rendering half superseded by 0015 |
 | [0015](0015-editor-kinds-inheritance.md) | d2editor shows an element's kind and inheritance, and omits what does not apply | accepted |
+| [0016](0016-source-pane-codemirror.md) | d2editor source pane becomes CodeMirror 6, linked to the canvas; text stays the only state | accepted |

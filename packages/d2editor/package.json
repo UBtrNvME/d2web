@@ -4,5 +4,11 @@
   "private": true,
   "type": "module",
   "description": "Canvas editing of D2 text through d2web's edit API (spec 0013); a static site, not a library",
-  "license": "MPL-2.0"
+  "license": "MPL-2.0",
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lint": "6.9.7",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15"
+  }
 }

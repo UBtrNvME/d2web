@@ -1,5 +1,9 @@
 // d2editor (spec 0013): the D2 text is the only document; canvas actions become d2web edits (spec 0012) and land in it as checked patches.
-import { createClient, getObject, type Association, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
+import { createClient, getObject, objectsAt, type Association, type Diagnostic, mount, spawnWorker, type CompileResult, type EditOp, type EditResult, type Engine, type SceneDocument } from '../../d2web/src/index.ts';
+import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view';
+import { standardKeymap } from '@codemirror/commands';
+import { setDiagnostics } from '@codemirror/lint';
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
@@ -14,7 +18,6 @@ import keywordTable from './keywords.json' with { type: 'json' };
 
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const src = $<HTMLTextAreaElement>('src');
 const ENTRY = 'main.d2';
 // D2's own default light and dark themes follow the system scheme, as in the demo.
 const dark = matchMedia('(prefers-color-scheme: dark)');
@@ -62,22 +65,93 @@ function status(message: string, error = false) {
   $('status').dataset.state = error ? 'error' : message === 'Compiling…' ? 'busy' : 'ok';
 }
 
-// The last patch's ranges, marked in a copy of the text behind the transparent textarea.
-function mark(edits: Range[] = [], side = new Set<Range>()) {
-  const marks = $('marks');
-  marks.replaceChildren();
-  let at = 0, shift = 0;
-  for (const e of edits) {
-    // Ranges are against the text before the patch; in the new text each starts after the earlier replacements.
-    const start = e.start + shift, end = start + e.text.length;
-    marks.append(state.text.slice(at, start), Object.assign(document.createElement('mark'), { textContent: state.text.slice(start, end) || ' ', className: side.has(e) ? 'side' : '' }));
-    at = end;
-    shift += e.text.length - (e.end - e.start);
+// CodeMirror projects the text; history.ts owns undo, and external changes never feed back into setText.
+const patchMarks = StateEffect.define<DecorationSet>();
+const patchField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(marks, transaction) {
+    if (transaction.docChanged) marks = Decoration.none;
+    for (const effect of transaction.effects) if (effect.is(patchMarks)) marks = effect.value;
+    return marks;
+  },
+  provide: field => EditorView.decorations.from(field),
+});
+class DeletedMark extends WidgetType {
+  constructor(readonly side: boolean) { super(); }
+  eq(other: DeletedMark) { return this.side === other.side; }
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = `patch-mark${this.side ? ' side' : ''}`;
+    span.textContent = '\u00a0';
+    span.setAttribute('aria-hidden', 'true');
+    return span;
   }
-  marks.append(state.text.slice(at) + '\n');
-  marks.scrollTop = src.scrollTop;
 }
-src.addEventListener('scroll', () => { $('marks').scrollTop = src.scrollTop; });
+let syncingSource = false, sourceLinked = false;
+const src = new EditorView({
+  parent: $('src'),
+  doc: initial,
+  extensions: [
+    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField,
+    EditorView.contentAttributes.of({ 'aria-label': 'D2 source', spellcheck: 'false' }),
+    keymap.of(standardKeymap),
+  ],
+  dispatchTransactions(transactions, editor) {
+    editor.update(transactions);
+    if (syncingSource) return;
+    if (transactions.some(t => t.docChanged)) setText(editor.state.doc.toString(), { delay: 250 });
+    else if (transactions.some(t => t.selection)) selectAtCaret();
+  },
+});
+
+// CodeMirror counts each displayed newline once; D2 offsets still address the original CRLF text until typing normalises it.
+const sourceOffset = (offset: number) => state.text.slice(0, offset).replace(/\r\n?/g, '\n').length;
+// An unchanged list is not sent again: each dispatch closes an open hover tooltip, and the idle recompile repeats the same diagnostics.
+let shownDiagnostics = '';
+function diagnose(diagnostics: Diagnostic[] = []) {
+  const list = diagnostics.flatMap(d => d.range && (!d.file || d.file === ENTRY) ? [{
+    from: sourceOffset(d.range.start), to: sourceOffset(d.range.end), severity: d.severity, message: d.message,
+  }] : []);
+  const key = JSON.stringify(list);
+  if (key === shownDiagnostics) return;
+  shownDiagnostics = key;
+  src.dispatch(setDiagnostics(src.state, list));
+}
+
+function mark(edits: Range[] = [], side = new Set<Range>()) {
+  let shift = 0;
+  const marks = edits.map(e => {
+    // Patch ranges address the old text; replacements are marked in the new text.
+    const start = e.start + shift, end = start + e.text.length;
+    shift += e.text.length - (e.end - e.start);
+    return end > start
+      ? Decoration.mark({ class: `patch-mark${side.has(e) ? ' side' : ''}` }).range(sourceOffset(start), sourceOffset(end))
+      : Decoration.widget({ widget: new DeletedMark(side.has(e)), side: 1 }).range(sourceOffset(start));
+  });
+  src.dispatch({ effects: patchMarks.of(Decoration.set(marks, true)) });
+}
+
+function selectAtCaret() {
+  if (!sourceLinked) return;
+  const board = boardOf();
+  if (!board) return;
+  const head = src.state.selection.main.head, line = src.state.doc.lineAt(head);
+  const object = objectsAt(board.association, { path: ENTRY, line: line.number - 1, column: head - line.from })[0];
+  state.selected = object?.id ?? '';
+  inspect();
+  const node = object && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
+  if (node) camera.reveal(node);
+}
+
+function caretToSelection() {
+  if (!sourceLinked) return;
+  const reference = objectOf(state.selected)?.references[0];
+  if (!reference || reference.path !== ENTRY) return;
+  const anchor = sourceOffset(reference.start.offset);
+  syncingSource = true;
+  try { src.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor) }); }
+  finally { syncingSource = false; }
+}
 
 // Top-left on screen of the painted parts under some nodes. Ownership frames can be zero-sized and each path's 1×1 <svg> wrapper sits at the
 // scene origin (as in canvas.reveal), so only the other descendants count.
@@ -99,6 +173,7 @@ function keepInPlace(moved: NonNullable<typeof pending>['moved'] & {}, before: A
 }
 
 async function compile(seeds?: number[]) {
+  sourceLinked = false;
   const revision = state.revision, board = state.board, run = ++compileRun;
   let result: CompileResult;
   try {
@@ -111,6 +186,7 @@ async function compile(seeds?: number[]) {
   if (result.error) {
     // A board the text no longer has falls back to the root.
     if (board && !result.available.includes(board)) { state.board = ''; return compile(seeds); }
+    diagnose(result.error.diagnostics);
     status(result.error.diagnostics.map(d => `${d.range ? `offset ${d.range.start}: ` : ''}${d.message}`).join('\n') || result.error.message, true);
     return;
   }
@@ -135,9 +211,11 @@ async function compile(seeds?: number[]) {
   pending = undefined;
   state.result = result;
   state.painted = revision;
+  diagnose(result.diagnostics);
+  sourceLinked = true;
   classButtons(after.classes);
   if (focused && focused === state.selected) $('host').shadowRoot?.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
-  status(notice || `compiled in ${Math.round(result.millis)} ms`, Boolean(notice));
+  status(notice || [`compiled in ${Math.round(result.millis)} ms`, ...result.diagnostics.map(d => d.message)].join('\n'), Boolean(notice));
   inspect();
 }
 
@@ -161,12 +239,19 @@ function paintCanvas(scene: SceneDocument) {
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.
 function setText(text: string, { record = true, edits, side, delay = 0 }: { record?: boolean; edits?: Range[]; side?: Set<Range>; delay?: number } = {}) {
   notice = '';
+  sourceLinked = false;
   clearTimeout(typing);
   clearTimeout(idle);
   state.text = text;
   state.revision++;
   if (record) history.push(text);
-  if (src.value !== text) src.value = text;
+  const displayed = text.replace(/\r\n?/g, '\n');
+  if (src.state.doc.toString() !== displayed) {
+    syncingSource = true;
+    try { src.dispatch({ changes: { from: 0, to: src.state.doc.length, insert: displayed } }); }
+    finally { syncingSource = false; }
+  }
+  diagnose();
   mark(edits, side);
   try { localStorage.setItem(STORAGE, text); } catch { /* storage is optional */ }
   status('Compiling…');
@@ -174,8 +259,6 @@ function setText(text: string, { record = true, edits, side, delay = 0 }: { reco
   // Seeds are TALA's: other engines need no second compile when the user stops.
   if (layout() === 'tala') idle = setTimeout(() => void compile(), 1000);
 }
-
-src.addEventListener('input', () => setText(src.value, { delay: 250 }));
 
 // One canvas action, one transaction. Only a checked patch changes the text; anything else leaves it as it was.
 // `effects` are objects the edit changes only as a side effect: their ranges are marked apart from the author's own (spec 0016).
@@ -231,6 +314,7 @@ function select(id: string) {
     return;
   }
   state.selected = id;
+  caretToSelection();
   inspect();
 }
 view.on('click', e => select(e.id));
@@ -468,7 +552,7 @@ function connectFrom(handle: HTMLElement, e: PointerEvent): Grab | undefined {
     },
   };
 }
-view.on('focus', e => { if (camera.pressed) return; state.selected = e.id; camera.reveal(e.domEvent.target as Element); inspect(); });
+view.on('focus', e => { if (camera.pressed) return; state.selected = e.id; caretToSelection(); camera.reveal(e.domEvent.target as Element); inspect(); });
 
 function objectOf(id: string) {
   const board = state.result?.boards?.find(b => b.path === state.board);
@@ -771,7 +855,7 @@ function connectableMove(object: NonNullable<ReturnType<typeof objectOf>>, board
   status('Positions need the TALA layout engine; use Tab and the inspector, or drop a shape into a zone.');
   return false;
 }
-const typingIn = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement;
+const typingIn = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLElement && t.isContentEditable);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { connectAbort?.(); connecting(false); select(''); return; }
   // Figma-style view keys outside text fields: +/- zoom, Shift+1 fit, Shift+0 100%.
@@ -814,7 +898,7 @@ $<HTMLInputElement>('open').addEventListener('change', async event => {
   input.value = '';
 });
 $('download').addEventListener('click', () => {
-  // Textarea values normalise CRLF; retain the document's line endings until the user types or accepts an edit.
+  // The view normalises CRLF; retain the document's line endings until the user types or accepts an edit.
   const url = URL.createObjectURL(new Blob([state.text], { type: 'text/plain;charset=utf-8' }));
   const link = Object.assign(document.createElement('a'), { href: url, download: 'diagram.d2' });
   link.click();
@@ -841,7 +925,6 @@ if (params.has('script')) {
   window.history.replaceState(null, '', location.pathname + location.hash);
 }
 
-src.value = initial;
 setText(initial, { record: false });
 if (shared !== undefined && shared !== initial) setText(shared);
 if (sharedError) status(notice = sharedError, true);

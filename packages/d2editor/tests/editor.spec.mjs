@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync, mkdirSync, cpSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { buildSync } from 'esbuild';
 import { root } from '../../../tests/examples.mjs';
 
 const dist = join(root, 'packages/d2editor/dist');
+// Exercise the view through CodeMirror's public API, without adding a test API to the application.
+const cmFixture = buildSync({
+  stdin: { contents: "export { EditorView } from '@codemirror/view';", resolveDir: join(root, 'packages/d2editor') },
+  bundle: true, write: false, format: 'iife', globalName: 'cm',
+}).outputFiles[0].text;
 const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 async function open(page, path = '/') {
   const errors = [];
@@ -49,9 +55,22 @@ const object = (page, id) => page.locator(`#host [data-id=${JSON.stringify(id)}]
 // Object ownership frames can be zero-sized; click their painted child so the real delegated pointer event selects the object.
 const select = (page, id) => object(page, id).locator('[data-k="rect"], [data-k="text"], svg').first().click({ position: { x: 5, y: 5 } });
 const visible = (page, id) => expect(object(page, id).locator('[data-k]').first()).toBeVisible();
-const source = page => page.inputValue('#src');
+// CodeMirror reads document.body at load, so the helper is a script tag added when needed, not an init script (it would be lost on reload).
+const withCm = async page => { if (!await page.evaluate(() => 'cm' in window)) await page.addScriptTag({ content: cmFixture }); };
+const source = async page => { await withCm(page); return page.evaluate(() => cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor')).state.doc.toString()); };
+const sourceInput = page => page.locator('#src .cm-content');
+function expectSource(page, text) {
+  const value = expect.poll(() => source(page));
+  return typeof text === 'string' ? value.toBe(text) : value.toMatch(text);
+}
+const caret = async page => { await withCm(page); return page.evaluate(() => cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor')).state.selection.main.head); };
+const moveCaret = async (page, anchor) => { await withCm(page); return page.evaluate(anchor => {
+  const view = cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor'));
+  view.focus();
+  view.dispatch({ selection: { anchor } });
+}, anchor); };
 async function type(page, text) {
-  await page.fill('#src', text);
+  await sourceInput(page).fill(text);
   await painted(page);
 }
 async function property(page, name, value) {
@@ -68,7 +87,7 @@ async function patch(page, expected, action) {
   for (const edit of [...result.patch.edits].reverse()) rebuilt = rebuilt.slice(0, edit.start) + edit.text + rebuilt.slice(edit.end);
   expect(rebuilt).toBe(expected);
   expect(result.patch.text).toBe(expected);
-  await expect(page.locator('#src')).toHaveValue(expected);
+  await expectSource(page, expected);
   await painted(page);
   return result;
 }
@@ -145,16 +164,16 @@ test('dragging a shape on TALA writes top/left where it was dropped; again adds 
   await drag(page, 'a', 90, 60);
   await expect.poll(() => page.evaluate(() => traffic.edits.length)).toBe(count + 1);
   const left = Math.round(before.X + 90 / k), top = Math.round(before.Y + 60 / k);
-  await expect(page.locator('#src')).toHaveValue(new RegExp(`top: ${top}[\\s\\S]*left: ${left}|left: ${left}[\\s\\S]*top: ${top}`));
+  await expectSource(page, new RegExp(`top: ${top}[\\s\\S]*left: ${left}|left: ${left}[\\s\\S]*top: ${top}`));
   await painted(page);
   await expect(page.locator('#selected')).toHaveText('Shape a');
   expect(await outline(page)).toEqual({ X: left, Y: top });
   await drag(page, 'a', -30, 15);
-  await expect(page.locator('#src')).toHaveValue(new RegExp(`top: ${top + Math.round(15 / k)}`));
+  await expectSource(page, new RegExp(`top: ${top + Math.round(15 / k)}`));
   await painted(page);
   await page.click('#undo');
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expectSource(page, text);
 });
 
 test('a nested shape beside a fixed sibling lands where dropped; on other engines a drop in its own parent returns with a hint and no edit', async ({ page }) => {
@@ -163,7 +182,7 @@ test('a nested shape beside a fixed sibling lands where dropped; on other engine
   await select(page, 'c.e');
   const before = await outline(page), k = await zoom(page);
   await drag(page, 'c.e', 50, 80);
-  await expect(page.locator('#src')).toHaveValue(/e: \{|e\.top|top: \d+[\s\S]*top: \d+/);
+  await expectSource(page, /e: \{|e\.top|top: \d+[\s\S]*top: \d+/);
   await painted(page);
   const after = await outline(page);
   expect(Math.abs(after.X - (before.X + 50 / k))).toBeLessThanOrEqual(1);
@@ -204,27 +223,27 @@ test('palette entries write D2 under a free key, focus the name; Zone defines it
   await open(page);
   await type(page, 'x\n');
   await page.click('[data-entry="markdown"]');
-  await expect(page.locator('#src')).toHaveValue('x\nnote: |md # Note |\n');
+  await expectSource(page, 'x\nnote: |md # Note |\n');
   await painted(page);
   await expect(page.locator('#rename input')).toBeFocused();
   await expect(page.locator('#selected')).toHaveText('Text note');
   await page.keyboard.press('Escape');
   await page.click('[data-entry="code"]');
-  await expect(page.locator('#src')).toHaveValue(/code: \|python print\("hello"\) \|/);
+  await expectSource(page, /code: \|python print\("hello"\) \|/);
   await painted(page);
   await expect(page.locator('#props [name="language"]')).toHaveValue('python');
   await page.keyboard.press('Escape');
   await page.click('[data-entry="icon"]');
-  await expect(page.locator('#src')).toHaveValue(/service: \{\n  icon: https:\/\/icons\.terrastruct\.com\/essentials\/112-server\.svg\n  shape: image\n\}/);
+  await expectSource(page, /service: \{\n  icon: https:\/\/icons\.terrastruct\.com\/essentials\/112-server\.svg\n  shape: image\n\}/);
   await painted(page);
   await expect(page.locator('#host img')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await page.click('[data-entry="zone"]');
-  await expect(page.locator('#src')).toHaveValue(/classes\.zone\.style\.stroke-dash: 3[\s\S]*zone: \{class: zone\}/);
+  await expectSource(page, /classes\.zone\.style\.stroke-dash: 3[\s\S]*zone: \{class: zone\}/);
   await painted(page);
   await page.keyboard.press('Escape');
   await page.click('[data-entry="zone"]');
-  await expect(page.locator('#src')).toHaveValue(/zone 2: \{class: zone\}/);
+  await expectSource(page, /zone 2: \{class: zone\}/);
   await painted(page);
   expect((await source(page)).match(/stroke-dash/g)).toHaveLength(1);
   // The inspector shows Language only for code blocks.
@@ -233,15 +252,15 @@ test('palette entries write D2 under a free key, focus the name; Zone defines it
   await type(page, 'classes: {db: {shape: cylinder}}\nx\n');
   await expect(page.locator('#classes button')).toHaveText(['db']);
   await page.click('#classes button');
-  await expect(page.locator('#src')).toHaveValue(/db: \{class: db\}/);
+  await expectSource(page, /db: \{class: db\}/);
 });
 
 test('Zone right after typing a zone class uses the current text, so the class keeps its own style', async ({ page }) => {
   await open(page);
   // No wait for the compile: the click comes while the typed text is still compiling.
-  await page.fill('#src', 'classes: {zone: {style.stroke: red}}\na\n');
+  await sourceInput(page).fill('classes: {zone: {style.stroke: red}}\na\n');
   await page.click('[data-entry="zone"]');
-  await expect(page.locator('#src')).toHaveValue('classes: {zone: {style.stroke: red}}\na\nzone: {class: zone}\n');
+  await expectSource(page, 'classes: {zone: {style.stroke: red}}\na\nzone: {class: zone}\n');
 });
 
 test('dropping a shape into a zone moves it there on any engine; out to empty space moves it to the root; leaves are not targets', async ({ page }) => {
@@ -253,12 +272,12 @@ test('dropping a shape into a zone moves it there on any engine; out to empty sp
   await expect(page.locator('#status')).toContainText('need the TALA layout engine');
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
   await dragTo(page, centre(await box(page, 'b')), centre(await box(page, 'vpc')));
-  await expect(page.locator('#src')).toHaveValue(/vpc: \{\n  class: zone\n  b\n\}[\s\S]*vpc\.b -> note/);
+  await expectSource(page, /vpc: \{\n  class: zone\n  b\n\}[\s\S]*vpc\.b -> note/);
   await painted(page);
   await expect(page.locator('#selected')).toHaveText('Shape vpc.b');
   const view = await page.locator('#canvas').boundingBox();
   await dragTo(page, centre(await box(page, 'vpc.b')), { x: view.x + view.width - 30, y: view.y + 30 });
-  await expect(page.locator('#src')).toHaveValue(/\nb -> note|\nb\n/);
+  await expectSource(page, /\nb -> note|\nb\n/);
   expect(await source(page)).not.toContain('vpc.b');
 });
 
@@ -268,18 +287,18 @@ test('a refused move returns the shape and shows the worker’s reason; the text
   await type(page, text);
   await dragTo(page, centre(await box(page, 'a')), centre(await box(page, 'vpc')));
   await expect(page.locator('#status')).toContainText('referenced in scenarios/s');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expectSource(page, text);
 });
 
 test('drag from a handle connects to a shape, creates a shape on empty space, and Escape cancels', async ({ page }) => {
   await open(page);
   await type(page, 'a\nb\n');
   await fromHandle(page, 'a', centre(await box(page, 'b')));
-  await expect(page.locator('#src')).toHaveValue('a\nb\na -> b\n');
+  await expectSource(page, 'a\nb\na -> b\n');
   await painted(page);
   const view = await page.locator('#canvas').boundingBox();
   await fromHandle(page, 'b', { x: view.x + view.width - 40, y: view.y + 40 });
-  await expect(page.locator('#src')).toHaveValue('a\nb\na -> b\nshape 2\nb -> shape 2\n');
+  await expectSource(page, 'a\nb\na -> b\nshape 2\nb -> shape 2\n');
   await painted(page);
   await expect(page.locator('#rename input')).toBeFocused();
   await page.keyboard.press('Escape');
@@ -316,10 +335,10 @@ test('a 3-tier diagram from an empty canvas, typing only names', async ({ page }
   await page.click('[data-entry="markdown"]');
   await expect(page.locator('#rename input')).toBeFocused();
   await fromHandle(page, 'vpc.web', centre(await box(page, 'vpc.app')));
-  await expect(page.locator('#src')).toHaveValue(/web -> app/);
+  await expectSource(page, /web -> app/);
   await painted(page);
   await fromHandle(page, 'vpc.app', centre(await box(page, 'vpc.rds')));
-  await expect(page.locator('#src')).toHaveValue(/app -> rds/);
+  await expectSource(page, /app -> rds/);
   await painted(page);
   const text = await source(page);
   for (const part of ['vpc: {', 'class: zone', 'web: {', 'app: {', 'rds: {', 'shape: image', 'note: |md', 'web -> app', 'app -> rds']) expect(text).toContain(part);
@@ -369,9 +388,9 @@ test('dragging past the left origin keeps the layout the author drew; the DOM pr
   await page.evaluate(() => { traffic.holdAbove = Math.max(0, ...traffic.requests.map(q => q.revision ?? 0)); });
   await page.mouse.up();
   await expect.poll(() => page.evaluate(() => traffic.edits.length)).toBe(count + 1);
-  await expect(page.locator('#src')).toHaveValue(/a: A \{[\s\S]*left: 0[\s\S]*b: B \{[\s\S]*left: \d+/);
-  await expect(page.locator('#marks mark.side').first()).toBeAttached();
-  await expect(page.locator('#marks mark:not(.side)').first()).toBeAttached();
+  await expectSource(page, /a: A \{[\s\S]*left: 0[\s\S]*b: B \{[\s\S]*left: \d+/);
+  await expect(page.locator('#src .patch-mark.side').first()).toBeAttached();
+  await expect(page.locator('#src .patch-mark:not(.side)').first()).toBeAttached();
   // Virtual state: with the compile held, the shape is where it was dropped and the sibling has not moved on screen.
   await page.waitForTimeout(300);
   expect(Math.abs((await box(page, 'a')).x - m.to.x + 4)).toBeLessThanOrEqual(3);
@@ -391,12 +410,12 @@ test('dragging past the left origin keeps the layout the author drew; the DOM pr
   expect(Math.abs((b1.x - a1.x) - ((before.b.x - before.a.x) + reach))).toBeLessThanOrEqual(2 * k + 2);
   expect(Math.abs(a1.y - before.a.y)).toBeLessThanOrEqual(3);
   // One drag rewrote this many lines (spec 0016 section 4).
-  const after = await page.inputValue('#src'), old = text.split('\n');
+  const after = await source(page), old = text.split('\n');
   const changed = after.split('\n').filter(l => { const i = old.indexOf(l); if (i < 0) return true; old.splice(i, 1); return false; }).length;
   test.info().annotations.push({ type: 'changed lines', description: String(changed) });
   expect(changed).toBeLessThanOrEqual(10);
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expectSource(page, text);
 });
 
 test('dragging past the top origin shifts siblings down, and the shape stays under the pointer', async ({ page }) => {
@@ -404,7 +423,7 @@ test('dragging past the top origin shifts siblings down, and the shape stays und
   const m = await pastOrigin(page, text, 'a', ['b'], 'y');
   await drop(page, m, ['a', 'b']);
   await page.mouse.up();
-  await expect(page.locator('#src')).toHaveValue(/a: A \{[\s\S]*top: 0[\s\S]*b: B \{[\s\S]*top: \d+/);
+  await expectSource(page, /a: A \{[\s\S]*top: 0[\s\S]*b: B \{[\s\S]*top: \d+/);
   await painted(page);
   await page.waitForTimeout(400);
   const a1 = await box(page, 'a'), b1 = await box(page, 'b');
@@ -419,7 +438,7 @@ test('a nested shape dragged past its container\'s origin shifts that container\
     (before, k) => before['c.e'].x - (before['c.d'].x - 40 * k) + 20 * k);
   await drop(page, m, ['c.e', 'c.d', 'z']);
   await page.mouse.up();
-  await expect(page.locator('#src')).toHaveValue(/d: \{top: 30; left: (?!40\b)\d+\}[\s\S]*e: \{[\s\S]*left: 0/);
+  await expectSource(page, /d: \{top: 30; left: (?!40\b)\d+\}[\s\S]*e: \{[\s\S]*left: 0/);
   await painted(page);
   await page.waitForTimeout(400);
   const e1 = await box(page, 'c.e'), d1 = await box(page, 'c.d');
@@ -433,7 +452,7 @@ test('a nested shape is shifted, not moved out, while it still overlaps its cont
     before => (before['c.e'].x + 4) - (before.c.x - 10));
   await drop(page, m, ['c.e']);
   await page.mouse.up();
-  await expect(page.locator('#src')).toHaveValue(/^c: \{[\s\S]*\n  e: \{[\s\S]*left: 0[\s\S]*\n\}\n$/);
+  await expectSource(page, /^c: \{[\s\S]*\n  e: \{[\s\S]*left: 0[\s\S]*\n\}\n$/);
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
@@ -444,7 +463,7 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   const red = '# services\na: API {style.fill: "#ff0000"}\nb: DB\n';
   await patch(page, red, () => property(page, 'fill', '#ff0000'));
   expect(await object(page, 'a').evaluate(el => [el, ...el.querySelectorAll('*')].some(e => getComputedStyle(e).backgroundColor === 'rgb(255, 0, 0)' || getComputedStyle(e).fill === 'rgb(255, 0, 0)'))).toBe(true);
-  await expect(page.locator('#marks mark')).not.toHaveCount(0);
+  await expect(page.locator('#src .patch-mark')).not.toHaveCount(0);
   const label = '# services\na: Gateway {style.fill: "#ff0000"}\nb: DB\n';
   await patch(page, label, () => property(page, 'label', 'Gateway'));
   await expect(object(page, 'a')).toContainText('Gateway');
@@ -481,14 +500,14 @@ test('unchecked deletion offers the reason, labels and formatted text; cancel an
   await expect(page.locator('#reason')).toContainText('change labels');
   await expect(page.locator('#labels')).toContainText('Scenarios');
   await expect(page.locator('#formatted')).toHaveText('testing: scenarios\n');
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expectSource(page, text);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.locator('#delete')).toBeFocused();
-  await expect(page.locator('#src')).toHaveValue(text);
+  await expectSource(page, text);
   await page.click('#delete');
   await expect(page.locator('#unchecked')).toBeVisible();
   await page.click('#use');
-  await expect(page.locator('#src')).toHaveValue('testing: scenarios\n');
+  await expectSource(page, 'testing: scenarios\n');
   await painted(page);
 });
 
@@ -501,13 +520,13 @@ test('stroke and shape edits use checked patches; invalid values report D2’s r
   await patch(page, shaped, () => page.selectOption('#props [name="shape"]', 'cylinder'));
   await property(page, 'fill', 'not-a-color');
   await expect(page.locator('#status.error')).toContainText('set a.style.fill');
-  await expect(page.locator('#src')).toHaveValue(shaped);
+  await expectSource(page, shaped);
   // The colour picker makes the same edit through its text field.
   await patch(page, shaped.replace('red', '"#00ff00"'), () => page.locator('input[data-for="stroke"]').fill('#00ff00'));
   await expect(page.locator('#props [name="stroke"]')).toHaveValue('#00ff00');
 });
 
-test('undo and redo restore exact mixed typed and patched texts with buttons and keyboard, including in the textarea', async ({ page }) => {
+test('undo and redo restore exact mixed typed and patched texts with buttons and keyboard, including in CodeMirror', async ({ page }) => {
   await open(page);
   const typed = '# mine\na: API\n';
   await type(page, typed);
@@ -515,16 +534,16 @@ test('undo and redo restore exact mixed typed and patched texts with buttons and
   const red = '# mine\na: API {style.fill: red}\n';
   await patch(page, red, () => property(page, 'fill', 'red'));
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue(typed);
+  await expectSource(page, typed);
   await painted(page);
   await page.click('#redo');
-  await expect(page.locator('#src')).toHaveValue(red);
+  await expectSource(page, red);
   await painted(page);
-  await page.locator('#src').focus();
+  await sourceInput(page).focus();
   await page.keyboard.press('ControlOrMeta+z');
-  await expect(page.locator('#src')).toHaveValue(typed);
+  await expectSource(page, typed);
   await page.keyboard.press('ControlOrMeta+Shift+z');
-  await expect(page.locator('#src')).toHaveValue(red);
+  await expectSource(page, red);
   await painted(page);
 });
 
@@ -548,14 +567,14 @@ test('layer edits keep the root text; adding inside a selected container uses D2
 test('Tab selects objects; keyboard reaches inspector, commits a label, renames and deletes', async ({ page }) => {
   await open(page);
   await type(page, 'a: API\n');
-  await page.locator('#src').focus();
+  await sourceInput(page).focus();
   await page.keyboard.press('Tab');
   await expect(object(page, 'a')).toBeFocused();
   await expect(page.locator('#selected')).toHaveText('Shape a');
   await page.keyboard.press('Escape');
   await expect(page.locator('#inspector')).toBeHidden();
-  await expect(page.locator('#src')).toHaveValue('a: API\n');
-  await page.locator('#src').focus();
+  await expectSource(page, 'a: API\n');
+  await sourceInput(page).focus();
   // The toolbar's buttons, then Element and Node controls, then the Shape section's label.
   for (let n = 0; n < 30 && !(await page.locator('#props [name="label"]').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#props [name="label"]')).toBeFocused();
@@ -563,7 +582,7 @@ test('Tab selects objects; keyboard reaches inspector, commits a label, renames 
   await page.keyboard.type('Keyboard');
   await patch(page, 'a: Keyboard\n', () => page.keyboard.press('Enter'));
   // Continue with Tab only, from the source through the canvas into the rename form.
-  await page.locator('#src').focus();
+  await sourceInput(page).focus();
   // a, then the inspector's controls (stroke, opacity, width, fill, label, shape, icon, effects), then name.
   for (let n = 0; n < 80 && !(await page.locator('#rename input').evaluate(el => el === document.activeElement)); n++) await page.keyboard.press('Tab');
   await expect(page.locator('#rename input')).toBeFocused();
@@ -583,15 +602,15 @@ test('a late edit cannot overwrite source typed before its result, even before t
   await page.evaluate(() => { traffic.hold = true; });
   await property(page, 'fill', 'red');
   await expect.poll(() => page.evaluate(() => Boolean(traffic.held))).toBe(true);
+  await withCm(page);
   await page.evaluate(() => {
-    const src = document.querySelector('#src');
-    src.value = 'newest: Typed\n';
-    src.dispatchEvent(new Event('input', { bubbles: true }));
+    const view = cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor'));
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'newest: Typed\n' } });
     traffic.hold = false;
     traffic.held.worker.dispatchEvent(new MessageEvent('message', { data: traffic.held.data }));
   });
   await painted(page);
-  await expect(page.locator('#src')).toHaveValue('newest: Typed\n');
+  await expectSource(page, 'newest: Typed\n');
   await visible(page, 'newest');
 });
 
@@ -651,16 +670,16 @@ test('a ?script= link opens on top of the saved text, a bad link keeps it, and S
   const script = 'x -> y\nI just forgot my whole philosophy of life!!!: {\n  s: TV is chewing gum for the eyes\n}\n';
   await page.goto('http://localhost:5281/?script=FMvBDcIwDEDRe6b4GYAFeuDOHbEAcmKjFFc4VbEQuyMGeG9OZ7JceOwxaf7qPlmTQ30Im9rw8E0TbwxrUmtd-BSIhesNC-4qhz07fV__nqmCpET5lt8A&layout=dagre');
   await painted(page);
-  await expect(page.locator('#src')).toHaveValue(script);
+  await expectSource(page, script);
   await expect(page.locator('#layout')).toHaveValue('dagre');
   expect(new URL(page.url()).search).toBe('');
   await page.click('#undo');
-  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+  await expectSource(page, 'mine: My saved text\n');
   await page.goto('http://localhost:5281/?script=broken!!');
   // The error outlasts the startup compiles (seeds [1], then the idle default seeds).
   await expect.poll(() => page.evaluate(() => traffic.results.filter(r => !r.error).length)).toBeGreaterThanOrEqual(2);
   await expect(page.locator('#status.error')).toContainText('shared link could not be opened');
-  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+  await expectSource(page, 'mine: My saved text\n');
   // A link's layout and theme apply to that visit only; the menus are the saved choice.
   await expect(page.locator('#layout')).toHaveValue('tala');
   await page.selectOption('#layout', 'elk');
@@ -672,7 +691,7 @@ test('a ?script= link opens on top of the saved text, a bad link keeps it, and S
   await type(page, 'other: text\n');
   await page.goto(link);
   await painted(page);
-  await expect(page.locator('#src')).toHaveValue('mine: My saved text\n');
+  await expectSource(page, 'mine: My saved text\n');
 });
 
 test('opening, downloading, restore and editing/idle seeds work at /editor/', async ({ page }) => {
@@ -681,7 +700,7 @@ test('opening, downloading, restore and editing/idle seeds work at /editor/', as
   await expect(page.locator('#example')).toHaveCount(0);
   const text = '# opened file\r\na: From file\r\n';
   await page.locator('#open').setInputFiles({ name: 'mine.d2', mimeType: 'text/plain', buffer: Buffer.from(text) });
-  await expect(page.locator('#src')).toHaveValue(text.replaceAll('\r\n', '\n'));
+  await expectSource(page, text.replaceAll('\r\n', '\n'));
   await painted(page);
   expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1).files['main.d2'])).toBe(text);
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('#download')]);
@@ -691,7 +710,7 @@ test('opening, downloading, restore and editing/idle seeds work at /editor/', as
   expect(await page.evaluate(revision => traffic.requests.filter(r => r.type === 'compile' && r.revision === revision).map(r => r.seeds ?? [1, 2, 3]), revision)).toEqual([[1], [1, 2, 3]]);
   await page.reload();
   await painted(page);
-  await expect(page.locator('#src')).toHaveValue(text.replaceAll('\r\n', '\n'));
+  await expectSource(page, text.replaceAll('\r\n', '\n'));
   await expect(object(page, 'a')).toContainText('From file');
 });
 
@@ -1111,4 +1130,144 @@ test('dragging a message down a sequence diagram reorders it by one edit (spec 0
   await painted(page);
   await expect.poll(() => source(page)).toMatch(/b -> a: two\n\s+a -> b: one/);
   expect(errors).toEqual([]);
+});
+
+// Spec 0020 slice 1: CodeMirror is a view of the same D2 text and history.
+test('source pane underlines D2 diagnostics and clears them after fixing the syntax', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('#src .cm-content')).toHaveAttribute('aria-label', 'D2 source');
+  await sourceInput(page).fill('# 😀\na -> {');
+  await expect(page.locator('#status.error')).toContainText('offset');
+  await expect(page.locator('#src .cm-lintRange-error').first()).toBeAttached();
+  const diagnostic = await page.evaluate(() => traffic.results.at(-1).error.diagnostics[0]);
+  const marker = page.locator('#src .cm-lintRange-error').first();
+  await withCm(page);
+  expect(await marker.evaluate(el => {
+    const view = cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor'));
+    return { start: view.posAtDOM(el), end: view.posAtDOM(el, el.childNodes.length) };
+  })).toEqual(diagnostic.range);
+  await marker.hover();
+  await expect(page.locator('.cm-tooltip-lint')).toContainText(diagnostic.message);
+  await type(page, 'a: Fixed\n');
+  await expect(page.locator('#src .cm-lintRange-error')).toHaveCount(0);
+});
+
+test('source caret selects the innermost object; canvas selection reveals its first reference without taking focus', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  const text = '# 😀 UTF-16\n' + '# spacer\n'.repeat(70) + 'a: {\n  b: Child\n}\nz: Other\n';
+  await type(page, text);
+  await moveCaret(page, text.indexOf('Child') + 2);
+  await expect(page.locator('#selected')).toHaveText('Shape a.b');
+  await expect(sourceInput(page)).toBeFocused();
+  await moveCaret(page, 0);
+  await expect(page.locator('#inspector')).toBeHidden();
+  // A keyboard canvas selection uses the same path as a pointer click, and keeps focus on that object.
+  await object(page, 'a.b').first().evaluate(el => el.focus());
+  await expect(object(page, 'a.b').first()).toBeFocused();
+  await expect.poll(() => caret(page)).toBe(text.indexOf('b: Child'));
+  await expect.poll(() => page.locator('#src .cm-scroller').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  // Clicking a different shape updates the caret too, with no reference feedback changing the canvas selection.
+  await select(page, 'z');
+  await expect.poll(() => caret(page)).toBe(text.indexOf('z: Other'));
+  await expect(page.locator('#selected')).toHaveText('Shape z');
+  await expect(sourceInput(page)).not.toBeFocused();
+});
+
+test('source and canvas linking is off during a pending compile and after a failed compile', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await type(page, 'a: A\nb: B\n');
+  await select(page, 'b');
+  const revision = await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1).revision);
+  await page.evaluate(revision => { traffic.holdAbove = revision; }, revision);
+  // A typing transaction disables the link immediately, before its debounce or result.
+  await sourceInput(page).fill('a: A\nb: B\n# pending\n');
+  await moveCaret(page, 1);
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await expect.poll(() => page.evaluate(() => Boolean(traffic.heldResult))).toBe(true);
+  await select(page, 'a');
+  await expect.poll(() => caret(page)).toBe(1);
+  await page.evaluate(() => {
+    traffic.holdAbove = undefined;
+    traffic.heldResult.worker.dispatchEvent(new MessageEvent('message', { data: traffic.heldResult.data }));
+  });
+  await painted(page);
+  await moveCaret(page, 6);
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await sourceInput(page).fill('a -> {');
+  await expect(page.locator('#status.error')).toContainText('offset');
+  await moveCaret(page, 1);
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await select(page, 'a');
+  await expect.poll(() => caret(page)).toBe(1);
+  await type(page, 'a: A\nb: B\n');
+  await moveCaret(page, 6);
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+});
+
+test('typing then dragging uses one undo stack and source shortcuts do not zoom the canvas', async ({ page }) => {
+  await open(page);
+  const original = 'a: A\nb: B\na -> b\n';
+  await type(page, original);
+  const k = await zoom(page);
+  await sourceInput(page).press('ControlOrMeta+End');
+  await page.keyboard.insertText('# typed +-=!\n');
+  const typed = original + '# typed +-=!\n';
+  await expectSource(page, typed);
+  await painted(page);
+  expect(await zoom(page)).toBe(k);
+  await select(page, 'a');
+  await drag(page, 'a', 70, 40);
+  await expect.poll(() => source(page)).not.toBe(typed);
+  await painted(page);
+  const dragged = await source(page);
+  await sourceInput(page).focus();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, typed);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, original);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expectSource(page, typed);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expectSource(page, dragged);
+  const beforeKey = await zoom(page);
+  await page.keyboard.press('+');
+  expect(await zoom(page)).toBe(beforeKey);
+});
+
+test('CRLF source links use UTF-16 offsets and the original endings survive until typing and undo', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  const text = '# 😀\r\na: A\r\nb: B\r\n';
+  await page.locator('#open').setInputFiles({ name: 'crlf.d2', mimeType: 'text/plain', buffer: Buffer.from(text) });
+  await painted(page);
+  const displayed = text.replaceAll('\r\n', '\n');
+  await expectSource(page, displayed);
+  await select(page, 'b');
+  await expect.poll(() => caret(page)).toBe(displayed.indexOf('b: B'));
+  await moveCaret(page, displayed.indexOf('b: B') + 1);
+  await expect(page.locator('#selected')).toHaveText('Shape b');
+  await sourceInput(page).press('ControlOrMeta+End');
+  await page.keyboard.insertText('# typed');
+  await painted(page);
+  expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1).files['main.d2'])).toBe(displayed + '# typed');
+  await page.keyboard.press('ControlOrMeta+z');
+  await painted(page);
+  expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1).files['main.d2'])).toBe(text);
+});
+
+test('source decorations cover patch replacements, show deletions, and clear on typing', async ({ page }) => {
+  await open(page);
+  await type(page, '# 😀\na: A\nb: B\n');
+  await select(page, 'a');
+  const result = await patch(page, '# 😀\na: A {style.fill: red}\nb: B\n', () => property(page, 'fill', 'red'));
+  expect(await page.locator('#src .patch-mark').allTextContents()).not.toHaveLength(0);
+  expect((await page.locator('#src .patch-mark').allTextContents()).join('')).toBe(result.patch.edits.map(e => e.text.replace(/\r\n?|\n/g, '')).join(''));
+  await select(page, 'b');
+  await patch(page, '# 😀\na: A {style.fill: red}\n', () => page.click('#delete'));
+  await expect(page.locator('#src .patch-mark[aria-hidden="true"]')).toHaveCount(1);
+  await sourceInput(page).press('ControlOrMeta+End');
+  await page.keyboard.insertText('# typed');
+  await expect(page.locator('#src .patch-mark')).toHaveCount(0);
 });
