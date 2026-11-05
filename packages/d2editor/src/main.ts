@@ -4,6 +4,7 @@ import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view';
 import { standardKeymap } from '@codemirror/commands';
 import { setDiagnostics } from '@codemirror/lint';
+import { sourceLanguage } from './source-language.ts';
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
@@ -92,7 +93,7 @@ const src = new EditorView({
   parent: $('src'),
   doc: initial,
   extensions: [
-    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField,
+    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField, sourceLanguage,
     EditorView.contentAttributes.of({ 'aria-label': 'D2 source', spellcheck: 'false' }),
     keymap.of(standardKeymap),
   ],

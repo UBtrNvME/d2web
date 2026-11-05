@@ -1271,3 +1271,86 @@ test('source decorations cover patch replacements, show deletions, and clear on 
   await page.keyboard.insertText('# typed');
   await expect(page.locator('#src .patch-mark')).toHaveCount(0);
 });
+
+// Spec 0021: highlighting and suggestions remain projections of the source text.
+test('source syntax has distinct token classes and follows the page theme', async ({ page }) => {
+  await open(page);
+  await sourceInput(page).fill('# comment\na: "quoted" {shape: rectangle; style.fill: "#abcdef"; width: 42}\na -> b\nb -- c\nc <- d\nd <-> e\nnote: |md\n# block content\n|\nz: Z\n');
+  for (const [kind, text] of [['comment', '# comment'], ['string', '"quoted"'], ['keyword', 'shape'], ['arrow', '->'], ['string', '"#abcdef"'], ['number', '42']]) {
+    await expect(page.locator(`#src .d2-${kind}`).filter({ hasText: text }).first()).toBeVisible();
+  }
+  await expect(page.locator('#src .d2-arrow')).toHaveText(['->', '--', '<-', '<->']);
+  await expect(page.locator('#src .d2-string').filter({ hasText: '# block content' })).toHaveCount(1);
+  const comment = page.locator('#src .d2-comment').first();
+  const light = await comment.evaluate(el => getComputedStyle(el).color);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(() => comment.evaluate(el => getComputedStyle(el).color)).not.toBe(light);
+});
+
+test('source completion offers shapes, style keywords and boolean values from D2', async ({ page }) => {
+  await open(page);
+  const table = JSON.parse(readFileSync(join(root, 'packages/d2editor/src/keywords.json'), 'utf8'));
+  for (const [text, expected] of [
+    ['a.shape: ', table.shapes],
+    ['a.style.', table.keywords.filter(k => k.style).map(k => k.name)],
+    ['a.style.bold: ', ['true', 'false']],
+  ]) {
+    await sourceInput(page).fill(text);
+    await sourceInput(page).press('Control+Space');
+    const labels = page.locator('.cm-tooltip-autocomplete .cm-completionLabel');
+    await expect(labels).toHaveCount(expected.length);
+    expect((await labels.allTextContents()).sort()).toEqual([...expected].sort());
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.cm-tooltip-autocomplete')).toHaveCount(0);
+    await expectSource(page, text);
+  }
+});
+
+test('accepting a source completion is one shared history step and never an edit API call', async ({ page }) => {
+  await open(page);
+  const original = await source(page), text = 'a.shape: rect';
+  await sourceInput(page).fill(text);
+  const edits = await page.evaluate(() => traffic.edits.length);
+  await sourceInput(page).press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toBeVisible();
+  await page.waitForTimeout(100); // CodeMirror ignores acceptance keys immediately after the list opens.
+  await page.keyboard.press('Enter');
+  await expectSource(page, 'a.shape: rectangle');
+  await painted(page);
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(edits);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, text);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, original);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expectSource(page, text);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expectSource(page, 'a.shape: rectangle');
+});
+
+test('source completion respects style scopes, known shapes, arrowheads and common languages', async ({ page }) => {
+  await open(page);
+  const table = JSON.parse(readFileSync(join(root, 'packages/d2editor/src/keywords.json'), 'utf8'));
+  const cases = [
+    ['a: { style: { ', table.keywords.filter(k => k.style).map(k => k.name)],
+    ['a: {shape: circle; style.', table.keywords.filter(k => k.style && (!k.only || k.only.includes('circle'))).map(k => k.name)],
+    ['a -> b: {source-arrowhead.shape: ', table.arrowheads],
+    ['a -> b: {target-arrowhead: {shape: ', table.arrowheads],
+  ];
+  for (const [text, expected] of cases) {
+    await sourceInput(page).fill(text);
+    await sourceInput(page).press('Control+Space');
+    const labels = page.locator('.cm-tooltip-autocomplete .cm-completionLabel');
+    await expect(labels).toHaveCount(expected.length);
+    expect((await labels.allTextContents()).sort()).toEqual([...expected].sort());
+    await page.keyboard.press('Escape');
+  }
+  for (const text of ['a.language: ', 'a: |']) {
+    await sourceInput(page).fill(text);
+    await sourceInput(page).press('Control+Space');
+    const labels = page.locator('.cm-tooltip-autocomplete .cm-completionLabel');
+    await expect(labels.first()).toHaveText(table.commonLanguages[0]);
+    expect((await labels.allTextContents()).slice(0, table.commonLanguages.length)).toEqual(table.commonLanguages);
+    await page.keyboard.press('Escape');
+  }
+});

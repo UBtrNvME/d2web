@@ -2,6 +2,7 @@
   color-scheme: light dark; font: 13px/1.4 system-ui, sans-serif;
   --bg: #fff; --panel: #f7f7f8; --fg: #1d1d1f; --muted: #6b6b73; --line: #0000001a; --control: #fff; --hover: #0000000d;
   --accent: #3975d5; --danger: #c0392b; --ok: #2e9d5b; --busy: #d79b00; --mark: #f5c40066; --mark-side: #3975d55c;
+  --source-comment: var(--muted); --source-string: var(--ok); --source-keyword: var(--accent); --source-arrow: var(--danger); --source-number: var(--fg);
 }
 @media (prefers-color-scheme: dark) {
   /* Close to D2's Dark Mauve (theme 200) background, which the canvas shows in dark mode. */
@@ -42,6 +43,13 @@ aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; bor
 #src .cm-content { padding: 8px 0; caret-color: var(--fg); }
 #src .cm-line { padding: 0 8px; }
 #src .cm-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+#src .d2-comment { color: var(--source-comment); font-style: italic; }
+#src .d2-string { color: var(--source-string); }
+#src .d2-keyword, #src .d2-tag { color: var(--source-keyword); }
+#src .d2-arrow { color: var(--source-arrow); }
+#src .d2-number { color: var(--source-number); }
+#src .d2-punctuation { color: var(--muted); }
+.cm-tooltip-autocomplete li[aria-selected] { background: var(--accent) !important; color: var(--bg) !important; }
 #src .patch-mark { background: var(--mark); border-radius: 2px; }
 #src .patch-mark.side { background: var(--mark-side); }
 .cm-tooltip { background: var(--panel) !important; color: var(--fg); border-color: var(--line) !important; }

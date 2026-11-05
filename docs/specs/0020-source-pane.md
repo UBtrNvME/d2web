@@ -1,7 +1,7 @@
 # Spec 0020: d2editor source pane (CodeMirror 6, diagnostics, canvas link)
 
 Status: **accepted** (user, 5 November 2026, with [ADR 0016](../adr/0016-source-pane-codemirror.md)). Builds on [spec 0004](0004-association.md) (ranges), [spec 0012](0012-edit-api.md) (patch ranges) and [spec 0013](0013-d2editor.md) (the page, `history.ts`).
-Delivered: slice 1 delivered 5 November 2026 (built by a Codex worker, reviewed and fixed here): the CodeMirror view, diagnostics with hover, the caret link and patch decorations. Limits: root board and the entry file only; no syntax highlighting. Not delivered: later slices (section 2). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user.
+Delivered: slice 1 delivered 5 November 2026 (built by a Codex worker, reviewed and fixed here): the CodeMirror view, diagnostics with hover, the caret link and patch decorations. Limits: root board and the entry file only; highlighting and completion are [spec 0021](0021-source-pane-highlight-complete.md). Not delivered: later slices (section 2). A spec is a short-lived brief: it must end `delivered` (or be marked not delivered); an agent that finds it otherwise tells the user.
 
 ## 1. Slice 1 (this spec)
 
