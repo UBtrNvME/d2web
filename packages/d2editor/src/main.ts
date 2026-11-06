@@ -13,7 +13,7 @@ import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
 import { leaves, moveOps, NUDGE, placeShifting } from './position.ts';
-import { connectTarget, dropTarget, entries, freeKey, receives, type Entry } from './palette.ts';
+import { connectTarget, dropTarget, freeKey } from './targets.ts';
 import { diagramOf, hasHandle, movable, press } from './traits.ts';
 import { decodeScript, encodeScript } from './share.ts';
 import { capabilities, setOps, type Field } from './capabilities.ts';
@@ -24,6 +24,11 @@ import keywordTable from './keywords.json' with { type: 'json' };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const ENTRY = 'main.d2';
+// Visual editing (dragging, handles, drag-to-connect, the selection toolbar, double-click labels, arrow-key moves) is off unless the page is opened
+// with `?visual=1`. Selecting, the inspector and the source pane edit without it.
+const VISUAL = new URLSearchParams(location.search).get('visual') === '1';
+document.body.dataset.visual = VISUAL ? 'on' : 'off';
+$('visual-tools').hidden = !VISUAL;
 // D2's own default light and dark themes follow the system scheme, as in the demo.
 const dark = matchMedia('(prefers-color-scheme: dark)');
 // D2's themes (d2themescatalog), for the Theme menu; Auto picks D2's own default light or dark theme.
@@ -47,7 +52,7 @@ try {
   sketchBox.checked = view.sketch === true;
 } catch { /* storage is optional */ }
 
-// Icons are links the page shows as images (spec 0010 `link` mode), so palette icons appear without a fetch policy (spec 0015 §3.5).
+// Icons are links the page shows as images (spec 0010 `link` mode), so icon shapes appear without a fetch policy (spec 0015 §3.5).
 const client = createClient({ spawn: spawnWorker(), images: { mode: 'link' } });
 const view = mount($('host'));
 const history = createHistory(initial);
@@ -237,7 +242,6 @@ async function compile(seeds?: number[]) {
   tree.current(board ? '' : objectsAt(after, { path: ENTRY, line: line.number - 1, column: head - line.from })[0]?.id ?? '');
   diagnose(result.diagnostics);
   sourceLinked = true;
-  classButtons(after.classes);
   if (focused && focused === state.selected) $('host').shadowRoot?.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
   status(notice || [`compiled in ${Math.round(result.millis)} ms`, ...result.diagnostics.map(d => d.message)].join('\n'), Boolean(notice));
   inspect();
@@ -421,6 +425,7 @@ function retarget(dot: HTMLElement, e: PointerEvent): Grab | undefined {
 }
 
 function grab(e: PointerEvent): Grab | undefined {
+  if (!VISUAL) return;
   const dot = (e.composedPath()[0] as Element | undefined)?.closest?.('.end-dot');
   if (dot) return retarget(dot as HTMLElement, e);
   const handle = (e.composedPath()[0] as Element | undefined)?.closest?.('.handle');
@@ -522,6 +527,7 @@ let handles: Element[] = [], handleFor = '', overHandle = false, hideTimer: Retu
 function hideHandles() { for (const h of handles) h.remove(); handles = []; handleFor = ''; }
 function showHandles() {
   clearTimeout(hideTimer);
+  if (!VISUAL) return;
   const object = objectOf(hovered), board = boardOf();
   if (!object || !board || !hasHandle.applies(object, { board: board.association, engine: layout() }) || !object.box) {
     // Moving onto a handle leaves the shape: keep its handles a moment so the pointer can reach them.
@@ -603,7 +609,7 @@ let endDots: HTMLElement[] = [];
 function markEnds(object: ReturnType<typeof objectOf>) {
   for (const dot of endDots) dot.remove();
   endDots = [];
-  const node = object?.kind === 'connection' && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
+  const node = VISUAL && object?.kind === 'connection' && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
   const paths = node ? [...node.querySelectorAll('path')] : [];
   const line = paths.sort((a, b) => b.getTotalLength() - a.getTotalLength())[0];
   if (!line || !line.getScreenCTM()) return;
@@ -620,7 +626,7 @@ function markEnds(object: ReturnType<typeof objectOf>) {
 // The toolbar sits on the selection's outline in screen space (it does not scale with zoom) and follows pan, zoom and repaints.
 function placeToolbar() {
   const bar = $('toolbar'), object = objectOf(state.selected), at = outline?.getBoundingClientRect(), page = $('canvas').getBoundingClientRect();
-  bar.hidden = !object || !at || !object.box;
+  bar.hidden = !VISUAL || !object || !at || !object.box;
   if (bar.hidden || !at || !object) return;
   const edge = object.kind === 'connection';
   bar.querySelector<HTMLElement>('[data-tool="fill"]')!.hidden = edge;
@@ -640,6 +646,7 @@ $('tool-delete').addEventListener('click', () => { if (state.selected) void edit
 
 // Double-click edits a shape's label where it is drawn: Enter or leaving saves, Escape cancels. A text node edits in the inspector.
 $('canvas').addEventListener('dblclick', () => {
+  if (!VISUAL) return;
   const object = objectOf(state.selected), parent = sceneParent();
   if (!object?.box || object.kind !== 'shape' || !parent) return;
   if (kindOf(object)?.id === 'text') { ($<HTMLFormElement>('props').elements.namedItem('content') as HTMLTextAreaElement).focus(); return; }
@@ -673,6 +680,7 @@ function inspect() {
   markEnds(object);
   placeToolbar();
   $('inspector').hidden = !object;
+  $('no-selection').hidden = Boolean(object);
   if (!object) return;
   const form = $<HTMLFormElement>('props');
   const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
@@ -814,43 +822,6 @@ $<HTMLFormElement>('rename').addEventListener('submit', event => {
 });
 $('delete').addEventListener('click', () => { if (state.selected) void edit([{ op: 'delete', key: state.selected }]); });
 
-// A palette entry (spec 0015 §3.1) goes inside the selected shape when it receives shapes (it holds some, or is a zone), otherwise at the top
-// level, in one edit under a key the editor picks; then its name is ready to type.
-async function insert(make: () => Entry | undefined) {
-  // Keys and the board's classes must come from the text as it is now: a stale class list would write Zone's defaults over a `zone` class just
-  // typed. So wait for the current text's compile, and refuse while it does not compile.
-  await compiled();
-  if (state.painted !== state.revision) { status('The D2 text must compile before adding to it.', true); return; }
-  const board = state.result?.boards?.find(b => b.path === state.board), entry = make(), parent = objectOf(state.selected);
-  if (!board || !entry) return;
-  const at = parent && receives(parent, { board: board.association, engine: layout() }) ? parent.id : '';
-  const ops = entry.ops({ board: board.association, parent: at }), key = ops.find(o => o.op === 'create')!.key;
-  const result = await edit(ops);
-  if (!result) return;
-  state.selected = result.ids.created[0] ?? key;
-  await compiled();
-  const input = $('rename').querySelector('input') as HTMLInputElement;
-  input.focus();
-  input.select();
-}
-const entryOf = (id: string) => entries(state.result?.boards?.find(b => b.path === state.board)?.association.classes ?? []).find(e => e.id === id);
-$('add').addEventListener('click', () => void insert(() => entryOf('shape')));
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-entry]')) button.addEventListener('click', () => void insert(() => entryOf(button.dataset.entry!)));
-// One button per class the board defines, except `zone`, which has its own (spec 0015 §3.1).
-let shownClasses = '';
-function classButtons(classes: readonly string[]) {
-  const named = classes.filter(c => c !== 'zone');
-  if (named.join('\n') === shownClasses) return;
-  shownClasses = named.join('\n');
-  $('classes').hidden = !named.length;
-  $('classes').replaceChildren(...named.map(c => {
-    const button = Object.assign(document.createElement('button'), { type: 'button', textContent: c, title: `Add a shape with class ${c}` });
-    button.dataset.class = c;
-    button.addEventListener('click', () => void insert(() => entryOf(`class:${c}`)));
-    return button;
-  }));
-}
-
 function connecting(on: boolean) {
   state.connectFrom = on ? state.selected : '';
   $('connect').setAttribute('aria-pressed', String(on));
@@ -892,7 +863,7 @@ document.addEventListener('keydown', event => {
   }
   // Arrow keys move the focused shape like a drag does (spec 0017 §3.4); a keyboard user has no other way to place one.
   const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
-  if (arrow && event.target === $('host') && state.selected && !event.ctrlKey && !event.metaKey && !event.altKey) {
+  if (VISUAL && arrow && event.target === $('host') && state.selected && !event.ctrlKey && !event.metaKey && !event.altKey) {
     const board = boardOf(), object = objectOf(state.selected);
     if (board && object && connectableMove(object, board)) {
       event.preventDefault();
@@ -950,7 +921,7 @@ if (params.has('script')) {
   try { shared = await decodeScript(params.get('script')!); } catch (error) { sharedError = `The shared link could not be opened: ${(error as Error).message}`; }
   for (const [select, value] of [[themeSelect, params.get('theme')], [layoutSelect, params.get('layout')]] as const) if ([...select.options].some(o => o.value === value)) select.value = value!;
   if (params.has('sketch')) sketchBox.checked = params.get('sketch') === '1';
-  window.history.replaceState(null, '', location.pathname + location.hash);
+  window.history.replaceState(null, '', location.pathname + (VISUAL ? '?visual=1' : '') + location.hash);
 }
 
 setText(initial, { record: false });
@@ -960,6 +931,7 @@ if (sharedError) status(notice = sharedError, true);
 $('share').addEventListener('click', async () => {
   const url = new URL(location.pathname, location.origin);
   url.searchParams.set('script', await encodeScript(state.text));
+  if (VISUAL) url.searchParams.set('visual', '1');
   url.searchParams.set('layout', layoutSelect.value);
   if (themeSelect.value !== 'auto') url.searchParams.set('theme', themeSelect.value);
   if (sketchBox.checked) url.searchParams.set('sketch', '1');

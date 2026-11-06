@@ -61,6 +61,6 @@ Dragging in the outline to reorder or reparent (a canvas gesture, spec 0015), re
 
 ## 8. Open
 
-- Layout: the outline sits in the existing source column above the editor, collapsed by default on narrow screens. The user may prefer another place; the tree builder does not depend on it.
+- Layout: ~~the outline sits in the existing source column above the editor~~ it moved to the side bar on 6 November 2026 ([spec 0024](0024-editor-side-bar-visual-flag.md)) because opening it pushed the editor down; still collapsed by default on narrow screens.
 - Bundle growth: report `dist/main.js` before and after (449,681 bytes at the end of slice 3). CodeMirror's `foldGutter` and `foldService` come from `@codemirror/language`, already a dependency, so no new package is expected.
 - Is "provenance" as small as §4 intended, or does the user want the origin named (class, glob) at the cost of a worker change?

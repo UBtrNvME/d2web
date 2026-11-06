@@ -1,7 +1,7 @@
 import { leaveRows } from './shape.ts';
 import type { Kind } from './types.ts';
 
-// The icon the palette's Icon entry uses; an image needs a source, and converting to Image has none to carry.
+// The icon a new Image gets; an image needs a source, and converting to Image has none to carry.
 export const PLACEHOLDER = 'https://icons.terrastruct.com/essentials/112-server.svg';
 
 /** `shape: image`: a picture. D2 refuses children under it, so converting a node that has some removes them (the author is asked first). */
