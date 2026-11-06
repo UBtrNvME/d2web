@@ -38,6 +38,9 @@ type Property struct {
 	Value   string   `json:"value"`
 	Source  *Source  `json:"source"`
 	Literal *Literal `json:"literal,omitempty"`
+	// Inherited is set when Source lies outside every declaration of the object that holds the property: a class, a glob or another
+	// statement supplied the value (spec 0023).
+	Inherited bool `json:"inherited,omitempty"`
 }
 
 // Literal is the range of the value's own text inside Source and the kind D2 parsed it as: bool, number, unquoted, double-quoted or
@@ -72,6 +75,8 @@ type AssocObject struct {
 	// Links are the indices into the scene's Links that D2 added for this object.
 	Links []int      `json:"links,omitempty"`
 	Rows  []AssocRow `json:"rows,omitempty"`
+	// Bodies are the `{ ... }` maps of this shape's declarations that span more than one line, braces included (spec 0023, for folding).
+	Bodies []Source `json:"bodies,omitempty"`
 }
 
 type AssocRow struct {
@@ -128,6 +133,26 @@ type Association struct {
 func source(r d2ast.Range) Source {
 	pos := func(p d2ast.Position) Pos { return Pos{p.Line, p.Column, p.Byte} }
 	return Source{Path: r.Path, Start: pos(r.Start), End: pos(r.End)}
+}
+
+// markInherited flags the properties whose source is not inside one of the object's own declarations (the whole `key: value` statements).
+func markInherited(props map[string]Property, own []Source) {
+	for name, p := range props {
+		if p.Source == nil {
+			continue
+		}
+		inside := false
+		for _, o := range own {
+			if o.Path == p.Source.Path && o.Start.Offset <= p.Source.Start.Offset && p.Source.End.Offset <= o.End.Offset {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			p.Inherited = true
+			props[name] = p
+		}
+	}
 }
 
 func scalar(sc *d2graph.Scalar) Property {
@@ -479,11 +504,20 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document, boa
 		if o.Parent != nil && o.Parent.AbsID() != "" {
 			out.Parent = o.Parent.AbsID()
 		}
+		var own []Source
 		for _, ref := range o.References {
 			if ref.Key != nil {
 				out.References = append(out.References, source(ref.Key.Range))
 			}
+			if ref.MapKey != nil {
+				own = append(own, source(ref.MapKey.Range))
+			}
+			// `a.b.c: {...}` names three objects but the map belongs to the last one only; an edge key's map belongs to the edge.
+			if k := ref.MapKey; k != nil && ref.Key != nil && ref.KeyPathIndex == len(ref.Key.Path)-1 && len(k.Edges) == 0 && k.Value.Map != nil && k.Value.Map.Range.Start.Line != k.Value.Map.Range.End.Line {
+				out.Bodies = append(out.Bodies, source(k.Value.Map.Range))
+			}
 		}
+		markInherited(out.Properties, own)
 		a.Objects = append(a.Objects, out)
 	}
 	for _, e := range g.Edges {
@@ -493,11 +527,16 @@ func associate(g *d2graph.Graph, d *d2target.Diagram, doc *d2scene.Document, boa
 		}
 		out.Links = links[out.ID]
 		out.Box = routeBox(top[out.ID])
+		var own []Source
 		for _, ref := range e.References {
 			if ref.Edge != nil {
 				out.References = append(out.References, source(ref.Edge.Range))
 			}
+			if ref.MapKey != nil {
+				own = append(own, source(ref.MapKey.Range))
+			}
 		}
+		markInherited(out.Properties, own)
 		a.Objects = append(a.Objects, out)
 	}
 	return a

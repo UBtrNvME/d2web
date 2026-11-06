@@ -36,6 +36,21 @@ header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-it
 aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; border-right: 1px solid var(--line); min-height: 0; background: var(--panel); }
 .pane-title { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 2px 2px; font: 600 12px ui-monospace, monospace; }
 .pane-title .hint { font: 11px system-ui, sans-serif; color: var(--muted); }
+#outline { max-height: 30vh; overflow: auto; flex: none; }
+#outline[hidden] { display: none; }
+#outline summary { cursor: pointer; color: var(--muted); }
+#outline ul { list-style: none; margin: 0; padding-left: 14px; }
+#outline > ul { padding-left: 0; }
+#outline li { border-radius: 4px; }
+#outline [hidden] { display: none; }
+.outline-row { display: flex; align-items: center; }
+.outline-row button { border: 0; background: transparent; height: auto; min-height: 26px; text-align: left; overflow-wrap: anywhere; }
+.outline-row small { color: var(--muted); }
+#outline [aria-current="true"] > .outline-row { background: var(--hover); font-weight: 600; }
+#outline .provenance { padding: 2px 8px 6px; font-size: 11px; }
+#outline .provenance button { height: auto; border: 0; background: transparent; text-align: left; padding: 2px 0; }
+#src .cm-gutters { background: var(--panel); color: var(--muted); border-color: var(--line); }
+#src .cm-foldPlaceholder { background: var(--hover); color: var(--fg); border-color: var(--line); }
 .source { position: relative; flex: 1; min-height: 200px; }
 #src { position: absolute; inset: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 #src .cm-editor { height: 100%; }

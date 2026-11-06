@@ -1541,3 +1541,180 @@ test('source completion respects style scopes, known shapes, arrowheads and comm
     await page.keyboard.press('Escape');
   }
 });
+
+const outlineRow = (page, id) => page.locator(`#outline [role=treeitem][data-id=${JSON.stringify(id)}]`);
+const outlineJump = (page, id) => outlineRow(page, id).locator(':scope > .outline-row > button:not(.outline-toggle)');
+const foldMarkers = page => page.locator('#src .cm-foldGutter [title="Fold line"]:visible');
+const folded = page => page.locator('#src .cm-foldPlaceholder');
+const outlineText = 'group: Group {\n  child: Child\n  other: Other\n}\nz: Last\ngroup.child -> z: requests\n';
+const foldText = 'a: {\n  label: Alpha\n  style.fill: red\n}\nz: {label: Z}\n';
+async function releaseCompile(page, diagnostic) {
+  await expect.poll(() => page.evaluate(() => Boolean(traffic.heldResult))).toBe(true);
+  await page.evaluate(diagnostic => {
+    const held = traffic.heldResult;
+    delete traffic.holdAbove;
+    delete traffic.heldResult;
+    if (diagnostic) held.data.diagnostics = [diagnostic];
+    held.worker.dispatchEvent(new MessageEvent('message', { data: held.data }));
+  }, diagnostic);
+}
+
+test('outline lists declaration nesting and connections, and links the caret and canvas both ways', async ({ page }) => {
+  const errors = await open(page);
+  await type(page, outlineText);
+  const rows = page.locator('#outline [role=treeitem]');
+  expect(await rows.evaluateAll(els => els.map(el => el.getAttribute('aria-label')))).toEqual(['Group', 'Child', 'Other', 'Last', 'group.child -> z']);
+  await expect(outlineRow(page, 'group').locator(':scope > [role=group] > [role=treeitem]')).toHaveCount(2);
+  await outlineJump(page, 'group.child').click();
+  expect(await caret(page)).toBe(outlineText.indexOf('child:'));
+  await expect(page.locator('#selected')).toContainText('group.child');
+  await expect(outlineRow(page, 'group.child')).toHaveAttribute('aria-current', 'true');
+  await moveCaret(page, outlineText.indexOf('other:') + 2);
+  await expect(outlineRow(page, 'group.other')).toHaveAttribute('aria-current', 'true');
+  await expect(outlineRow(page, 'group.child')).not.toHaveAttribute('aria-current', 'true');
+  await select(page, 'z');
+  await expect(outlineRow(page, 'z')).toHaveAttribute('aria-current', 'true');
+  await expectSource(page, outlineText);
+  expect(errors).toEqual([]);
+});
+
+test('outline retains the last good tree and ignores jumps during pending and failed compiles', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await type(page, outlineText);
+  await page.evaluate(() => { traffic.holdAbove = -1; });
+  await sourceInput(page).fill(outlineText + 'extra: Extra\n');
+  const pendingCaret = await caret(page);
+  await outlineJump(page, 'group.child').click();
+  expect(await caret(page)).toBe(pendingCaret);
+  await releaseCompile(page);
+  await painted(page);
+  const landed = await page.locator('#outline [role=treeitem]').allTextContents();
+  expect(landed).toContain('Extra');
+  await sourceInput(page).fill(outlineText + 'broken: {\n');
+  await expect(page.locator('#status')).toHaveClass('error');
+  const failedCaret = await caret(page);
+  await outlineJump(page, 'group.child').click();
+  expect(await caret(page)).toBe(failedCaret);
+  await expect(outlineRow(page, 'extra')).toHaveCount(1);
+  expect(await page.locator('#outline [role=treeitem]').allTextContents()).toEqual(landed);
+});
+
+test('outline roves with arrows, collapses only its tree, and Enter jumps', async ({ page }) => {
+  await open(page);
+  await type(page, outlineText);
+  const group = outlineRow(page, 'group'), child = outlineRow(page, 'group.child');
+  await group.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(child).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(group).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(group).toHaveAttribute('aria-expanded', 'false');
+  await expect(child).toBeHidden();
+  await page.keyboard.press('ArrowDown');
+  await expect(outlineRow(page, 'z')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowRight');
+  await expect(group).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(child).toBeFocused();
+  await expect(page.locator('#outline [role=treeitem][tabindex="0"]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  expect(await caret(page)).toBe(outlineText.indexOf('child:'));
+  await expectSource(page, outlineText);
+});
+
+test('only multiline association bodies fold, leaving braces around the placeholder', async ({ page }) => {
+  const errors = await open(page);
+  await type(page, foldText);
+  await expect(foldMarkers(page)).toHaveCount(1);
+  await foldMarkers(page).click();
+  await expect(folded(page)).toHaveText('…');
+  await expect(page.locator('#src .cm-line').filter({ has: page.locator('.cm-foldPlaceholder') })).toHaveText('a: {…}');
+  await expectSource(page, foldText);
+  await folded(page).click();
+  await expect(folded(page)).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('an edit inside a fold unfolds and drops its gutter range until the next good compile', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await type(page, foldText);
+  await foldMarkers(page).click();
+  await withCm(page);
+  await page.evaluate(from => {
+    traffic.holdAbove = -1;
+    cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor')).dispatch({ changes: { from, to: from + 5, insert: 'Beta' } });
+  }, foldText.indexOf('Alpha'));
+  await expect(folded(page)).toHaveCount(0);
+  await expect(foldMarkers(page)).toHaveCount(0);
+  await releaseCompile(page);
+  await painted(page);
+  await expect(foldMarkers(page)).toHaveCount(1);
+  await expectSource(page, foldText.replace('Alpha', 'Beta'));
+});
+
+test('a worker diagnostic inside an unchanged folded body unfolds it', async ({ page }) => {
+  await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await painted(page);
+  await type(page, foldText);
+  await foldMarkers(page).click();
+  await page.evaluate(() => { traffic.holdAbove = -1; });
+  await page.selectOption('#theme', '1');
+  // Deliver a diagnostic without a text edit so this exercises diagnose, rather than edit invalidation.
+  await releaseCompile(page, { severity: 'error', message: 'Body diagnostic', file: 'main.d2', range: { start: foldText.indexOf('Alpha'), end: foldText.indexOf('Alpha') + 5 } });
+  await expect(folded(page)).toHaveCount(0);
+  await expect(page.locator('#src .cm-lintRange-error')).toHaveCount(1);
+  await expectSource(page, foldText);
+});
+
+test('current outline provenance lists inherited values with keyword names and literal jumps only', async ({ page }) => {
+  await open(page);
+  const text = 'classes: {kit: {label: Class; style.fill: red; style.font-size: 24}}\na: {class: kit; style.stroke: blue}\nb: Own {style.fill: green}\n';
+  await type(page, text);
+  await outlineJump(page, 'a').click();
+  const provenance = outlineRow(page, 'a').locator(':scope > .provenance');
+  await provenance.locator('summary').click();
+  await expect(provenance).toContainText('fill: red (line 1)');
+  await expect(provenance).toContainText('font-size: 24 (line 1)');
+  await expect(provenance).not.toContainText('stroke:');
+  await expect(provenance).toContainText('label: Class (line 1)');
+  await provenance.getByRole('button', { name: 'fill: red (line 1)', exact: true }).click();
+  expect(await caret(page)).toBe(text.indexOf('red;'));
+  await outlineJump(page, 'b').click();
+  await expect(page.locator('#outline .provenance')).toHaveCount(0);
+  await expectSource(page, text);
+});
+
+test('folding and outline navigation leave whole-text undo and redo unchanged', async ({ page }) => {
+  await open(page);
+  const previous = await source(page);
+  await type(page, foldText);
+  await foldMarkers(page).click();
+  await outlineJump(page, 'z').click();
+  await page.locator('#undo').click();
+  await expectSource(page, previous);
+  await page.locator('#redo').click();
+  await expectSource(page, foldText);
+  await painted(page);
+  await expect(folded(page)).toHaveCount(0);
+});
+
+test('outline is collapsed initially on narrow screens and CRLF bodies still fold correctly', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 900 });
+  await open(page);
+  await expect(page.locator('#outline')).not.toHaveAttribute('open', '');
+  const text = '# 😀\r\n' + foldText.replaceAll('\n', '\r\n');
+  await page.locator('#open').setInputFiles({ name: 'folds.d2', mimeType: 'text/plain', buffer: Buffer.from(text) });
+  await painted(page);
+  await foldMarkers(page).click();
+  await expect(folded(page)).toHaveCount(1);
+  await page.locator('#outline > summary').click();
+  await outlineJump(page, 'a').click();
+  expect(await caret(page)).toBe(text.replaceAll('\r\n', '\n').indexOf('a:'));
+});

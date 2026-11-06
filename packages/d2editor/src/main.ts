@@ -6,6 +6,8 @@ import { standardKeymap } from '@codemirror/commands';
 import { setDiagnostics } from '@codemirror/lint';
 import { sourceLanguage } from './source-language.ts';
 import { sourceValues, valueEdit } from './source-values.ts';
+import { outlineView } from './outline-view.ts';
+import { sourceFolds, bodyRanges, replaceFolds, diagnosticUnfolds } from './source-folds.ts';
 import { textChange } from './source-value.ts';
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
@@ -92,11 +94,20 @@ class DeletedMark extends WidgetType {
 }
 let syncingSource = false, sourceLinked = false;
 const values = sourceValues({ text: () => state.text, setText, push: text => history.push(text) });
+const tree = outlineView($<HTMLDetailsElement>('outline'), {
+  entry: ENTRY, linked: () => sourceLinked && !state.board,
+  jump(id) {
+    state.selected = id; caretToSelection(); inspect(); src.focus();
+    const node = objectOf(id)?.nodes[0], element = node && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(node)}"]`);
+    if (element) camera.reveal(element);
+  },
+  source(offset) { const anchor = sourceOffset(offset); src.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor) }); src.focus(); },
+});
 const src = new EditorView({
   parent: $('src'),
   doc: initial,
   extensions: [
-    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField, sourceLanguage, values.extension,
+    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField, sourceLanguage, values.extension, sourceFolds,
     EditorView.contentAttributes.of({ 'aria-label': 'D2 source', spellcheck: 'false' }),
     keymap.of(standardKeymap),
   ],
@@ -117,6 +128,8 @@ function diagnose(diagnostics: Diagnostic[] = []) {
     from: sourceOffset(d.range.start), to: sourceOffset(d.range.end), severity: d.severity, message: d.message,
   }] : []);
   const key = JSON.stringify(list);
+  const unfolds = diagnosticUnfolds(src.state, list);
+  if (unfolds.length) src.dispatch({ effects: unfolds });
   if (key === shownDiagnostics) return;
   shownDiagnostics = key;
   src.dispatch(setDiagnostics(src.state, list));
@@ -142,6 +155,7 @@ function selectAtCaret() {
   const head = src.state.selection.main.head, line = src.state.doc.lineAt(head);
   const object = objectsAt(board.association, { path: ENTRY, line: line.number - 1, column: head - line.from })[0];
   state.selected = object?.id ?? '';
+  tree.current(state.board ? '' : state.selected);
   inspect();
   const node = object && $('host').shadowRoot?.querySelector(`[data-id="${CSS.escape(object.nodes[0])}"]`);
   if (node) camera.reveal(node);
@@ -155,6 +169,7 @@ function caretToSelection() {
   syncingSource = true;
   try { src.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor) }); }
   finally { syncingSource = false; }
+  tree.current(state.board ? '' : state.selected);
 }
 
 // Top-left on screen of the painted parts under some nodes. Ownership frames can be zero-sized and each path's 1×1 <svg> wrapper sits at the
@@ -216,6 +231,10 @@ async function compile(seeds?: number[]) {
   state.result = result;
   state.painted = revision;
   values.refresh(src, board ? undefined : boardOf()?.association, ENTRY, state.text);
+  tree.refresh(board ? undefined : boardOf()?.association);
+  src.dispatch({ effects: replaceFolds.of(bodyRanges(board ? undefined : boardOf()?.association, ENTRY, state.text)) });
+  const head = src.state.selection.main.head, line = src.state.doc.lineAt(head);
+  tree.current(board ? '' : objectsAt(after, { path: ENTRY, line: line.number - 1, column: head - line.from })[0]?.id ?? '');
   diagnose(result.diagnostics);
   sourceLinked = true;
   classButtons(after.classes);

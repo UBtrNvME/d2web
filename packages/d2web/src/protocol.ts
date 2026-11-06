@@ -161,7 +161,10 @@ export interface AssociationObject {
   nodes: string[];
   references: Source[];
   // `literal` (spec 0022): the value's own range inside `source` and the kind D2 parsed; absent for anything but a single-line scalar.
-  properties: Record<string, { value: string; source: Source | null; literal?: { start: Pos; end: Pos; kind: 'bool' | 'number' | 'unquoted' | 'double-quoted' | 'single-quoted' } }>;
+  // `inherited` (spec 0023): the value's source lies outside this object's own declarations (a class, glob or other statement).
+  properties: Record<string, { value: string; source: Source | null; inherited?: boolean; literal?: { start: Pos; end: Pos; kind: 'bool' | 'number' | 'unquoted' | 'double-quoted' | 'single-quoted' } }>;
+  // Spec 0023: the multi-line `{ ... }` maps of this shape's declarations, braces included, for folding.
+  bodies?: Source[];
   src?: string;
   dst?: string;
   // Spec 0010: the link of an image the scene could not carry; `node` is the placeholder's scene node (<id>:icon, <id>:image for `shape: image`).

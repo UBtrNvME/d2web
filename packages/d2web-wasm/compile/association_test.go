@@ -276,3 +276,67 @@ func TestPropertyLiteralRangesAndKinds(t *testing.T) {
 		t.Errorf("a substitution has no literal, got %v", props["a"]["fontColor"])
 	}
 }
+
+func TestObjectBodiesAreTheMultiLineMaps(t *testing.T) {
+	text := "a: {\n  b: {\n    c\n  }\n}\nd.e.f: \"😀\" {\n  g\n}\nh: {x}\ni -> j: {\n  style.stroke: red\n}\nk: |md\n y\n|\nk: {\n  z\n}\n"
+	res := compileText(t, text)
+	bodies := map[string][]string{}
+	units := utf16.Encode([]rune(text))
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		list, _ := obj["bodies"].([]any)
+		for _, b := range list {
+			m := b.(map[string]any)
+			from, to := int(m["start"].(map[string]any)["offset"].(float64)), int(m["end"].(map[string]any)["offset"].(float64))
+			bodies[obj["id"].(string)] = append(bodies[obj["id"].(string)], string(utf16.Decode(units[from:to])))
+		}
+	}
+	want := map[string][]string{
+		"a":     {"{\n  b: {\n    c\n  }\n}"},
+		"a.b":   {"{\n    c\n  }"},
+		"d.e.f": {"{\n  g\n}"},
+		"k":     {"{\n  z\n}"},
+	}
+	for id, w := range want {
+		if len(bodies[id]) != 1 || bodies[id][0] != w[0] {
+			t.Errorf("%s bodies %q, want %q", id, bodies[id], w)
+		}
+	}
+	for _, id := range []string{"d", "d.e", "h", "(i -> j)[0]", "a.b.c"} {
+		if len(bodies[id]) != 0 {
+			t.Errorf("%s has bodies %q, want none", id, bodies[id])
+		}
+	}
+	if len(bodies) != len(want) {
+		t.Errorf("unexpected bodies: %v", bodies)
+	}
+}
+
+func TestPropertyInheritedWhenDeclaredOutsideTheObject(t *testing.T) {
+	text := "classes: {kit: {style.fill: red}}\na: {class: kit; style.stroke: blue}\nb: {class: kit}\nb.style.opacity: 0.5\n*.style.bold: true\nc -> d: {style.stroke: green}\n"
+	res := compileText(t, text)
+	got := map[string]map[string]bool{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		got[obj["id"].(string)] = map[string]bool{}
+		for name, p := range obj["properties"].(map[string]any) {
+			if p.(map[string]any)["source"] != nil {
+				got[obj["id"].(string)][name], _ = p.(map[string]any)["inherited"].(bool)
+			}
+		}
+	}
+	want := []struct {
+		id, name  string
+		inherited bool
+	}{
+		{"a", "fill", true}, {"a", "stroke", false}, {"a", "bold", true},
+		{"b", "fill", true}, {"b", "opacity", false},
+		{"(c -> d)[0]", "stroke", false},
+	}
+	for _, w := range want {
+		v, ok := got[w.id][w.name]
+		if !ok || v != w.inherited {
+			t.Errorf("%s %s inherited=%v present=%v, want %v (all: %v)", w.id, w.name, v, ok, w.inherited, got[w.id])
+		}
+	}
+}

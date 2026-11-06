@@ -385,4 +385,4 @@ Open: the Firefox focus-tooltip failure; flow has no runtime refit if a consumer
 - [x] Slice 1 (5 November 2026; `dist/main.js` 111,458 to 400,369 bytes): CodeMirror 6 replaces `#src` (no history extension), inline diagnostics, two-way caret/selection link, patch highlights as decorations; Chromium tests per spec 0020 §3. Measure `dist/main.js` growth and report it.
 - [x] Slice 2 (spec 0021, 5 November 2026; `dist/main.js` 400,369 to 442,303 bytes): D2 tokenizer, highlighting, completion from the keyword table.
 - [x] Slice 3 (spec 0022, delivered 6 November 2026): value popovers; Go `literal` field (spec 0004 amendment), editor popovers, writer, tests.
-- [ ] Slice 4: outline, folding, provenance. Each needs its own spec first.
+- [x] Slice 4 (spec 0023, delivered 6 November 2026): outline, folding, provenance; Go `bodies` and `inherited` fields, editor outline, folds, provenance list.
