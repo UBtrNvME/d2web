@@ -8,7 +8,7 @@
   /* Close to D2's Dark Mauve (theme 200) background, which the canvas shows in dark mode. */
   :root { --bg: #1e1e2e; --panel: #181825; --fg: #e4e4ef; --muted: #9a9ab0; --line: #ffffff1c; --control: #26263a; --hover: #ffffff12; --danger: #ef6b5b; }
 }
-body { margin: 0; height: 100vh; display: grid; grid-template: auto 1fr / minmax(260px, 28%) 1fr auto; background: var(--bg); color: var(--fg); }
+body { margin: 0; height: 100vh; display: grid; grid-template: auto 1fr / minmax(260px, 28%) 1fr 280px; background: var(--bg); color: var(--fg); }
 button, select, input { font: inherit; color: inherit; }
 button, select, .file, #inspector input:not([type=color]) {
   height: 28px; box-sizing: border-box; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--control);
@@ -33,21 +33,40 @@ header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-it
 .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .file:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; border-right: 1px solid var(--line); min-height: 0; background: var(--panel); }
+aside.source-pane { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; border-right: 1px solid var(--line); min-height: 0; background: var(--panel); }
 .pane-title { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 2px 2px; font: 600 12px ui-monospace, monospace; }
 .pane-title .hint { font: 11px system-ui, sans-serif; color: var(--muted); }
-#outline { max-height: 30vh; overflow: auto; flex: none; }
-#outline[hidden] { display: none; }
-#outline summary { cursor: pointer; color: var(--muted); }
-#outline ul { list-style: none; margin: 0; padding-left: 14px; }
-#outline > ul { padding-left: 0; }
-#outline li { border-radius: 4px; }
+
+/* The side bar, as VS Code's: stacked panes with a header (twistie, small caps), each body scrolling on its own. The source column never moves. */
+#sidebar { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.pane { display: flex; flex-direction: column; min-height: 0; border-bottom: 1px solid var(--line); }
+.pane:last-child { border-bottom: 0; }
+.pane > summary { display: flex; align-items: center; gap: 4px; flex: none; height: 22px; padding: 0 8px 0 4px; list-style: none; cursor: pointer; user-select: none;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--hover); }
+.pane > summary::-webkit-details-marker { display: none; }
+.pane > summary::before { content: "▸"; width: 14px; text-align: center; color: var(--muted); }
+.pane[open] > summary::before { content: "▾"; }
+.pane > summary:focus-visible { outline-offset: -2px; }
+.pane[open]#inspector-pane { flex: 1 1 0; }
+.pane[open]#outline { flex: 0 1 auto; max-height: 45%; }
+.pane-body { flex: 1; min-height: 0; overflow: auto; }
+.empty { margin: 0; padding: 8px 12px; color: var(--muted); font-size: 12px; }
+.empty[hidden] { display: none; }
+#outline > [role=tree] { flex: 1; min-height: 0; overflow: auto; padding: 2px 0; }
+#outline ul { list-style: none; margin: 0; padding: 0; }
 #outline [hidden] { display: none; }
-.outline-row { display: flex; align-items: center; }
-.outline-row button { border: 0; background: transparent; height: auto; min-height: 26px; text-align: left; overflow-wrap: anywhere; }
-.outline-row small { color: var(--muted); }
-#outline [aria-current="true"] > .outline-row { background: var(--hover); font-weight: 600; }
-#outline .provenance { padding: 2px 8px 6px; font-size: 11px; }
+.outline-row { display: flex; align-items: center; height: 22px; padding: 0 8px 0 calc(var(--depth, 0) * 12px + 4px); cursor: pointer; }
+.outline-row:hover { background: var(--hover); }
+.outline-row button { border: 0; border-radius: 0; background: transparent; height: 22px; padding: 0 4px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline-row button:hover { background: transparent; }
+.outline-row button:first-child:not(.outline-toggle) { margin-left: 16px; }
+.outline-toggle { width: 16px; padding: 0 !important; justify-content: center; color: var(--muted); }
+.outline-row small { margin-left: auto; padding-left: 8px; color: var(--muted); font-size: 11px; }
+[role=treeitem] { outline: 0; }
+[role=treeitem]:focus-visible > .outline-row { outline: 1px solid var(--accent); outline-offset: -1px; }
+#outline [aria-current="true"] > .outline-row { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+#outline .provenance { padding: 2px 8px 6px 28px; font-size: 11px; }
+#outline .provenance summary { cursor: pointer; color: var(--muted); }
 #outline .provenance button { height: auto; border: 0; background: transparent; text-align: left; padding: 2px 0; }
 #src .cm-gutters { background: var(--panel); color: var(--muted); border-color: var(--line); }
 #src .cm-foldPlaceholder { background: var(--hover); color: var(--fg); border-color: var(--line); }
@@ -90,7 +109,7 @@ main { position: relative; overflow: clip; min-height: 0; touch-action: none; cu
 main.panning { cursor: grabbing; user-select: none; }
 #host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 
-#inspector { width: 248px; box-sizing: border-box; padding: 12px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; overflow: auto; background: var(--panel); }
+#inspector { box-sizing: border-box; padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 14px; }
 #inspector[hidden], #inspector label[hidden], .tools[hidden] { display: none; }
 #inspector h2 { font-size: 14px; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-weight: 600; }
 #inspector h2 .kind { display: inline-block; margin-right: 4px; padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--muted); font: 11px system-ui, sans-serif; vertical-align: 1px; }
@@ -116,8 +135,12 @@ menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; }
 @media (max-width: 800px) {
   body { grid-template: auto auto 60vh auto / 1fr; height: auto; }
   .document { margin-left: 0; }
-  aside { border-right: 0; border-bottom: 1px solid var(--line); }
-  #inspector { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+  aside.source-pane { border-right: 0; border-bottom: 1px solid var(--line); }
+  /* Stacked under the canvas the bar has no height of its own, so its panes take their natural height. */
+  #sidebar { display: block; border-left: 0; border-top: 1px solid var(--line); }
+  .pane { display: block; }
+  .pane[open]#outline { max-height: none; }
+  #outline > [role=tree] { overflow: visible; }
 }
 .fields { display: flex; flex-direction: column; gap: 8px; }
 .fields label small { font-size: 11px; color: var(--muted); font-style: italic; }

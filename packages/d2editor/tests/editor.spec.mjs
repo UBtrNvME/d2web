@@ -11,7 +11,7 @@ const cmFixture = buildSync({
   bundle: true, write: false, format: 'iife', globalName: 'cm',
 }).outputFiles[0].text;
 const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.wasm': 'application/wasm' };
-async function open(page, path = '/') {
+async function open(page, path = '/', { visual = false } = {}) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.addInitScript(() => {
@@ -44,7 +44,7 @@ async function open(page, path = '/') {
     const name = new URL(route.request().url()).pathname.slice(path.length) || 'index.html';
     return route.fulfill({ body: readFileSync(join(dist, name)), contentType: types[extname(name)] ?? 'text/plain' });
   });
-  await page.goto(`http://localhost:5281${path}`);
+  await page.goto(`http://localhost:5281${path}${visual ? '?visual=1' : ''}`);
   await expect(page.locator('#status')).toContainText('compiled in', { timeout: 90_000 });
   expect(errors).toEqual([]);
   return errors;
@@ -155,7 +155,7 @@ async function drag(page, id, dx, dy) {
 }
 
 test('dragging a shape on TALA writes top/left where it was dropped; again adds the distance; Undo restores the text', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   const text = 'a: A\nb: B\na -> b\n';
   await type(page, text);
   await select(page, 'a');
@@ -177,7 +177,7 @@ test('dragging a shape on TALA writes top/left where it was dropped; again adds 
 });
 
 test('a nested shape beside a fixed sibling lands where dropped; on other engines a drop in its own parent returns with a hint and no edit', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   await type(page, 'c: {\n  d: {top: 30; left: 40}\n  e\n}\n');
   await select(page, 'c.e');
   const before = await outline(page), k = await zoom(page);
@@ -201,7 +201,7 @@ test('a nested shape beside a fixed sibling lands where dropped; on other engine
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
 });
 
-// Spec 0015: palette, zones and drag-to-connect.
+// Spec 0015: zones and drag-to-connect (visual editing, behind `?visual=1`).
 const box = (page, id) => object(page, id).locator('[data-k]').first().boundingBox();
 async function dragTo(page, from, to) {
   await page.mouse.move(from.x, from.y);
@@ -219,52 +219,8 @@ async function fromHandle(page, id, to) {
   await dragTo(page, centre(await handle.boundingBox()), to);
 }
 
-test('palette entries write D2 under a free key, focus the name; Zone defines its class once; a typed class gets a button', async ({ page }) => {
-  await open(page);
-  await type(page, 'x\n');
-  await page.click('[data-entry="markdown"]');
-  await expectSource(page, 'x\nnote: |md # Note |\n');
-  await painted(page);
-  await expect(page.locator('#rename input')).toBeFocused();
-  await expect(page.locator('#selected')).toHaveText('Text note');
-  await page.keyboard.press('Escape');
-  await page.click('[data-entry="code"]');
-  await expectSource(page, /code: \|python print\("hello"\) \|/);
-  await painted(page);
-  await expect(page.locator('#props [name="language"]')).toHaveValue('python');
-  await page.keyboard.press('Escape');
-  await page.click('[data-entry="icon"]');
-  await expectSource(page, /service: \{\n  icon: https:\/\/icons\.terrastruct\.com\/essentials\/112-server\.svg\n  shape: image\n\}/);
-  await painted(page);
-  await expect(page.locator('#host img')).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await page.click('[data-entry="zone"]');
-  await expectSource(page, /classes\.zone\.style\.stroke-dash: 3[\s\S]*zone: \{class: zone\}/);
-  await painted(page);
-  await page.keyboard.press('Escape');
-  await page.click('[data-entry="zone"]');
-  await expectSource(page, /zone 2: \{class: zone\}/);
-  await painted(page);
-  expect((await source(page)).match(/stroke-dash/g)).toHaveLength(1);
-  // The inspector shows Language only for code blocks.
-  await select(page, 'note');
-  await expect(page.locator('#props [name="language"]')).toBeHidden();
-  await type(page, 'classes: {db: {shape: cylinder}}\nx\n');
-  await expect(page.locator('#classes button')).toHaveText(['db']);
-  await page.click('#classes button');
-  await expectSource(page, /db: \{class: db\}/);
-});
-
-test('Zone right after typing a zone class uses the current text, so the class keeps its own style', async ({ page }) => {
-  await open(page);
-  // No wait for the compile: the click comes while the typed text is still compiling.
-  await sourceInput(page).fill('classes: {zone: {style.stroke: red}}\na\n');
-  await page.click('[data-entry="zone"]');
-  await expectSource(page, 'classes: {zone: {style.stroke: red}}\na\nzone: {class: zone}\n');
-});
-
 test('dropping a shape into a zone moves it there on any engine; out to empty space moves it to the root; leaves are not targets', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   await page.selectOption('#layout', 'dagre');
   await type(page, 'classes: {zone: {style.stroke-dash: 3}}\nvpc: {class: zone}\nb\nnote: |md # hi |\nb -> note\n');
   const count = await page.evaluate(() => traffic.edits.length);
@@ -282,7 +238,7 @@ test('dropping a shape into a zone moves it there on any engine; out to empty sp
 });
 
 test('a refused move returns the shape and shows the worker’s reason; the text is unchanged', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   const text = 'classes: {zone: {style.stroke-dash: 3}}\nvpc: {class: zone}\na\nscenarios: {s: {a -> c}}\n';
   await type(page, text);
   await dragTo(page, centre(await box(page, 'a')), centre(await box(page, 'vpc')));
@@ -291,7 +247,7 @@ test('a refused move returns the shape and shows the worker’s reason; the text
 });
 
 test('drag from a handle connects to a shape, creates a shape on empty space, and Escape cancels', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   await type(page, 'a\nb\n');
   await fromHandle(page, 'a', centre(await box(page, 'b')));
   await expectSource(page, 'a\nb\na -> b\n');
@@ -317,33 +273,6 @@ test('drag from a handle connects to a shape, creates a shape on empty space, an
   expect(await page.evaluate(() => traffic.edits.length)).toBe(count);
 });
 
-test('a 3-tier diagram from an empty canvas, typing only names', async ({ page }) => {
-  await open(page);
-  await type(page, 'x\n');
-  // An insert focuses the name once its shape is painted.
-  const name = async n => { await expect(page.locator('#rename input')).toBeFocused(); await page.locator('#rename input').fill(n); await page.locator('#rename input').press('Enter'); await painted(page); };
-  await page.click('[data-entry="zone"]');
-  await name('vpc');
-  for (const n of ['web', 'app', 'rds']) {
-    // The zone's corner (a dashed stroke paints as an SVG rect): its label sits under the hover handle at the top edge.
-    await object(page, 'vpc').locator('rect').first().click({ position: { x: 5, y: 5 } });
-    await expect(page.locator('#selected')).toHaveText('Shape vpc');
-    await page.click('[data-entry="icon"]');
-    await name(n);
-  }
-  await page.keyboard.press('Escape');
-  await page.click('[data-entry="markdown"]');
-  await expect(page.locator('#rename input')).toBeFocused();
-  await fromHandle(page, 'vpc.web', centre(await box(page, 'vpc.app')));
-  await expectSource(page, /web -> app/);
-  await painted(page);
-  await fromHandle(page, 'vpc.app', centre(await box(page, 'vpc.rds')));
-  await expectSource(page, /app -> rds/);
-  await painted(page);
-  const text = await source(page);
-  for (const part of ['vpc: {', 'class: zone', 'web: {', 'app: {', 'rds: {', 'shape: image', 'note: |md', 'web -> app', 'app -> rds']) expect(text).toContain(part);
-});
-
 // Spec 0016: a drop past the origin sits at 0 and the container's other shapes move by the overshoot.
 // Samples an object's screen left/top on every frame until stopped, so a jump between frames shows.
 const sample = (page, ids) => page.evaluate(ids => {
@@ -354,7 +283,7 @@ const sample = (page, ids) => page.evaluate(ids => {
 }, ids);
 // Pans so the origin lies inside the viewport, then drags `id` inside the canvas but past that origin along one axis.
 async function pastOrigin(page, text, id, others, axis, reachOf) {
-  await open(page);
+  await open(page, '/', { visual: true });
   await type(page, text);
   await select(page, id);
   const view = await page.locator('#canvas').boundingBox();
@@ -456,7 +385,7 @@ test('a nested shape is shifted, not moved out, while it still overlaps its cont
 });
 
 test('restyle, relabel, create, connect, rename and delete use only the exact checked patches', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, '# services\na: API\nb: DB\n');
   await select(page, 'a');
   await expect(page.locator('#selected')).toHaveText('Shape a');
@@ -467,11 +396,7 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   const label = '# services\na: Gateway {style.fill: "#ff0000"}\nb: DB\n';
   await patch(page, label, () => property(page, 'label', 'Gateway'));
   await expect(object(page, 'a')).toContainText('Gateway');
-  const created = label + 'shape 2\n';
-  await patch(page, created, () => page.click('#add'));
-  await expect(page.locator('#rename input')).toBeFocused();
-  await expect(page.locator('#rename input')).toHaveValue('shape 2');
-  await visible(page, 'shape 2');
+  const created = label;
   await select(page, 'a');
   await page.click('#connect');
   // Connect mode must look pressed: toolbar buttons are otherwise transparent.
@@ -480,11 +405,11 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   await patch(page, connected, () => select(page, 'b'));
   await expect(object(page, '(a -> b)[0]').locator('path').first()).toHaveAttribute('d', /M/);
   await select(page, 'b');
-  const renamed = '# services\na: Gateway {style.fill: "#ff0000"}\ndatabase: DB\nshape 2\na -> database\n';
+  const renamed = '# services\na: Gateway {style.fill: "#ff0000"}\ndatabase: DB\na -> database\n';
   await patch(page, renamed, async () => { await page.fill('#rename input', 'database'); await page.locator('#rename input').press('Enter'); });
   await expect(page.locator('#selected')).toHaveText('Shape database');
   await expect(object(page, '(a -> database)[0]').locator('path').first()).toHaveAttribute('d', /M/);
-  await patch(page, '# services\na: Gateway {style.fill: "#ff0000"}\n\nshape 2\n', () => page.click('#delete'));
+  await patch(page, '# services\na: Gateway {style.fill: "#ff0000"}\n', () => page.click('#delete'));
   await expect(object(page, 'database')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -547,7 +472,7 @@ test('undo and redo restore exact mixed typed and patched texts with buttons and
   await painted(page);
 });
 
-test('layer edits keep the root text; adding inside a selected container uses D2 keys', async ({ page }) => {
+test('layer edits keep the root text; a nested shape edits with its D2 key', async ({ page }) => {
   await open(page);
   const text = 'a: Root\nlayers: {\n  detail: {\n    a: API\n  }\n}\n';
   await type(page, text);
@@ -559,9 +484,8 @@ test('layer edits keep the root text; adding inside a selected container uses D2
   expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'edit').at(-1).board)).toBe('/layers/detail');
   await type(page, 'box: {\n  a\n}\n');
   await painted(page); // removed board falls back to root
-  await select(page, 'box');
-  await patch(page, 'box: {\n  a\n  shape 2\n}\n', () => page.click('#add'));
-  await visible(page, 'box.shape 2');
+  await select(page, 'box.a');
+  await patch(page, 'box: {\n  a: Alpha\n}\n', () => property(page, 'label', 'Alpha'));
 });
 
 test('Tab selects objects; keyboard reaches inspector, commits a label, renames and deletes', async ({ page }) => {
@@ -625,7 +549,7 @@ test('layout changes animate surviving nodes, new nodes fade and edits pulse; re
   expect(await page.evaluate(() => document.querySelector('#host').shadowRoot.getAnimations().length)).toBeGreaterThan(0);
   expect(await page.evaluate(() => traffic.animations.some(a => a.frames[0].outline))).toBe(true);
   await page.evaluate(() => { traffic.animations = []; });
-  await page.click('#add');
+  await type(page, 'a: API\nb: DB\nshape 2\na -> b\n');
   await expect.poll(() => page.evaluate(() => traffic.animations.some(a => a.id === 'shape 2' && a.frames[0].opacity === 0))).toBe(true);
   await painted(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -823,7 +747,7 @@ test('a node with no kind yet (a hierarchy) shows Element and Node only; a text 
 });
 
 test('arrow keys move a focused shape on TALA by one checked edit, Undo restores it; other engines say positions need TALA; (spec 0017)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, 'a\nb\n');
   await object(page, 'a').focus();
   const edits = () => page.evaluate(() => traffic.edits.length);
@@ -962,7 +886,7 @@ test('turning a shape with children into an Image asks first; Cancel changes not
 });
 
 test('double-click edits a label on the canvas; the toolbar sits on the selection and sets colours and deletes (spec 0018)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, 'a: A\nb: B\n');
   await expect(page.locator('#toolbar')).toBeHidden();
   await select(page, 'a');
@@ -1018,7 +942,7 @@ test('a sequence diagram offers Add actor, an actor inside it offers Add note, a
 });
 
 test('a grid shows Columns, Rows and Gap; dragging a cell onto a sibling reorders it by one edit; turning it into a Shape removes the grid keywords (spec 0018)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, 'g: {\n  grid-columns: 2\n  a\n  b\n  c\n}\n');
   await object(page, 'g').focus();
   await expect(page.locator('#selected')).toHaveText('Grid g');
@@ -1049,7 +973,7 @@ test('a grid shows Columns, Rows and Gap; dragging a cell onto a sibling reorder
 });
 
 test('a selected connection has an end dot on each side; dragging one onto another shape retargets it; Reverse swaps the ends, each one edit (spec 0018)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, 'a -> b\nc\n');
   await page.locator('#host [data-id="(a -> b)[0]"]').focus();
   await expect(page.locator('#host .end-dot')).toHaveCount(2);
@@ -1117,7 +1041,7 @@ test('a table edits its columns in place: type, constraint chips, rename, add, d
 });
 
 test('dragging a message down a sequence diagram reorders it by one edit (spec 0018)', async ({ page }) => {
-  const errors = await open(page, '/repo/editor/');
+  const errors = await open(page, '/repo/editor/', { visual: true });
   await type(page, 's: {\n  shape: sequence_diagram\n  a\n  b\n  a -> b: one\n  b -> a: two\n}\n');
   const edits = () => page.evaluate(() => traffic.edits.length);
   const n = await edits();
@@ -1207,7 +1131,7 @@ test('source and canvas linking is off during a pending compile and after a fail
 });
 
 test('typing then dragging uses one undo stack and source shortcuts do not zoom the canvas', async ({ page }) => {
-  await open(page);
+  await open(page, '/', { visual: true });
   const original = 'a: A\nb: B\na -> b\n';
   await type(page, original);
   const k = await zoom(page);
@@ -1717,4 +1641,60 @@ test('outline is collapsed initially on narrow screens and CRLF bodies still fol
   await page.locator('#outline > summary').click();
   await outlineJump(page, 'a').click();
   expect(await caret(page)).toBe(text.replaceAll('\r\n', '\n').indexOf('a:'));
+});
+
+test('without the flag the canvas selects and pans only: no connect tool, handles, toolbar or label editor, and drags and arrow keys write nothing', async ({ page }) => {
+  test.setTimeout(40_000);
+  await open(page);
+  await type(page, 'a: A\nb: B\na -> b\n');
+  const text = await source(page);
+  await expect(page.locator('#visual-tools')).toBeHidden();
+  await expect(page.locator('[data-entry], #add, #classes')).toHaveCount(0);
+  await select(page, 'a');
+  await expect(page.locator('#selected')).toContainText('a');
+  await expect(page.locator('#toolbar')).toBeHidden();
+  await drag(page, 'a', 70, 40);
+  const label = (await page.locator('#host [data-id="a:label:0"]').boundingBox());
+  await page.mouse.dblclick(label.x + label.width / 2, label.y + label.height / 2);
+  await expect(page.locator('#host .label-edit, #host .handle, #host .end-dot')).toHaveCount(0);
+  await page.locator('#host').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(400);
+  expect(await source(page)).toBe(text);
+  expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'edit').length)).toBe(0);
+  // The inspector still edits through the same checked patches.
+  await select(page, 'a');
+  await patch(page, 'a: Alpha\nb: B\na -> b\n', () => property(page, 'label', 'Alpha'));
+});
+
+test('with ?visual=1 the connect tool appears', async ({ page }) => {
+  await open(page, '/', { visual: true });
+  await expect(page.locator('#visual-tools #connect')).toBeVisible();
+});
+
+test('the outline and inspector are panes of one side bar, and opening, closing or selecting never moves the source editor or the canvas', async ({ page }) => {
+  await open(page);
+  await type(page, outlineText);
+  await expect(page.locator('#sidebar > #outline')).toHaveCount(1);
+  await expect(page.locator('#sidebar > #inspector-pane')).toHaveCount(1);
+  await expect(page.locator('aside.source-pane #outline')).toHaveCount(0);
+  const editor = () => page.locator('#src').boundingBox(), canvas = () => page.locator('#canvas').boundingBox();
+  const [editorBox, canvasBox] = [await editor(), await canvas()];
+  await expect(page.locator('#no-selection')).toBeVisible();
+  await select(page, 'z');
+  await expect(page.locator('#inspector')).toBeVisible();
+  await expect(page.locator('#no-selection')).toBeHidden();
+  expect(await editor()).toEqual(editorBox);
+  expect(await canvas()).toEqual(canvasBox);
+  await page.locator('#outline > summary').click();
+  await expect(page.locator('#outline')).not.toHaveAttribute('open', '');
+  expect(await editor()).toEqual(editorBox);
+  await page.locator('#outline > summary').click();
+  await page.locator('#inspector-pane > summary').click();
+  await expect(page.locator('#inspector')).toBeHidden();
+  expect(await editor()).toEqual(editorBox);
+  // A long tree scrolls inside its own pane instead of pushing the inspector off the side bar.
+  const bar = await page.locator('#sidebar').boundingBox();
+  const lower = await page.locator('#inspector-pane').boundingBox();
+  expect(lower.y + lower.height).toBeLessThanOrEqual(bar.y + bar.height + 1);
 });

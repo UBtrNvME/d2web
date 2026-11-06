@@ -74,13 +74,14 @@ export function outlineView(host: HTMLDetailsElement, options: { linked: () => b
     event.preventDefault();
     event.stopPropagation();
   };
-  function render(rows: OutlineRow[], parent: HTMLElement) {
+  function render(rows: OutlineRow[], parent: HTMLElement, depth = 0) {
     for (const row of rows) {
       const item = document.createElement('li'), line = document.createElement('div'), button = document.createElement('button');
       item.setAttribute('role', 'treeitem');
       item.setAttribute('aria-label', row.label);
       item.dataset.id = row.id;
       item.tabIndex = -1;
+      line.style.setProperty('--depth', String(depth));
       line.className = 'outline-row';
       if (row.children.length) {
         const toggle = document.createElement('button');
@@ -99,7 +100,7 @@ export function outlineView(host: HTMLDetailsElement, options: { linked: () => b
         const group = document.createElement('ul');
         group.setAttribute('role', 'group');
         item.append(group);
-        render(row.children, group);
+        render(row.children, group, depth + 1);
         expand(item, !collapsed.has(row.id));
       }
     }
@@ -110,7 +111,7 @@ export function outlineView(host: HTMLDetailsElement, options: { linked: () => b
       const disclosure = tree.querySelector<HTMLDetailsElement>('.provenance')?.open;
       objects = new Map((next?.objects ?? []).map(o => [o.id, o]));
       tree.replaceChildren();
-      host.hidden = !next?.objects.length;
+      host.querySelector<HTMLElement>(':scope > .empty')!.hidden = Boolean(next?.objects.length);
       render(next ? buildOutline(next) : [], tree);
       const row = visible().find(el => el.dataset.id === roving) ?? visible()[0];
       if (row) { row.tabIndex = 0; if (focused) focus(row); }

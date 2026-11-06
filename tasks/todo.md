@@ -386,3 +386,4 @@ Open: the Firefox focus-tooltip failure; flow has no runtime refit if a consumer
 - [x] Slice 2 (spec 0021, 5 November 2026; `dist/main.js` 400,369 to 442,303 bytes): D2 tokenizer, highlighting, completion from the keyword table.
 - [x] Slice 3 (spec 0022, delivered 6 November 2026): value popovers; Go `literal` field (spec 0004 amendment), editor popovers, writer, tests.
 - [x] Slice 4 (spec 0023, delivered 6 November 2026): outline, folding, provenance; Go `bodies` and `inherited` fields, editor outline, folds, provenance list.
+- [x] Side bar and visual flag (spec 0024, delivered 6 November 2026): drag, handles, connect, toolbar, label editing and arrow moves only with `?visual=1`; palette removed (`palette.ts` is now `targets.ts`); outline and inspector are VS Code style panes in a fixed right side bar, so the outline no longer moves the source editor. Open: the user may want a UI setting or a stored flag; the inspector's sections are not collapsible.

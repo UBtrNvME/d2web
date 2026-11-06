@@ -1,4 +1,4 @@
-import { freeKey } from '../palette.ts';
+import { freeKey } from '../targets.ts';
 import { leaveRows } from './shape.ts';
 import type { Kind } from './types.ts';
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { connectTarget, dropTarget, entries, freeKey, PLACEHOLDER_ICON } from '../src/palette.ts';
+import { connectTarget, dropTarget, freeKey } from '../src/targets.ts';
 
 const shape = (id, X, Y, W, H, extra = {}) => ({ id, kind: 'shape', parent: id.includes('.') ? id.slice(0, id.lastIndexOf('.')) : undefined, nodes: [id], properties: {}, box: { X, Y, Width: W, Height: H }, ...extra });
 const context = (objects, classes = []) => ({ board: { objects, classes }, engine: 'tala' });
@@ -13,20 +13,6 @@ test('freeKey takes D2’s next free name under the parent, ignoring case', () =
   // `vpc.shape` would set vpc's shape: a keyword never names a shape.
   assert.equal(freeKey(objects, 'vpc', 'shape'), 'vpc.shape 2');
   assert.equal(freeKey(objects, '', 'Icon'), 'Icon 2');
-});
-
-test('palette entries write the ops of spec 0015 §3.1', () => {
-  const ops = id => entries([]).find(e => e.id === id).ops({ board: { objects: [], classes: [] }, parent: '', base: 'k' });
-  assert.deepEqual(ops('markdown'), [{ op: 'create', key: 'k' }, { op: 'set', key: 'k', value: '# Note', tag: 'md' }]);
-  assert.deepEqual(ops('icon').map(o => o.key), ['k', 'k.icon', 'k.shape']);
-  assert.equal(ops('icon')[1].value, PLACEHOLDER_ICON);
-  assert.deepEqual(ops('zone').map(o => o.key), ['classes.zone.style.stroke-dash', 'classes.zone.style.fill', 'k', 'k.class']);
-  assert.deepEqual(entries([]).map(e => e.ops({ board: { objects: [], classes: [] }, parent: '' }).find(o => o.op === 'create').key), ['shape 2', 'note', 'code', 'service', 'zone']);
-  assert.equal(entries([])[1].ops({ board: { objects: [shape('vpc.note', 0, 0, 1, 1)], classes: [] }, parent: 'vpc' })[0].key, 'vpc.note 2');
-  // A defined zone class is reused, and a class becomes its own entry.
-  const withZone = entries(['zone', 'db', 'my class']);
-  assert.deepEqual(withZone.find(e => e.id === 'zone').ops({ board: { objects: [], classes: ['zone'] }, parent: '', base: 'k' }).map(o => o.key), ['k', 'k.class']);
-  assert.deepEqual(withZone.filter(e => e.id.startsWith('class:')).map(e => [e.label, e.ops({ board: { objects: [], classes: [] }, parent: '' })[0].key]), [['db', 'db'], ['my class', 'shape 2']]);
 });
 
 test('dropTarget: deepest Container holding shapes, or a zone, under the point; never the dragged shape or its descendants', () => {

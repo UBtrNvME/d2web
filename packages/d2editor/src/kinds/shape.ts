@@ -1,5 +1,5 @@
 import type { AssociationObject, EditOp } from '../../../d2web/src/index.ts';
-import { freeKey } from '../palette.ts';
+import { freeKey } from '../targets.ts';
 import { isGrid } from '../traits.ts';
 import type { Kind } from './types.ts';
 

@@ -1,12 +1,10 @@
-import type { Association, EditOp } from '../../d2web/src/index.ts';
+import type { Association } from '../../d2web/src/index.ts';
 import { container, connectable, type Context } from './traits.ts';
 
 type AssocObject = Association['objects'][number];
 type Box = NonNullable<AssocObject['box']>;
 
-// Spec 0015 §3.5: one placeholder until the curated icon set (with sketched variants) exists.
-export const PLACEHOLDER_ICON = 'https://icons.terrastruct.com/essentials/112-server.svg';
-
+// Where a dragged or connected shape lands (spec 0015 §3.3, §3.4). Used only by visual editing, which is behind the `?visual=1` flag.
 const within = (id: string, ancestor: string) => id === ancestor || id.startsWith(`${ancestor}.`);
 
 // D2's reserved keywords (d2ast.ReservedKeywords at v0.9.0, with `classes`, `source-arrowhead` and `target-arrowhead`): never a shape name.
@@ -23,52 +21,6 @@ export function freeKey(objects: readonly AssocObject[], parent: string, base: s
     const key = `${prefix}${n === 1 ? base : `${base} ${n}`}`;
     if (!taken.has(key.toLowerCase())) return key;
   }
-}
-
-export type EntryContext = { board: Association; parent: string; base?: string };
-export type Entry = { id: string; label: string; ops(ctx: EntryContext): EditOp[] };
-const entryKey = (ctx: EntryContext, base: string) => freeKey(ctx.board.objects, ctx.parent, ctx.base ?? base);
-
-// Spec 0015 §3.1. A class name becomes the key's base only when it is a plain D2 key.
-export function entries(classes: readonly string[]): Entry[] {
-  const plain = (name: string) => /^[\w-]+$/.test(name) ? name : 'shape';
-  return [
-    { id: 'shape', label: 'Shape', ops: ctx => [{ op: 'create', key: entryKey(ctx, 'shape') }] },
-    {
-      id: 'markdown', label: 'Markdown', ops: ctx => {
-        const k = entryKey(ctx, 'note');
-        return [{ op: 'create', key: k }, { op: 'set', key: k, value: '# Note', tag: 'md' }];
-      },
-    },
-    {
-      id: 'code', label: 'Code', ops: ctx => {
-        const k = entryKey(ctx, 'code');
-        return [{ op: 'create', key: k }, { op: 'set', key: k, value: 'print("hello")', tag: 'python' }];
-      },
-    },
-    {
-      id: 'icon', label: 'Icon', ops: ctx => {
-        const k = entryKey(ctx, 'service');
-        // `shape: image` before `icon` fails to recompile, so the icon goes first.
-        return [{ op: 'create', key: k }, { op: 'set', key: `${k}.icon`, value: PLACEHOLDER_ICON }, { op: 'set', key: `${k}.shape`, value: 'image' }];
-      },
-    },
-    {
-      id: 'zone', label: 'Zone', ops: ctx => {
-        const k = entryKey(ctx, 'zone');
-        return [
-          ...(ctx.board.classes.includes('zone') ? [] : [{ op: 'set', key: 'classes.zone.style.stroke-dash', value: '3' }, { op: 'set', key: 'classes.zone.style.fill', value: 'transparent' }] as EditOp[]),
-          { op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: 'zone' },
-        ];
-      },
-    },
-    ...classes.filter(c => c !== 'zone').map((c): Entry => ({
-      id: `class:${c}`, label: c, ops: ctx => {
-        const k = entryKey(ctx, plain(c));
-        return [{ op: 'create', key: k }, { op: 'set', key: `${k}.class`, value: c }];
-      },
-    })),
-  ];
 }
 
 const contains = (b: Box, x: number, y: number) => x >= b.X && x <= b.X + b.Width && y >= b.Y && y <= b.Y + b.Height;
