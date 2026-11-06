@@ -409,7 +409,7 @@ test('restyle, relabel, create, connect, rename and delete use only the exact ch
   await patch(page, renamed, async () => { await page.fill('#rename input', 'database'); await page.locator('#rename input').press('Enter'); });
   await expect(page.locator('#selected')).toHaveText('Shape database');
   await expect(object(page, '(a -> database)[0]').locator('path').first()).toHaveAttribute('d', /M/);
-  await patch(page, '# services\na: Gateway {style.fill: "#ff0000"}\n\n', () => page.click('#delete'));
+  await patch(page, '# services\na: Gateway {style.fill: "#ff0000"}\n', () => page.click('#delete'));
   await expect(object(page, 'database')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
