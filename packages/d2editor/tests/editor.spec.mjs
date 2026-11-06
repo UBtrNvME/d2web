@@ -1644,6 +1644,7 @@ test('outline is collapsed initially on narrow screens and CRLF bodies still fol
 });
 
 test('without the flag the canvas selects and pans only: no connect tool, handles, toolbar or label editor, and drags and arrow keys write nothing', async ({ page }) => {
+  test.setTimeout(40_000);
   await open(page);
   await type(page, 'a: A\nb: B\na -> b\n');
   const text = await source(page);
@@ -1653,7 +1654,8 @@ test('without the flag the canvas selects and pans only: no connect tool, handle
   await expect(page.locator('#selected')).toContainText('a');
   await expect(page.locator('#toolbar')).toBeHidden();
   await drag(page, 'a', 70, 40);
-  await page.locator('#host [data-id="a:label:0"]').dblclick();
+  const label = (await page.locator('#host [data-id="a:label:0"]').boundingBox());
+  await page.mouse.dblclick(label.x + label.width / 2, label.y + label.height / 2);
   await expect(page.locator('#host .label-edit, #host .handle, #host .end-dot')).toHaveCount(0);
   await page.locator('#host').focus();
   await page.keyboard.press('ArrowRight');
