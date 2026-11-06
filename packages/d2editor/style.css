@@ -136,7 +136,11 @@ menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; }
   body { grid-template: auto auto 60vh auto / 1fr; height: auto; }
   .document { margin-left: 0; }
   aside.source-pane { border-right: 0; border-bottom: 1px solid var(--line); }
-  #sidebar { border-left: 0; border-top: 1px solid var(--line); max-height: 70vh; }
+  /* Stacked under the canvas the bar has no height of its own, so its panes take their natural height. */
+  #sidebar { display: block; border-left: 0; border-top: 1px solid var(--line); }
+  .pane { display: block; }
+  .pane[open]#outline { max-height: none; }
+  #outline > [role=tree] { overflow: visible; }
 }
 .fields { display: flex; flex-direction: column; gap: 8px; }
 .fields label small { font-size: 11px; color: var(--muted); font-style: italic; }

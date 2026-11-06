@@ -1653,7 +1653,7 @@ test('without the flag the canvas selects and pans only: no connect tool, handle
   await expect(page.locator('#selected')).toContainText('a');
   await expect(page.locator('#toolbar')).toBeHidden();
   await drag(page, 'a', 70, 40);
-  await object(page, 'a').locator('[data-k]').first().dblclick();
+  await page.locator('#host [data-id="a:label:0"]').dblclick();
   await expect(page.locator('#host .label-edit, #host .handle, #host .end-dot')).toHaveCount(0);
   await page.locator('#host').focus();
   await page.keyboard.press('ArrowRight');
