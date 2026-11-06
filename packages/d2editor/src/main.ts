@@ -5,6 +5,8 @@ import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '
 import { standardKeymap } from '@codemirror/commands';
 import { setDiagnostics } from '@codemirror/lint';
 import { sourceLanguage } from './source-language.ts';
+import { sourceValues, valueEdit } from './source-values.ts';
+import { textChange } from './source-value.ts';
 import { createHistory } from './history.ts';
 import { outerNodes, snap } from './snap.ts';
 import { canvas, type Grab } from './canvas.ts';
@@ -53,7 +55,7 @@ let fitNext = true;
 // `painted` is the revision the canvas shows.
 const state = { text: initial, revision: 0, painted: -1, board: '', result: undefined as CompileResult | undefined, selected: '', connectFrom: '' };
 type Range = { start: number; end: number; text: string };
-let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, compileRun = 0;
+let typing: ReturnType<typeof setTimeout>, idle: ReturnType<typeof setTimeout>, compileRun = 0, previewFrame = 0;
 // A startup error (a broken shared link) stays in the status over later compiles until the text, a menu or the board changes.
 let notice = '';
 // `moved` is a dropped drag (spec 0014): the snap starts that shape from where it was dropped, not from where it was. Past the origin (spec 0016)
@@ -89,11 +91,12 @@ class DeletedMark extends WidgetType {
   }
 }
 let syncingSource = false, sourceLinked = false;
+const values = sourceValues({ text: () => state.text, setText, push: text => history.push(text) });
 const src = new EditorView({
   parent: $('src'),
   doc: initial,
   extensions: [
-    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField, sourceLanguage,
+    EditorState.tabSize.of(2), EditorView.lineWrapping, patchField, sourceLanguage, values.extension,
     EditorView.contentAttributes.of({ 'aria-label': 'D2 source', spellcheck: 'false' }),
     keymap.of(standardKeymap),
   ],
@@ -212,6 +215,7 @@ async function compile(seeds?: number[]) {
   pending = undefined;
   state.result = result;
   state.painted = revision;
+  values.refresh(src, board ? undefined : boardOf()?.association, ENTRY, state.text);
   diagnose(result.diagnostics);
   sourceLinked = true;
   classButtons(after.classes);
@@ -238,25 +242,28 @@ function paintCanvas(scene: SceneDocument) {
 }
 
 // Every change of text: typing, a patch, undo, an opened file. Each is a new revision, so older edits and compiles become stale.
-function setText(text: string, { record = true, edits, side, delay = 0 }: { record?: boolean; edits?: Range[]; side?: Set<Range>; delay?: number } = {}) {
+function setText(text: string, { record = true, edits, side, delay = 0, preview = false, valueEdit: valueId }: { record?: boolean; edits?: Range[]; side?: Set<Range>; delay?: number; preview?: boolean; valueEdit?: string } = {}) {
+  values.close();
   notice = '';
   sourceLinked = false;
   clearTimeout(typing);
   clearTimeout(idle);
+  cancelAnimationFrame(previewFrame);
   state.text = text;
   state.revision++;
   if (record) history.push(text);
   const displayed = text.replace(/\r\n?/g, '\n');
   if (src.state.doc.toString() !== displayed) {
     syncingSource = true;
-    try { src.dispatch({ changes: { from: 0, to: src.state.doc.length, insert: displayed } }); }
+    try { src.dispatch({ changes: textChange(src.state.doc.toString(), displayed), annotations: valueId ? valueEdit.of(valueId) : undefined }); }
     finally { syncingSource = false; }
   }
   diagnose();
   mark(edits, side);
   try { localStorage.setItem(STORAGE, text); } catch { /* storage is optional */ }
   status('Compiling…');
-  typing = setTimeout(() => void compile([1]), delay);
+  if (preview) previewFrame = requestAnimationFrame(() => void compile([1]));
+  else typing = setTimeout(() => void compile([1]), delay);
   // Seeds are TALA's: other engines need no second compile when the user stops.
   if (layout() === 'tala') idle = setTimeout(() => void compile(), 1000);
 }
@@ -881,9 +888,10 @@ document.addEventListener('keydown', event => {
   step(event.shiftKey ? history.redo() : history.undo());
 });
 
-$<HTMLSelectElement>('board').addEventListener('change', event => { state.board = (event.target as HTMLSelectElement).value; state.selected = ''; notice = ''; fitNext = true; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
+$<HTMLSelectElement>('board').addEventListener('change', event => { values.close(); values.refresh(src, undefined, ENTRY, state.text); state.board = (event.target as HTMLSelectElement).value; state.selected = ''; notice = ''; fitNext = true; connecting(false); pending = undefined; status('Compiling…'); void compile([1]); });
 
 function openText(text: string) {
+  values.close();
   history.reset(text);
   state.board = '';
   fitNext = true;

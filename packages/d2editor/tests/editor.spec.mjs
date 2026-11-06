@@ -1328,6 +1328,193 @@ test('accepting a source completion is one shared history step and never an edit
   await expectSource(page, 'a.shape: rectangle');
 });
 
+// Spec 0022: native controls write exactly the D2 literal and share history.ts.
+const widgetText = '# 😀\na: {style.fill: red; style.bold: false; style.font-size: 24; style.opacity: 0.5; shape: rectangle}\nb: {style.stroke: blue}\n';
+async function valuePopover(page, literal, name) {
+  const text = await source(page);
+  await moveCaret(page, text.indexOf(literal) + 1);
+  await page.keyboard.press('ControlOrMeta+.');
+  const popover = page.getByRole('dialog', { name, exact: true });
+  await expect(popover).toBeVisible();
+  await expect(popover).toHaveAttribute('popover', 'auto');
+  return popover;
+}
+
+test('source values have swatches and underlines; a touched range disappears while other last-good ranges survive errors', async ({ page }) => {
+  const errors = await open(page);
+  await type(page, widgetText);
+  await expect(page.locator('#src .source-swatch')).toHaveCount(2);
+  await expect(page.locator('#src .source-swatch').first()).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('#src .source-value')).toHaveCount(6);
+  // Click a mark as well as using the keyboard path in the other tests.
+  await page.locator('#src .source-value').filter({ hasText: /^red$/ }).click();
+  await expect(page.getByRole('dialog', { name: 'fill', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await withCm(page);
+  await page.evaluate(() => {
+    const view = cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor'));
+    const from = view.state.doc.toString().indexOf('red');
+    view.dispatch({ changes: { from, to: from + 3, insert: 'not-a-color' } });
+  });
+  await expect(page.locator('#src .source-swatch')).toHaveCount(1);
+  await expect(page.locator('#src .source-value')).toHaveCount(5);
+  await expect(page.locator('#status.error')).toBeVisible();
+  await expect(page.locator('#src .source-swatch')).toHaveCount(1);
+  await expect(page.locator('#src .source-value').filter({ hasText: /^blue$/ })).toBeVisible();
+  // An unrelated edit maps the surviving range even though this compile also fails.
+  await page.evaluate(() => cm.EditorView.findFromDOM(document.querySelector('#src .cm-editor')).dispatch({ changes: { from: 0, insert: '# added\n' } }));
+  await page.locator('#src .source-value').filter({ hasText: /^blue$/ }).click();
+  const popover = page.getByRole('dialog', { name: 'stroke', exact: true });
+  await popover.getByRole('textbox', { name: 'Hex color' }).fill('#112233');
+  await page.keyboard.press('Enter');
+  await expectSource(page, '# added\n' + widgetText.replace('red', 'not-a-color').replace('blue', '"#112233"'));
+  await type(page, widgetText);
+  await expect(page.locator('#src .source-swatch')).toHaveCount(2);
+  expect(errors).toEqual([]);
+});
+
+for (const [name, literal, replacement] of [
+  ['fill', 'red', '"#112233"'],
+  ['bold', 'false', 'true'],
+  ['shape', 'rectangle', 'circle'],
+  ['font-size', '24', '32'],
+]) test(`source ${name} popover edits only its value, repaints, and closes as one undo step`, async ({ page }) => {
+  const errors = await open(page);
+  await type(page, widgetText);
+  const edits = await page.evaluate(() => traffic.edits.length);
+  const popover = await valuePopover(page, literal, name);
+  if (name === 'fill') {
+    await expect(popover.locator('input[type=color]')).toHaveCount(1);
+    await popover.getByRole('textbox', { name: 'Hex color' }).fill('#445566');
+    await painted(page);
+    await popover.locator('input[type=color]').fill('#112233');
+  } else if (name === 'bold') {
+    await popover.getByRole('checkbox').check();
+  } else if (name === 'shape') {
+    await expect(popover.getByRole('listbox')).toBeVisible();
+    await popover.getByRole('listbox').selectOption('circle');
+  } else {
+    await expect(popover.getByRole('slider')).toHaveAttribute('min', '8');
+    await expect(popover.getByRole('slider')).toHaveAttribute('max', '100');
+    await popover.getByRole('spinbutton').fill('30');
+    await painted(page);
+    await popover.getByRole('spinbutton').fill('32');
+  }
+  await expectSource(page, widgetText.replace(literal, replacement));
+  await painted(page);
+  if (name === 'fill') expect(await object(page, 'a').evaluate(el => [el, ...el.querySelectorAll('*')].some(e => getComputedStyle(e).backgroundColor === 'rgb(17, 34, 51)' || getComputedStyle(e).fill === 'rgb(17, 34, 51)'))).toBe(true);
+  // Outside dismissal must commit before a subsequent Undo button click reads history.
+  if (name === 'bold') await page.locator('.pane-title').first().click();
+  else await page.keyboard.press('Enter');
+  await expect(popover).toHaveCount(0);
+  expect(await page.evaluate(() => traffic.edits.length)).toBe(edits);
+  await page.locator('#undo').click();
+  await expectSource(page, widgetText);
+  await page.locator('#redo').click();
+  await expectSource(page, widgetText.replace(literal, replacement));
+  expect(errors).toEqual([]);
+});
+
+test('Escape after live source previews restores the original text and adds no history step', async ({ page }) => {
+  const errors = await open(page), previous = await source(page);
+  await type(page, widgetText);
+  const popover = await valuePopover(page, 'red', 'fill');
+  await popover.getByRole('textbox', { name: 'Hex color' }).fill('#112233');
+  await painted(page);
+  await popover.getByRole('textbox', { name: 'Hex color' }).fill('#abcdef');
+  await painted(page);
+  await page.keyboard.press('Escape');
+  await expectSource(page, widgetText);
+  await expect(sourceInput(page)).toBeFocused();
+  await painted(page);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, previous);
+  expect(errors).toEqual([]);
+});
+
+test('class-owned source literal announces all affected shapes and changes the declaration once', async ({ page }) => {
+  await open(page);
+  const text = 'classes: {kit: {style.fill: red}}\na: {class: kit}\nb: {class: kit}\n';
+  await type(page, text);
+  await expect(page.locator('#src .source-swatch')).toHaveCount(1);
+  const popover = await valuePopover(page, 'red', 'fill');
+  await expect(popover).toContainText('Used by 2 shapes');
+  await popover.getByRole('textbox', { name: 'Hex color' }).fill('#123456');
+  await page.keyboard.press('Enter');
+  await expectSource(page, text.replace('red', '"#123456"'));
+  await painted(page);
+});
+
+test('Alt arrows step style numbers with table bounds; canvas dimensions have no widget', async ({ page }) => {
+  await open(page);
+  const text = 'a: {width: 100; height: 80; top: 0; left: 0; style.opacity: 0.95; style.font-size: 24}\n';
+  await type(page, text);
+  await expect(page.locator('#src .source-value')).toHaveCount(2);
+  await moveCaret(page, text.indexOf('0.95') + 1);
+  await page.keyboard.press('Alt+ArrowUp');
+  await expectSource(page, text.replace('0.95', '1'));
+  await page.keyboard.press('Alt+ArrowUp');
+  await expectSource(page, text.replace('0.95', '1'));
+  await page.keyboard.press('Alt+ArrowDown');
+  await expectSource(page, text);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectSource(page, text.replace('0.95', '1'));
+  await expect(page.locator('.source-value-popover')).toHaveCount(0);
+});
+
+test('slider bursts schedule one compile per frame and never overlap worker compiles', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker, active = new Set();
+    window.compilePeak = 0;
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener('message', e => { if (e.data.type === 'result') active.delete(this); });
+      }
+      postMessage(message, ...rest) {
+        if (message.type === 'compile') { active.add(this); window.compilePeak = Math.max(window.compilePeak, active.size); }
+        super.postMessage(message, ...rest);
+      }
+      terminate() { active.delete(this); super.terminate(); }
+    };
+  });
+  const errors = await open(page);
+  await page.selectOption('#layout', 'dagre');
+  await type(page, widgetText);
+  const popover = await valuePopover(page, '0.5', 'opacity');
+  await expect(popover.getByRole('slider')).toHaveAttribute('step', '0.05');
+  await expect(popover.getByRole('slider')).toHaveAttribute('min', '0');
+  await expect(popover.getByRole('slider')).toHaveAttribute('max', '1');
+  const before = await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').length);
+  await popover.getByRole('slider').evaluate(el => {
+    for (let i = 1; i <= 18; i++) { el.value = String(i * 0.05); el.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  await expectSource(page, widgetText.replace('0.5', '0.9'));
+  await painted(page);
+  expect(await page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').length)).toBe(before + 1);
+  expect(await page.evaluate(() => window.compilePeak)).toBe(1);
+  await page.keyboard.press('Enter');
+  await page.locator('#undo').click();
+  await expectSource(page, widgetText);
+  expect(errors).toEqual([]);
+});
+
+test('source popover keeps CRLF bytes outside the literal and undo restores the exact file', async ({ page }) => {
+  await open(page);
+  const text = '# 😀\r\na.style.fill: red\r\nb: Other\r\n';
+  await page.locator('#open').setInputFiles({ name: 'widgets.d2', mimeType: 'text/plain', buffer: Buffer.from(text) });
+  await painted(page);
+  const popover = await valuePopover(page, 'red', 'fill');
+  await popover.getByRole('textbox', { name: 'Hex color' }).fill('#112233');
+  await page.keyboard.press('Enter');
+  await painted(page);
+  const compiledText = () => page.evaluate(() => traffic.requests.filter(r => r.type === 'compile').at(-1).files['main.d2']);
+  expect(await compiledText()).toBe(text.replace('red', '"#112233"'));
+  await page.locator('#undo').click();
+  await painted(page);
+  expect(await compiledText()).toBe(text);
+});
+
 test('source completion respects style scopes, known shapes, arrowheads and common languages', async ({ page }) => {
   await open(page);
   const table = JSON.parse(readFileSync(join(root, 'packages/d2editor/src/keywords.json'), 'utf8'));

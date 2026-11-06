@@ -160,7 +160,8 @@ export interface AssociationObject {
   rows?: { name: string; type: string; constraint?: string[] }[];
   nodes: string[];
   references: Source[];
-  properties: Record<string, { value: string; source: Source | null }>;
+  // `literal` (spec 0022): the value's own range inside `source` and the kind D2 parsed; absent for anything but a single-line scalar.
+  properties: Record<string, { value: string; source: Source | null; literal?: { start: Pos; end: Pos; kind: 'bool' | 'number' | 'unquoted' | 'double-quoted' | 'single-quoted' } }>;
   src?: string;
   dst?: string;
   // Spec 0010: the link of an image the scene could not carry; `node` is the placeholder's scene node (<id>:icon, <id>:image for `shape: image`).

@@ -29,7 +29,7 @@ const CONNECTION_STYLE = new Set(['opacity', 'stroke', 'stroke-width', 'stroke-d
 // Layout keywords the inspector advertises, per object kind; icon, constraint, class and vars have their own controls or are not fields.
 const SHAPE_LAYOUT = new Set(['tooltip', 'link', 'near', 'width', 'height', 'direction', 'top', 'left', 'grid-rows', 'grid-columns', 'grid-gap', 'vertical-gap', 'horizontal-gap']);
 const CONNECTION_LAYOUT = new Set(['link']); // D2's scene builder refuses a connection tooltip
-const property = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
+export const property = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
 const list = (items: string[]) => items.join(', ');
 
 export function capabilities(object: AssocObject, ctx: Context): { fields: Field[]; endpoints?: { source: string; target: string } } {

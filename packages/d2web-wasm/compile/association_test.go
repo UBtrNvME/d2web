@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestMarkdownHTMLKeepsD2ElementsAndOnlyTheAttributesD2Reads(t *testing.T) {
@@ -236,5 +237,42 @@ func TestClassRowsFromImportsAndBoards(t *testing.T) {
 		if !reflect.DeepEqual(names, want) {
 			t.Errorf("board %s rows %v, want %v", board["path"], names, want)
 		}
+	}
+}
+
+// Spec 0022: a property carries the range and kind of its value's own text, read from D2's syntax tree; non-literals have none.
+func TestPropertyLiteralRangesAndKinds(t *testing.T) {
+	text := "vars: {x: red}\na: {\n  shape: circle\n  style: {\n    bold: true\n    opacity: 0.5\n    fill: \"#3366cc\"\n    stroke: 'red'\n    font-color: ${x}\n  }\n}\nb: \"😀\" {style.fill: \"#fff\"}\nc: |md\n x\n|\n"
+	res := compileText(t, text)
+	props := map[string]map[string]any{}
+	for _, o := range res["boards"].([]any)[0].(map[string]any)["association"].(map[string]any)["objects"].([]any) {
+		obj := o.(map[string]any)
+		props[obj["id"].(string)] = obj["properties"].(map[string]any)
+	}
+	pos := func(m any) int { return int(m.(map[string]any)["offset"].(float64)) }
+	check := func(id, name, kind, want string) {
+		t.Helper()
+		lit, ok := props[id][name].(map[string]any)["literal"].(map[string]any)
+		if !ok || lit["kind"] != kind {
+			t.Fatalf("%s %s literal %v, want kind %s", id, name, props[id][name], kind)
+		}
+		units := utf16.Encode([]rune(text))
+		got := string(utf16.Decode(units[pos(lit["start"]):pos(lit["end"])]))
+		if got != want {
+			t.Errorf("%s %s literal text %q, want %q", id, name, got, want)
+		}
+	}
+	check("a", "shape", "unquoted", "circle")
+	check("a", "bold", "bool", "true")
+	check("a", "opacity", "number", "0.5")
+	check("a", "fill", "double-quoted", "\"#3366cc\"")
+	check("a", "stroke", "single-quoted", "'red'")
+	check("b", "fill", "double-quoted", "\"#fff\"") // after an emoji: offsets are UTF-16
+	fc, ok := props["a"]["fontColor"].(map[string]any)
+	if !ok {
+		t.Fatalf("a has no fontColor property: %v", props["a"])
+	}
+	if _, ok := fc["literal"]; ok {
+		t.Errorf("a substitution has no literal, got %v", props["a"]["fontColor"])
 	}
 }

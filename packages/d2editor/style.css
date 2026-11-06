@@ -49,6 +49,14 @@ aside { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; bor
 #src .d2-arrow { color: var(--source-arrow); }
 #src .d2-number { color: var(--source-number); }
 #src .d2-punctuation { color: var(--muted); }
+#src .source-value { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+#src .source-swatch { display: inline-block; width: .75em; height: .75em; margin-right: 3px; border: 1px solid var(--muted); border-radius: 2px; cursor: pointer; }
+.source-value-popover { position: fixed; inset: auto; margin: 0; padding: 10px; max-width: calc(100vw - 24px); border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); box-shadow: 0 4px 16px #0003; }
+.source-value-popover strong, .source-value-popover small { display: block; margin-bottom: 6px; }
+.source-value-popover small { color: var(--muted); }
+.value-controls { display: flex; align-items: center; gap: 8px; }
+.value-controls input:not([type=color], [type=range], [type=checkbox]) { width: 8em; padding: 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--control); }
+.value-controls select { height: auto; padding: 4px; }
 .cm-tooltip-autocomplete li[aria-selected] { background: var(--accent) !important; color: var(--bg) !important; }
 #src .patch-mark { background: var(--mark); border-radius: 2px; }
 #src .patch-mark.side { background: var(--mark-side); }

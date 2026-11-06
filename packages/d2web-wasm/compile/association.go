@@ -35,8 +35,17 @@ type Source struct {
 // Property is an effective value and the declaration that owns it: possibly a class, glob or imported file rather than the object's own
 // references. Source is nil when D2 reports no declaration.
 type Property struct {
-	Value  string  `json:"value"`
-	Source *Source `json:"source"`
+	Value   string   `json:"value"`
+	Source  *Source  `json:"source"`
+	Literal *Literal `json:"literal,omitempty"`
+}
+
+// Literal is the range of the value's own text inside Source and the kind D2 parsed it as: bool, number, unquoted, double-quoted or
+// single-quoted (spec 0022). It is absent for anything that is not a single-line scalar with no substitution, such as a block string.
+type Literal struct {
+	Start Pos    `json:"start"`
+	End   Pos    `json:"end"`
+	Kind  string `json:"kind"`
 }
 
 type AssocObject struct {
@@ -126,8 +135,40 @@ func scalar(sc *d2graph.Scalar) Property {
 	if sc.MapKey != nil {
 		src := source(sc.MapKey.Range)
 		p.Source = &src
+		p.Literal = literal(sc.MapKey)
 	}
 	return p
+}
+
+// literal reads the value of a key from D2's own syntax tree.
+func literal(key *d2ast.Key) *Literal {
+	var r d2ast.Range
+	var kind string
+	var parts []d2ast.InterpolationBox
+	switch v := key.Value.ScalarBox().Unbox().(type) {
+	case *d2ast.Boolean:
+		r, kind = v.Range, "bool"
+	case *d2ast.Number:
+		r, kind = v.Range, "number"
+	case *d2ast.UnquotedString:
+		r, kind, parts = v.Range, "unquoted", v.Value
+	case *d2ast.DoubleQuotedString:
+		r, kind, parts = v.Range, "double-quoted", v.Value
+	case *d2ast.SingleQuotedString:
+		r, kind = v.Range, "single-quoted"
+	default:
+		return nil
+	}
+	for _, part := range parts {
+		if part.Substitution != nil {
+			return nil
+		}
+	}
+	if r.Start.Line != r.End.Line {
+		return nil
+	}
+	src := source(r)
+	return &Literal{Start: src.Start, End: src.End, Kind: kind}
 }
 
 // properties lists the label, every style keyword D2 holds a value for (named as in D2's own JSON: fontSize, strokeWidth, 3d, ...) and the
